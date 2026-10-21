@@ -24,6 +24,8 @@ const chart = new ChartIndex([
   account('1200', 'Receivables', { ledger: 'external', hasChildren: true }),
 ]);
 const money = (value: string) => ({ value, currency: 'EUR' });
+/** The chart's revenue account, on the credit side of the lines below. */
+const REVENUE = { number: '5011', name: '5011', type: 'Revenues', parentNumber: '5000' };
 const LIVE = await loadLiveData();
 
 /** Aggregates as apaleo lists them: [number, type, debited, credited], balance = debited − credited. */
@@ -42,7 +44,7 @@ function totals(rows: [string, string, string, string][]): AccountTotals {
 
 describe('compareAggregates (by balance)', () => {
   // A 7 % charge with apaleo's eight-decimal net and tax: 114.00 = 106.54205607 + 7.45794393.
-  const charge = ledgerLine({ grossCents: 11_400, netPrecise: '106.54205607', netCents: 10_654, taxes: [tax('Reduced', 7, 746, '7.45794393')] });
+  const charge = ledgerLine({ credit: REVENUE, grossCents: 11_400, netPrecise: '106.54205607', netCents: 10_654, taxes: [tax('Reduced', 7, 746, '7.45794393')] });
 
   it('compares revenue net, its VAT account with the precise tax and other accounts gross', () => {
     const result = compareAggregates(
@@ -71,7 +73,7 @@ describe('compareAggregates (by balance)', () => {
   });
 
   it('compares the balance only: apaleo may list a negative charge as a debit', () => {
-    const allowance = ledgerLine({ grossCents: -1_000, netPrecise: '-9.34579439', netCents: -935, taxes: [tax('Reduced', 7, -65, '-0.65420561')] });
+    const allowance = ledgerLine({ credit: REVENUE, grossCents: -1_000, netPrecise: '-9.34579439', netCents: -935, taxes: [tax('Reduced', 7, -65, '-0.65420561')] });
     const result = compareAggregates(totals([['5011', 'Revenues', '9.34579439', '0']]), [allowance], chart);
     expect(result.find((r) => r.account.number === '5011')).toMatchObject({ source: { debitCents: 935, creditCents: 0 }, sourceBalanceCents: 935, match: true });
   });

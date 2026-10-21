@@ -1,28 +1,29 @@
 {
   "transactions": [
     {
-      "timestamp": "2026-09-21T22:05:00.0000000Z",
+      "timestamp": "2026-09-21T22:05:00Z",
       "date": "2026-09-21",
       "debitedAccount": {
         "name": "Receivables for Reservation BSP-GHIJKL-1",
         "number": "BSP-GHIJKL-1_Receivables",
+        "parentNumber": "1200",
         "type": "Receivables"
       },
       "creditedAccount": {
-        "name": "Accommodation 7%",
-        "number": "5011",
-        "type": "Revenues",
-        "parentNumber": "5010"
+        "name": "Revenues Accommodation (10%)",
+        "number": "RevenueAccommodation_VeryReduced:10.00",
+        "parentNumber": "5000",
+        "type": "Revenues"
       },
       "command": "PostCharge",
       "currency": "EUR",
-      "grossAmount": 200.0,
-      "netAmount": 186.92,
+      "grossAmount": 220,
+      "netAmount": 200,
       "taxes": [
         {
-          "type": "Reduced",
-          "percent": 7.0,
-          "amount": 13.08
+          "type": "VeryReduced",
+          "percent": 10,
+          "amount": 20
         }
       ],
       "receipt": {
@@ -34,27 +35,29 @@
       "referenceType": "Guest"
     },
     {
-      "timestamp": "2026-09-21T22:05:00.0000000Z",
+      "timestamp": "2026-09-21T22:05:00Z",
       "date": "2026-09-21",
       "debitedAccount": {
-        "name": "Liabilities for Reservation BSP-GHIJKL-1",
-        "number": "BSP-GHIJKL-1_Liabilities",
-        "type": "Liabilities"
-      },
-      "creditedAccount": {
         "name": "Receivables for Reservation BSP-GHIJKL-1",
         "number": "BSP-GHIJKL-1_Receivables",
+        "parentNumber": "1200",
         "type": "Receivables"
       },
-      "command": "System",
+      "creditedAccount": {
+        "name": "Liabilities for Reservation BSP-GHIJKL-1 (10%)",
+        "number": "BSP-GHIJKL-1_Liabilities/VeryReduced:10.00",
+        "parentNumber": "3000",
+        "type": "Liabilities"
+      },
+      "command": "PostCharge",
       "currency": "EUR",
-      "grossAmount": 200.0,
-      "netAmount": 186.92,
+      "grossAmount": -220,
+      "netAmount": -200,
       "taxes": [
         {
-          "type": "Reduced",
-          "percent": 7.0,
-          "amount": 13.08
+          "type": "VeryReduced",
+          "percent": 10,
+          "amount": -20
         }
       ],
       "receipt": {

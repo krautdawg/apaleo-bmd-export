@@ -16,8 +16,8 @@ import { describeDifference } from './helpers/golden.js';
 const UPDATE = process.env.UPDATE_GOLDEN === '1';
 const root = (path: string) => fileURLToPath(new URL(`../${path}`, import.meta.url));
 const read = (path: string) => readFileSync(root(path));
-const FILE = 'EXTF_Buchungsstapel_1234567_42_20260901-20260930_BSP.csv';
-const PROTOCOL = 'EXTF_Buchungsstapel_1234567_42_20260901-20260930_BSP.protokoll.txt';
+const FILE = 'BMD_Buchungsimport_20260901-20260930_BSP.csv';
+const PROTOCOL = 'BMD_Buchungsimport_20260901-20260930_BSP.protokoll.txt';
 
 function filesIn(dir: string): string[] {
   return readdirSync(root(dir), { recursive: true, withFileTypes: true })
@@ -27,7 +27,7 @@ function filesIn(dir: string): string[] {
 }
 
 describe('docs/examples', () => {
-  it('holds the current golden EXTF file byte for byte', () => {
+  it('holds the current golden BMD file byte for byte', () => {
     const difference = describeDifference(read(`test/golden/export/${FILE}`), read(`docs/examples/${FILE}`));
     expect(difference, `docs/examples/${FILE} differs from the golden file:\n${difference}`).toBeUndefined();
   });
@@ -40,10 +40,10 @@ describe('docs/examples', () => {
     expect(read(`docs/examples/${PROTOCOL}`).toString('utf8')).toBe(protocol.toString('utf8'));
   });
 
-  it('holds the mapping that produced the file, with the city-tax decision commented', () => {
+  it('holds the EKR mapping that produced the file, with the Ortstaxe decision commented', () => {
     const mapping = read('docs/examples/mapping-BSP.example.csv');
-    expect(mapping.equals(read('test/fixtures/mapping/skr03-beispiel.csv'))).toBe(true);
-    expect(mapping.toString('utf8')).toMatch(/^3501;CityTaxes;.*;1590;.*Kurtaxe, Gast schuldet/m);
+    expect(mapping.equals(read('test/fixtures/mapping/ekr-beispiel.csv'))).toBe(true);
+    expect(mapping.toString('utf8')).toMatch(/^3501;CityTaxes;.*;3580;.*Ortstaxe: schuldet der Gast/m);
   });
 });
 

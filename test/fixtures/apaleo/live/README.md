@@ -10,9 +10,9 @@ Origin: copied unchanged from release 0.1.1 (commit `e16e75e`) of the upstream p
 | `<BER\|VIE>/export-gross-daily/2026-10-21.json` | ExportGrossTransactionListModel | 35 ledger lines each: prepayments, releases, a refund, an overpayment parked at 0 %, payments with their `/Offset` lines, an AR transfer, a no-show and a cancellation fee. |
 | `<BER\|VIE>/export-gross-daily/2026-10-22.json` | ExportGrossTransactionListModel | 4 lines each, posted ahead for the next business day (not yet audited). |
 | `<BER\|VIE>/aggregate-daily/<day>.json` | AggregateTransactionListModel | apaleo's own daily totals for the same days. |
-| `BER/mapping-BER.live.csv` | mapping file | What `init-mapping --skr 03` writes with the German SKR03 template `skr03-hotel@2` on the BER chart (header comment renamed to `apaleo-bmd`), used by the regression tests. |
+| `VIE/mapping-VIE.live.csv` | mapping file | What `init-mapping --template ekr` writes with the EKR template `ekr-hotel@1` on the VIE chart (dialect `ntcs`, Sachkontenlänge 4, Personenkontenlänge 6), byte for byte; a test regenerates and compares it. Used by the regression tests. |
 
-The BER mapping is in the German SKR03 mapping format of the current default target. It lives only until b03 switches the mapping format to BMD; b03 replaces it with a VIE mapping from the EKR template. Folio recordings were not copied: the tool does not read folios.
+VIE is the regression day of the BMD target. BER has German rates (7 % and 19 %), which no EKR rule maps: with the EKR template its export stops with `E-UNMAPPED`, and the tests assert exactly that. Folio recordings were not copied: the tool does not read folios.
 
 ## Privacy scan
 
@@ -24,23 +24,9 @@ Before copying, `node test/helpers/fixture-scan.ts <recordings folder>` scanned 
 
 No names, e-mail addresses or postal addresses had to be stripped. `test/apaleo/live-fixtures.test.ts` runs the same scan over this folder on every test run (10 files here).
 
-## Hand-checked BER totals of 2026-10-21
-
-With `BER/mapping-BER.live.csv` (see `test/posting/live-day.test.ts` for the arithmetic):
-
-- 35 apaleo lines: 29 bookings, 6 skipped `SAME_ACCOUNT` lines (the `/Offset` second lines) with an unsigned gross of 331.60.
-- Revenue gross 571.22 at 7 %, 47.38 at 19 %, 45.00 at 0 % (663.60 in all).
-- Revenue VAT per booking 37.38 at 7 % and 7.57 at 19 %; apaleo precise 37.3695327 and 7.56487395 (37.37 and 7.56).
-- Deposit VAT per booking 14.26 at 7 % and 3.19 at 19 %; apaleo precise 14.26299065 and 3.19008404.
-- Payments 111.70 on 1000 (cash) and 675.90 on 1360 (cards), 787.60 in all.
-- Deposits received 590.00, released 352.00, of it refunded 10.00 (to a Girocard); balance 238.00.
-- Accounts receivable (10000) 114.00 Soll.
-- No `W-VAT-ROUNDING`: per line the VAT per booking equals apaleo's tax rounded half away from zero.
-- `aggregate-daily` matches the ledger by balance on all 18 accounts.
-
 ## VIE totals of 2026-10-21
 
-The first real Austrian data of this project, recomputed offline from the recordings (exact decimals, half away from zero). b03 asserts them through the BMD target; until then the tests read and post VIE and expect `E-UNMAPPED` for its Austrian accounts.
+The first real Austrian data of this project, recomputed offline from the recordings (exact decimals, half away from zero) and asserted through the BMD target with `VIE/mapping-VIE.live.csv` (`test/posting/live-day.test.ts`, `test/cli/live-data.test.ts`). The per-line tax rounded half away from zero is what each booking carries as `steuer`.
 
 | VIE 2026-10-21 | value |
 |---|---|
@@ -52,5 +38,9 @@ The first real Austrian data of this project, recomputed offline from the record
 | deposits | received 491.00, released 295.00, of it refunded 10.00 |
 | accounts receivable | 95.00 |
 | skipped `SAME_ACCOUNT` (`/Offset` lines) | 6 lines, 312.60 unsigned |
+
+- 35 apaleo lines: 29 bookings, 6 skipped `SAME_ACCOUNT` lines.
+- Exactly one `W-VAT-ROUNDING`: line `000000031`, gross 46.80 at 10 %, `steuer` 4.25, BMD's check 42.55 × 10 % = 4.26.
+- The no-show at 13 % (`RevenueNoShow_Reduced:13.00`) maps to `4040` through the 13 % rule of the template.
 
 `aggregate-daily` matches the ledger by balance on all 19 accounts.

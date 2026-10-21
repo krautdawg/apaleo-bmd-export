@@ -2,73 +2,16 @@
   "aggregations": [
     {
       "account": {
-        "name": "Accommodation 7%",
-        "number": "5011",
-        "type": "Revenues"
-      },
-      "creditedAmount": {
-        "amount": 186.92,
-        "currency": "EUR"
-      },
-      "debitedAmount": {
-        "amount": 0,
-        "currency": "EUR"
-      },
-      "balance": {
-        "amount": -186.92,
-        "currency": "EUR"
-      }
-    },
-    {
-      "account": {
-        "name": "VAT 7%",
-        "number": "2007",
-        "type": "Vat"
-      },
-      "creditedAmount": {
-        "amount": 13.08,
-        "currency": "EUR"
-      },
-      "debitedAmount": {
-        "amount": 0,
-        "currency": "EUR"
-      },
-      "balance": {
-        "amount": -13.08,
-        "currency": "EUR"
-      }
-    },
-    {
-      "account": {
-        "name": "VAT on Liabilities 7%",
-        "number": "2107",
-        "type": "VatOnLiabilities"
-      },
-      "creditedAmount": {
-        "amount": 0,
-        "currency": "EUR"
-      },
-      "debitedAmount": {
-        "amount": 13.08,
-        "currency": "EUR"
-      },
-      "balance": {
-        "amount": 13.08,
-        "currency": "EUR"
-      }
-    },
-    {
-      "account": {
-        "name": "Guest Receivables",
+        "name": "Receivables",
         "number": "1200",
         "type": "Receivables"
       },
       "creditedAmount": {
-        "amount": 200,
+        "amount": 220,
         "currency": "EUR"
       },
       "debitedAmount": {
-        "amount": 200,
+        "amount": 220,
         "currency": "EUR"
       },
       "balance": {
@@ -78,7 +21,45 @@
     },
     {
       "account": {
-        "name": "Guest Liabilities",
+        "name": "Revenues Accommodation (10%)",
+        "number": "RevenueAccommodation_VeryReduced:10.00",
+        "type": "Revenues"
+      },
+      "creditedAmount": {
+        "amount": 200,
+        "currency": "EUR"
+      },
+      "debitedAmount": {
+        "amount": 0,
+        "currency": "EUR"
+      },
+      "balance": {
+        "amount": -200,
+        "currency": "EUR"
+      }
+    },
+    {
+      "account": {
+        "name": "VAT Very Reduced (10%)",
+        "number": "Vat_VeryReduced:10.00",
+        "type": "Vat"
+      },
+      "creditedAmount": {
+        "amount": 20,
+        "currency": "EUR"
+      },
+      "debitedAmount": {
+        "amount": 0,
+        "currency": "EUR"
+      },
+      "balance": {
+        "amount": -20,
+        "currency": "EUR"
+      }
+    },
+    {
+      "account": {
+        "name": "Liabilities",
         "number": "3000",
         "type": "Liabilities"
       },
@@ -87,22 +68,41 @@
         "currency": "EUR"
       },
       "debitedAmount": {
-        "amount": 186.92,
+        "amount": 200,
         "currency": "EUR"
       },
       "balance": {
-        "amount": 186.92,
+        "amount": 200,
+        "currency": "EUR"
+      }
+    },
+    {
+      "account": {
+        "name": "LiabilitiesVat Very Reduced (10%)",
+        "number": "LiabilitiesVat_VeryReduced:10.00",
+        "type": "VatOnLiabilities"
+      },
+      "creditedAmount": {
+        "amount": 0,
+        "currency": "EUR"
+      },
+      "debitedAmount": {
+        "amount": 20,
+        "currency": "EUR"
+      },
+      "balance": {
+        "amount": 20,
         "currency": "EUR"
       }
     }
   ],
   "total": {
     "creditedAmount": {
-      "amount": 400,
+      "amount": 440,
       "currency": "EUR"
     },
     "debitedAmount": {
-      "amount": 400,
+      "amount": 440,
       "currency": "EUR"
     },
     "balance": {

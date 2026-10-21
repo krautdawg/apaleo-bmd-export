@@ -112,7 +112,7 @@ export function checkCommandLines(file: string, markdown: string, commands: read
  * A backticked config key. The design's pattern plus an optional `[]` after the
  * section, so `properties[].mapping` is checked too and not silently ignored.
  */
-export const CONFIG_KEY = /^(apaleo|datev|output|posting|properties|schedule|checks)(\[\])?(\.[A-Za-z[\]]+)+$/;
+export const CONFIG_KEY = /^(apaleo|bmd|datev|output|posting|properties|schedule|checks)(\[\])?(\.[A-Za-z[\]]+)+$/;
 
 interface SchemaDef {
   type: string;

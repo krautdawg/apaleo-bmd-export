@@ -30,7 +30,7 @@ describe('listProperties', () => {
       `GET ${API}/inventory/v1/properties?pageNumber=1&pageSize=500`,
     ]);
     expect(properties).toEqual([
-      { id: 'BSP', code: 'BSP', name: 'Hotel Beispiel', timeZone: 'Europe/Berlin', currency: 'EUR', countryCode: 'DE' },
+      { id: 'BSP', code: 'BSP', name: 'Hotel Beispiel', timeZone: 'Europe/Vienna', currency: 'EUR', countryCode: 'AT' },
       { id: 'HBW', code: 'HBW', name: 'Hotel Beispiel Wien', timeZone: 'Europe/Vienna', currency: 'EUR', countryCode: 'AT' },
     ]);
   });
@@ -58,20 +58,21 @@ describe('getChartOfAccounts', () => {
     const accounts = await source.getChartOfAccounts(BSP);
     const pick = (number: string) => accounts.find((a) => a.number === number && a.ledger === 'global');
     expect(pick('5000')).toEqual({ number: '5000', name: 'Revenues', type: 'Revenues', ledger: 'global', isArchived: false, hasChildren: true });
-    expect(pick('5010')).toMatchObject({ name: 'Accommodation', parentNumber: '5000', hasChildren: true });
-    expect(pick('5010')?.vat).toBeUndefined();
-    expect(pick('5011')).toMatchObject({ parentNumber: '5010', vat: { type: 'Reduced', percent: 7 }, hasChildren: false });
-    expect(pick('5019')).toMatchObject({ parentNumber: '5010', vat: { type: 'Normal', percent: 19 } });
-    expect(pick('5111')).toMatchObject({ parentNumber: '5110', vat: { type: 'Reduced', percent: 7 } });
-    expect(pick('5990')).toMatchObject({ isArchived: true, vat: { type: 'Without', percent: 0 } });
+    expect(pick('RevenueAccommodation')).toMatchObject({ name: 'Revenues Accommodation', parentNumber: '5000', hasChildren: true });
+    expect(pick('RevenueAccommodation')?.vat).toBeUndefined();
+    expect(pick('RevenueAccommodation_VeryReduced:10.00')).toMatchObject({ parentNumber: 'RevenueAccommodation', vat: { type: 'VeryReduced', percent: 10 }, hasChildren: false });
+    expect(pick('RevenueAccommodation_Normal:20.00')).toMatchObject({ parentNumber: 'RevenueAccommodation', vat: { type: 'Normal', percent: 20 } });
+    expect(pick('RevenueFoodAndBeverages_VeryReduced:10.00')).toMatchObject({ parentNumber: 'RevenueFoodAndBeverages', vat: { type: 'VeryReduced', percent: 10 } });
+    expect(pick('RevenueOther_Without:0.00')).toMatchObject({ isArchived: true, vat: { type: 'Without', percent: 0 } });
   });
 
   it('keeps the ledger list of account numbers that repeat', async () => {
     const { source } = createFixtureSource();
     const accounts = await source.getChartOfAccounts(BSP);
     expect(accounts.filter((a) => a.number === '1200').map((a) => [a.ledger, a.name])).toEqual([
-      ['guest', 'Guest Receivables'],
-      ['external', 'External Receivables'],
+      ['guest', 'Receivables'],
+      ['external', 'Receivables'],
+      ['booking', 'Receivables'],
     ]);
     expect(accounts.filter((a) => a.number === '3000').map((a) => a.ledger)).toEqual(['guest', 'booking']);
   });
@@ -80,12 +81,12 @@ describe('getChartOfAccounts', () => {
     const chart = structuredClone(readFixture('accounts-schema.json')) as {
       globalAccounts: { subAccounts?: { parentNumber?: string }[] }[];
     };
-    delete chart.globalAccounts[0]?.subAccounts?.[0]?.parentNumber;
+    delete chart.globalAccounts[1]?.subAccounts?.[0]?.parentNumber;
     const { source } = createFixtureSource({
       override: (_r, url) => (url.pathname.endsWith('/schema') ? Response.json(chart) : undefined),
     });
-    const cash = (await source.getChartOfAccounts(BSP)).find((a) => a.number === '1600');
-    expect(cash?.parentNumber).toBe('1000');
+    const visa = (await source.getChartOfAccounts(BSP)).find((a) => a.number === '1102');
+    expect(visa?.parentNumber).toBe('1000');
   });
 });
 
@@ -126,15 +127,15 @@ describe('getLedger', () => {
     const lines = await source.getLedger(BSP, '2026-09-14', '2026-09-15');
     expect(lines.find((l) => l.sourceEntryNumber === 'BSPE0001')).toEqual({
       businessDate: '2026-09-14',
-      postedAt: '2026-09-14T10:12:03.4410021Z',
-      debit: { number: '1611', name: 'Visa', type: 'Payments', parentNumber: '1610' },
-      credit: { number: 'BSP-GHIJKL-1_Liabilities', name: 'Liabilities for Reservation BSP-GHIJKL-1', type: 'Liabilities' },
+      postedAt: '2026-09-14T10:12:03Z',
+      debit: { number: '1102', name: 'Visa Credit Card Payment', type: 'Payments', parentNumber: '1000' },
+      credit: { number: 'BSP-GHIJKL-1_Liabilities/VeryReduced:10.00', name: 'Liabilities for Reservation BSP-GHIJKL-1 (10%)', type: 'Liabilities', parentNumber: '3000' },
       command: 'PostPrepayment',
       currency: 'EUR',
-      grossCents: 20000,
-      netPrecise: '186.92',
-      netCents: 18692,
-      taxes: [tax('Reduced', 7, 1308)],
+      grossCents: 22000,
+      netPrecise: '200',
+      netCents: 20000,
+      taxes: [tax('VeryReduced', 10, 2000, '20')],
       receipt: { type: 'PspReference', number: 'PSP-8823410001' },
       reference: 'BSP-GHIJKL-1',
       referenceType: 'Guest',
@@ -147,30 +148,46 @@ describe('getLedger', () => {
     const { source } = createFixtureSource();
     const lines = await source.getLedger(BSP, '2026-09-14', '2026-09-16');
     const allowance = lines.find((l) => l.sourceEntryNumber === 'BSPE0010');
-    expect(allowance).toMatchObject({ grossCents: -1000, netCents: -935, taxes: [{ amountCents: -65 }] });
+    expect(allowance).toMatchObject({ grossCents: -1100, netCents: -1000, taxes: [{ amountCents: -100 }] });
     const cityTax = lines.find((l) => l.sourceEntryNumber === 'BSPE0004');
     expect(cityTax?.taxes).toEqual([tax('Without', 0, 0, '0')]);
     expect(cityTax?.debit).toEqual({
       number: 'BSP-ABCDEF-1_Receivables',
       name: 'Receivables for Reservation BSP-ABCDEF-1',
       type: 'Receivables',
+      parentNumber: '1200',
     });
     const mueller = lines.find((l) => l.sourceEntryNumber === 'BSPE0011');
-    expect(mueller?.debit).toEqual({ number: 'BSP-12345-1', name: 'Müller, Hans', type: 'Receivables', parentNumber: '1200' });
+    expect(mueller?.debit).toEqual({ number: 'BSP-EXT-1_Receivables', name: 'Müller, Hans', type: 'Receivables', parentNumber: '1200' });
+    // Eight decimals of net and tax, as apaleo sends them.
+    expect(lines.find((l) => l.sourceEntryNumber === 'BSPE0002')).toMatchObject({ grossCents: 9800, netPrecise: '89.09090909', taxes: [tax('VeryReduced', 10, 891, '8.90909091')] });
   });
 
-  it('reads both deposit-release variants', async () => {
+  it('reads the real deposit shapes: releases as negative charges with taxes, a parked overpayment and its refund, no PostPrepaymentVat', async () => {
     const { source } = createFixtureSource();
-    const [withTaxes] = (await source.getLedger(BSP, '2026-09-21', '2026-09-22')).filter((l) => l.debit.type === 'Liabilities');
-    expect(withTaxes).toMatchObject({ credit: { type: 'Receivables' }, taxes: [{ percent: 7, amountCents: 1308 }] });
-    const day = await source.getLedger(BSP, '2026-09-22', '2026-09-23');
-    const release = day.find((l) => l.debit.type === 'Liabilities' && l.credit.type === 'Receivables');
-    expect(release?.taxes).toEqual([]);
-    // Variant (b) is a full cycle: VAT on the prepayment received on 09-15, reversed at the service date.
-    const vat = (await source.getLedger(BSP, '2026-09-15', '2026-09-23')).filter((l) => l.command === 'PostPrepaymentVat');
-    expect(vat.map((l) => [l.businessDate, l.debit.number, l.credit.number, l.grossCents])).toEqual([
-      ['2026-09-15', 'BSP-MNOPQR-1_Liabilities', '2107', 981],
-      ['2026-09-22', '2107', 'BSP-MNOPQR-1_Liabilities', 981],
+    const lines = await source.getLedger(BSP, '2026-09-14', '2026-09-23');
+    const release = lines.find((l) => l.sourceEntryNumber === 'BSPE0019');
+    expect(release).toMatchObject({
+      command: 'PostCharge',
+      debit: { type: 'Receivables' },
+      credit: { number: 'BSP-GHIJKL-1_Liabilities/VeryReduced:10.00', type: 'Liabilities', parentNumber: '3000' },
+      grossCents: -22000,
+      taxes: [{ percent: 10, amountCents: -2000 }],
+    });
+    expect(lines.find((l) => l.sourceEntryNumber === 'BSPE0022')).toMatchObject({ credit: { number: 'BSP-MNOPQR-1_Liabilities/Null:0.00' }, grossCents: 1000, taxes: [] });
+    expect(lines.find((l) => l.sourceEntryNumber === 'BSPE0023')).toMatchObject({ command: 'PostPrepayment', debit: { number: '1106' }, grossCents: -1000 });
+    expect(lines.filter((l) => l.command === 'PostPrepaymentVat')).toEqual([]);
+    // Every payment comes with its /Offset second line.
+    const offsets = lines.filter((l) => l.credit.number.endsWith('/Offset'));
+    expect(offsets.map((l) => [l.sourceEntryNumber, l.grossCents])).toEqual([
+      ['BSPE0014', 12000],
+      ['BSPE0014', -12000],
+      ['BSPE0015', 2400],
+      ['BSPE0015', -2400],
+      ['BSPE0016', -11500],
+      ['BSPE0016', 11500],
+      ['BSPE0017', 6170],
+      ['BSPE0017', -6170],
     ]);
   });
 
@@ -180,7 +197,7 @@ describe('getLedger', () => {
     const keys = lines.map((l) => [l.businessDate, l.sourceEntryNumber, l.postedAt].join(' '));
     expect(keys).toEqual([...keys].sort());
     const breakfast = lines.filter((l) => l.sourceEntryNumber === 'BSPE0003');
-    expect(breakfast.map((l) => l.credit.number)).toEqual(['5111', '5121']);
+    expect(breakfast.map((l) => l.credit.number)).toEqual(['RevenueFoodAndBeverages_VeryReduced:10.00', 'RevenueFoodAndBeverages_Normal:20.00']);
     expect(breakfast[0]?.postedAt).toBe(breakfast[1]?.postedAt);
   });
 
@@ -189,7 +206,7 @@ describe('getLedger', () => {
     reversed.transactions.reverse();
     const { source } = createFixtureSource({ override: (_r, url) => (isExport(url) ? Response.json(reversed) : undefined) });
     const breakfast = (await source.getLedger(BSP, '2026-09-14', '2026-09-15')).filter((l) => l.sourceEntryNumber === 'BSPE0003');
-    expect(breakfast.map((l) => l.credit.number)).toEqual(['5121', '5111']);
+    expect(breakfast.map((l) => l.credit.number)).toEqual(['RevenueFoodAndBeverages_Normal:20.00', 'RevenueFoodAndBeverages_VeryReduced:10.00']);
   });
 
   it('returns equal results for repeated reads of unchanged data', async () => {
@@ -297,7 +314,7 @@ describe('response validation', () => {
 
   it('accepts taxes: null and a receipt without type', async () => {
     const data = dayFixture('2026-09-14');
-    Object.assign(data.transactions[0] as object, { netAmount: 200, taxes: null, receipt: { number: 'R-1' } });
+    Object.assign(data.transactions[0] as object, { netAmount: 220, taxes: null, receipt: { number: 'R-1' } });
     const [line] = await withDay(data).getLedger(BSP, '2026-09-14', '2026-09-15');
     expect(line).toMatchObject({ taxes: [], receipt: { number: 'R-1' } });
     expect(line?.receipt).not.toHaveProperty('type');
@@ -436,11 +453,11 @@ describe('getAccountTotals', () => {
       expect(totals.accounts.length).toBeGreaterThan(0);
       expect(totals.total.debited.value).toBe(totals.total.credited.value);
     }
-    expect(results[0]?.accounts.find((a) => a.account.number === '5011')).toEqual({
-      account: { number: '5011', name: 'Accommodation 7%', type: 'Revenues' },
+    expect(results[0]?.accounts.find((a) => a.account.number === 'RevenueAccommodation_VeryReduced:10.00')).toEqual({
+      account: { number: 'RevenueAccommodation_VeryReduced:10.00', name: 'Revenues Accommodation (10%)', type: 'Revenues' },
       debited: { value: '0', currency: 'EUR' },
-      credited: { value: '93.46', currency: 'EUR' },
-      balance: { value: '-93.46', currency: 'EUR' },
+      credited: { value: '89.09090909', currency: 'EUR' },
+      balance: { value: '-89.09090909', currency: 'EUR' },
     });
   });
 

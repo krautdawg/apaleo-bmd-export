@@ -2,8 +2,27 @@
   "aggregations": [
     {
       "account": {
-        "name": "Visa",
-        "number": "1611",
+        "name": "Receivables",
+        "number": "1200",
+        "type": "Receivables"
+      },
+      "creditedAmount": {
+        "amount": 531.4,
+        "currency": "EUR"
+      },
+      "debitedAmount": {
+        "amount": 210.7,
+        "currency": "EUR"
+      },
+      "balance": {
+        "amount": -320.7,
+        "currency": "EUR"
+      }
+    },
+    {
+      "account": {
+        "name": "Visa Credit Card Payment",
+        "number": "1102",
         "type": "Payments"
       },
       "creditedAmount": {
@@ -21,7 +40,7 @@
     },
     {
       "account": {
-        "name": "Cash",
+        "name": "Cash Payment",
         "number": "1600",
         "type": "Payments"
       },
@@ -30,26 +49,26 @@
         "currency": "EUR"
       },
       "debitedAmount": {
-        "amount": 23.8,
+        "amount": 24,
         "currency": "EUR"
       },
       "balance": {
-        "amount": 23.8,
+        "amount": 24,
         "currency": "EUR"
       }
     },
     {
       "account": {
         "name": "Accounts Receivable",
-        "number": "1400",
+        "number": "9999",
         "type": "AccountsReceivable"
       },
       "creditedAmount": {
-        "amount": 0,
+        "amount": 115,
         "currency": "EUR"
       },
       "debitedAmount": {
-        "amount": 115,
+        "amount": 230,
         "currency": "EUR"
       },
       "balance": {
@@ -59,8 +78,8 @@
     },
     {
       "account": {
-        "name": "Mastercard",
-        "number": "1612",
+        "name": "MasterCard Credit Card Payment",
+        "number": "1104",
         "type": "Payments"
       },
       "creditedAmount": {
@@ -68,41 +87,22 @@
         "currency": "EUR"
       },
       "debitedAmount": {
-        "amount": 100,
+        "amount": 61.7,
         "currency": "EUR"
       },
       "balance": {
-        "amount": 100,
-        "currency": "EUR"
-      }
-    },
-    {
-      "account": {
-        "name": "Guest Receivables",
-        "number": "1200",
-        "type": "Receivables"
-      },
-      "creditedAmount": {
-        "amount": 363.8,
-        "currency": "EUR"
-      },
-      "debitedAmount": {
-        "amount": 5,
-        "currency": "EUR"
-      },
-      "balance": {
-        "amount": -358.8,
+        "amount": 61.7,
         "currency": "EUR"
       }
     }
   ],
   "total": {
     "creditedAmount": {
-      "amount": 363.8,
+      "amount": 646.4,
       "currency": "EUR"
     },
     "debitedAmount": {
-      "amount": 363.8,
+      "amount": 646.4,
       "currency": "EUR"
     },
     "balance": {
