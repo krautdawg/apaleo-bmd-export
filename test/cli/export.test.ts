@@ -210,7 +210,7 @@ describe('re-running an export', () => {
     expect(await runCli(['export', '--month', '2026-09', '--property', BSP], setup.ctx)).toBe(1);
     const out = setup.ctx.out();
     expect(out).toContain('E-FILE-EXISTS');
-    expect(out).toContain('A BMD Buchungsimport is not idempotent');
+    expect(out).toContain('BMD does not recognise a file it has already imported, so importing both files would book those days twice.');
     expect(out).toContain('If the Kanzlei has already imported the old file, it must first delete the imported bookings of that file in BMD NTCS');
     expect(out).toContain('--overwrite');
     expect(read(setup, FILE)).toEqual(before);

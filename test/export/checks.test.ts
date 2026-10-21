@@ -92,7 +92,7 @@ describe('tax per rate (E-VAT-TOTAL)', () => {
     const findings = checkVatByRate(LEDGER, result, OPTIONS);
     expect(findings.map((f) => [f.code, f.value])).toEqual([['E-VAT-TOTAL', '20']]);
     expect(findings[0]?.message).toContain(
-      'at 20 % the bookings carry 7.65 tax, but apaleo charged 7.67 as the sum of its per-line tax rounded to cents (difference -0.02, the rounding total allows 0.00)',
+      'at 20 % the bookings carry 7.65 tax, but apaleo charged 7.67 as the sum of its per-line tax rounded to cents (difference apaleo minus bookings 0.02, the rounding total allows 0.00)',
     );
     expect(findings[0]?.message).toContain("apaleo's precise total is 7.66666667; its per-line rounding (0.00333333) is no error");
   });

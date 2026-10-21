@@ -61,7 +61,7 @@ export function createBmdTarget(settingsOf: (meta: TargetFileMeta) => BmdTargetS
         '(and have the Kanzlei reverse its imported bookings in BMD if it was imported) and run again',
       reimport:
         'A change of bmd.dialect or bmd.buchsymbol also changes every line, so the bookings themselves may be unchanged. ' +
-        'A BMD Buchungsimport is not idempotent, so importing both files would book those days twice. ' +
+        'BMD does not recognise a file it has already imported, so importing both files would book those days twice. ' +
         'If the Kanzlei has already imported the old file, it must first delete the imported bookings of that file in BMD NTCS ' +
         "(the old file's protocol names their Buchungssymbol and the range of Belegnummern).",
     },
