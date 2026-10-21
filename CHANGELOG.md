@@ -8,6 +8,8 @@ Die Geschichte von apaleo-bmd-export beginnt hier. Das Projekt ist eine Kopie vo
 
 ## [Unveröffentlicht]
 
+## [0.1.0] - 2026-10-21
+
 ### Hinzugefügt
 
 - **BMD Buchungsimport** (b02, b03, b06): Der Export schreibt pro Hotel und Monat `BMD_Buchungsimport_<von>-<bis>_<Hotel>.csv` im variablen Format des BMD-Buchungsimports (Satzart 0, Kopfzeile, `;`, Windows-1252, CRLF) für BMD NTCS, mit `bmd.dialect: bmd55` für BMD 5.5 (Spaltennamen, Datum und Steuercodes schalten gemeinsam um). Das Konto mit Steuercode führt, mit Nettobetrag und der Steuer aus apaleo, sodass BMD in der UVA genau die USt von apaleo bucht. Belegnummern aus Monat und Tag des ersten Tags plus Zähler wiederholen sich zwischen den Dateien eines Hotels nicht. Jedes Feld wird vor dem Schreiben geprüft (`E-BMD-ACCOUNT` bis `E-BMD-FILE-NAME`). Das Protokoll beginnt mit dem Block „Import into BMD“ zum Vergleich mit dem Mandanten; `manifest.json` enthält die Steuer pro Satz (`taxByRate`).
