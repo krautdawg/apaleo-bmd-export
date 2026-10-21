@@ -46,7 +46,7 @@ Das zeigt die Buchungsübersicht für September 2026 im „Hotel Beispiel“. Oh
 
 Es gibt noch kein npm-Paket und kein Container-Image zum Herunterladen. Du installierst aus dem Quellcode.
 
-1. **apaleo Custom App anlegen.** In apaleo: Apps > Connected apps > Add custom app, Client-Typ simple, mit den Berechtigungen aus [docs/setup-apaleo.md](docs/setup-apaleo.md). Kopiere Client-ID und Secret.
+1. **apaleo Custom App anlegen.** In apaleo: Apps > Connected apps > Add a new app > Add custom app (Seite „New simple client“), personenbezogene Daten „Omit all“, mit den Berechtigungen aus [docs/setup-apaleo.md](docs/setup-apaleo.md). Kopiere Client-ID und Secret.
 
 2. **Installieren** (braucht Node.js 24 und git):
 
@@ -63,11 +63,13 @@ Es gibt noch kein npm-Paket und kein Container-Image zum Herunterladen. Du insta
    Dann die Konfiguration ausfüllen und das Secret setzen. Das Secret kommt nie in die Konfigurationsdatei.
 
    ```sh
-   cp apaleo-bmd.config.example.yaml apaleo-bmd.config.yaml   # apaleo.clientId und das Buchungssymbol der Kanzlei eintragen
+   cp apaleo-bmd.config.example.yaml apaleo-bmd.config.yaml   # apaleo.clientId, das Buchungssymbol der Kanzlei und unter properties dein Hotel eintragen
    export APALEO_CLIENT_SECRET='das Secret aus apaleo'
    node dist/cli/main.js doctor
    node dist/cli/main.js properties
    ```
+
+   `properties` zeigt die ID deines Hotels. Trag sie in der Konfiguration unter `properties` ein (den auskommentierten Abschnitt `properties:` in der Datei aktivieren); `export` exportiert jedes dort eingetragene Hotel. Die Befehle unten verwenden als Beispiel die ID `BSP`.
 
    Die Befehle unten verwenden `apaleo-bmd`. Ohne `pnpm link --global` tippst du stattdessen `node dist/cli/main.js`.
 
