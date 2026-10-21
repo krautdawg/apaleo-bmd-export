@@ -28,6 +28,14 @@ describe('sanitiseText', () => {
     expect(notes[0]?.message).toContain('U+1F6CF');
   });
 
+  it('handles a long text with many distinct unencodable characters in linear time', () => {
+    const distinct = Array.from({ length: 20000 }, (_, i) => String.fromCodePoint(0x4e00 + i)).join('');
+    const { value, notes } = sanitiseText(distinct, 0);
+    expect(value).toBe('?'.repeat(40));
+    expect(notes.map((n) => n.code)).toEqual(['N-BMD-CHARSET', 'N-BMD-TRUNCATED']);
+    expect(notes[0]?.message.indexOf('U+4E00')).toBeLessThan(notes[0]?.message.indexOf('U+4E01') ?? -1);
+  });
+
   it('cuts at 40 characters and reports N-BMD-TRUNCATED', () => {
     const long = 'Logis Doppelzimmer Seeblick mit Frühstück und Halbpension';
     const { value, notes } = sanitiseText(long, 1);

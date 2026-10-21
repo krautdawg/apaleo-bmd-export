@@ -47,10 +47,19 @@ function clean(original: string, index: number, field: TextField, maxLength: num
     value = spaced.replace(EXTBELEGNR_DISALLOWED, '');
     if (value !== spaced) note('N-BMD-CHARSET', `may only contain A-Z a-z 0-9 - / . _, written as "${value}"`);
   } else {
-    const unencodable = [...spaced].filter((char) => cp1252Byte(char.codePointAt(0) ?? -1) === undefined);
-    value = [...spaced].map((char) => (unencodable.includes(char) ? REPLACEMENT : char)).join('');
-    if (unencodable.length > 0) {
-      note('N-BMD-CHARSET', `${[...new Set(unencodable)].map(describe).join(', ')} not in Windows-1252, written as "${value}"`);
+    // One pass; a Set keeps first-seen order for the note without a linear search per character.
+    const unencodable = new Set<string>();
+    value = '';
+    for (const char of spaced) {
+      if (cp1252Byte(char.codePointAt(0) ?? -1) === undefined) {
+        unencodable.add(char);
+        value += REPLACEMENT;
+      } else {
+        value += char;
+      }
+    }
+    if (unencodable.size > 0) {
+      note('N-BMD-CHARSET', `${[...unencodable].map(describe).join(', ')} not in Windows-1252, written as "${value}"`);
     }
   }
   const chars = [...value];
