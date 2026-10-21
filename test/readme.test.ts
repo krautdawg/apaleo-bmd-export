@@ -197,6 +197,28 @@ describe('docs folder', () => {
     expect(text).toContain(APALEO_PERMISSIONS.scopeAlternative);
   });
 
+  it('docs/setup-apaleo.md follows the real apaleo screens in order and recommends "Omit all"', () => {
+    const text = readRepoFile('docs/setup-apaleo.md');
+    const names = ['Add a new app', 'Add custom app', 'New simple client', 'Secret description', 'Search permission', 'Omit all'];
+    const positions = names.map((name) => text.indexOf(`**${name}**`));
+    expect(positions.every((position) => position >= 0), names.join(', ')).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    for (const name of ['All properties', 'Only selected properties', 'Retrieve', 'Omit linked']) expect(text).toContain(`**${name}**`);
+    expect(text).toContain('Wähle **Omit all**');
+  });
+
+  it('describes apaleo as tested live: precise amounts, the first live test and the aggregate rule', () => {
+    const source = readRepoFile('docs/apaleo-source.md');
+    expect(source).toContain('bis zu acht Nachkommastellen');
+    expect(source).toContain('Nur der Bruttobetrag (`grossAmount`) muss ganze Cent sein');
+    expect(source).not.toMatch(/ein Betrag, der mehr als 0,0001 von einem ganzen Cent abweicht, stoppt den Export/);
+    for (const answer of ['`parentNumber`', '**negativem** Betrag', '`PostPrepaymentVat`', '**Saldo**', '/Offset']) expect(source).toContain(answer);
+    const troubleshooting = readRepoFile('docs/troubleshooting.md');
+    expect(troubleshooting).toContain('`netAmount` oder `taxes[…].amount`: Du nutzt eine alte Version');
+    expect(troubleshooting).toContain('`grossAmount`: Das ist auch in der aktuellen Version ein echter Fehler');
+    expect(readRepoFile('docs/export.md')).toContain('DATEV VAT 37.38, apaleo VAT 37.37, difference 0.01');
+  });
+
   it('documents every config key and every environment variable in docs/configuration.md', () => {
     const text = readRepoFile('docs/configuration.md');
     for (const path of configPaths()) expect(text, path).toContain(`\`${path}\``);
