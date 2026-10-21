@@ -12,7 +12,7 @@ The file follows the documented BMD import layout (PR08/PR08A); a first test imp
 
 There is no npm package or container image release yet. You install from source.
 
-1. Create an apaleo custom app (Apps > Connected apps > Add custom app, simple client) with the permissions in [docs/setup-apaleo.md](docs/setup-apaleo.md).
+1. Create an apaleo custom app (Apps > Connected apps > Add a new app > Add custom app, page "New simple client", personal data "Omit all") with the permissions in [docs/setup-apaleo.md](docs/setup-apaleo.md).
 2. Install (needs Node.js 24 and git):
 
    ```sh
@@ -24,10 +24,10 @@ There is no npm package or container image release yet. You install from source.
    node dist/cli/main.js --help
    ```
 
-   The commands below use `apaleo-bmd`. Without `pnpm link --global`, type `node dist/cli/main.js` instead.
+   The commands below use `apaleo-bmd` (after `pnpm link --global`). Without it, type `node dist/cli/main.js` instead.
 
 3. Try it on the bundled demo data, without apaleo: `node dist/cli/main.js export --month 2026-09 --demo --dry-run`.
-4. Copy `apaleo-bmd.config.example.yaml` to `apaleo-bmd.config.yaml`, fill in the client id and the Buchungssymbol your Kanzlei created in BMD, and set the secret in the environment (`APALEO_CLIENT_SECRET`), never in the file. Then create the mapping, have your Steuerberater check it, and export:
+4. Copy `apaleo-bmd.config.example.yaml` to `apaleo-bmd.config.yaml`, fill in the client id, the Buchungssymbol your Kanzlei created in BMD and your property under `properties` (`apaleo-bmd properties` lists the ids; `export` exports every property listed there), and set the secret in the environment (`APALEO_CLIENT_SECRET`), never in the file. Then create the mapping, have your Steuerberater check it, and export:
 
    ```sh
    apaleo-bmd init-mapping --property BSP --template ekr
