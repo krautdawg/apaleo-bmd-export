@@ -11,7 +11,7 @@ describe('apaleo-bmd properties', () => {
     const lines = ctx.out().trimEnd().split('\n');
     expect(lines[0]).toMatch(/^ID\s+CODE\s+NAME\s+TIME ZONE\s+CURRENCY$/);
     expect(lines.slice(1).map((l) => l.split(/\s{2,}/))).toEqual([
-      ['BSP', 'BSP', 'Hotel Beispiel', 'Europe/Berlin', 'EUR'],
+      ['BSP', 'BSP', 'Hotel Beispiel', 'Europe/Vienna', 'EUR'],
       ['HBW', 'HBW', 'Hotel Beispiel Wien', 'Europe/Vienna', 'EUR'],
     ]);
     expect(ctx.err()).toBe('');
@@ -59,7 +59,7 @@ describe('apaleo-bmd properties', () => {
   it('exits 1 without any network call when the client id is missing', async () => {
     const ctx = createApaleoContext(
       {},
-      { files: { 'apaleo-bmd.config.yaml': 'datev:\n  beraternummer: 1234567\n  mandantennummer: 42\n' } },
+      { files: { 'apaleo-bmd.config.yaml': 'bmd:\n  buchsymbol: HO\n' } },
     );
     expect(await runCli(['properties'], ctx)).toBe(1);
     expect(ctx.err()).toContain('apaleo.clientId is not set');

@@ -8,11 +8,9 @@
 #   APALEO_CLIENT_SECRET   das Client-Secret deiner apaleo Custom App
 #
 # Diese Einstellungen lassen sich auch aus der Umgebung setzen (nur einzelne Werte):
-#   APALEO_BMD_OUTPUT_DIR       -> output.dir
-#   APALEO_CLIENT_ID              -> apaleo.clientId
-#   APALEO_BMD_BERATERNUMMER    -> datev.beraternummer
-#   APALEO_BMD_MANDANTENNUMMER  -> datev.mandantennummer
-#   APALEO_BMD_TIMEZONE         -> schedule.timezone
+#   APALEO_BMD_OUTPUT_DIR   -> output.dir
+#   APALEO_CLIENT_ID        -> apaleo.clientId
+#   APALEO_BMD_TIMEZONE     -> schedule.timezone
 
 apaleo:
   # Client-ID der Custom App, die du unter Apps > Connected apps angelegt hast.
@@ -26,49 +24,48 @@ apaleo:
   # baseUrl: https://api.apaleo.com
   # identityUrl: https://identity.apaleo.com
 
-# Die beiden Nummern der Kanzlei bleiben absichtlich leer: Das Tool startet erst,
-# wenn du sie einträgst, damit keine erfundene Nummer in eine DATEV-Datei gerät.
-datev:
-  # Beraternummer deiner Steuerberatung (1001 bis 9999999). Frag die Kanzlei.
-  beraternummer:
-  # Mandantennummer des Hotels bei der Kanzlei (1 bis 99999).
-  mandantennummer:
-  # Sachkontenlänge im DATEV-Bestand der Kanzlei, 4 bis 8. Die meisten
-  # Mandanten mit SKR03/SKR04 nutzen 4.
+# Was der BMD-Mandant der Kanzlei festlegt. Frag deine Kanzlei.
+bmd:
+  # Das Buchungssymbol jeder Buchung. Es hat absichtlich keinen Standardwert:
+  # Die Kanzlei muss es in BMD zuerst anlegen (zum Beispiel HO, kopiert von AR mit
+  # allen Kontenarten erlaubt), sonst lehnt BMD den Import ab. Siehe docs/bmd-import.md.
+  # 1 bis 4 Zeichen A-Z und 0-9 (mit dialect bmd55 höchstens 2).
+  buchsymbol: HO
+  # Optional: ein eigenes Buchungssymbol für Zahlungen (Buchungstyp Zahlung).
+  # Ohne Angabe gilt buchsymbol.
+  # buchsymbolZahlung: HZ
+  # Sachkontenlänge im Kontenplan der Kanzlei, 4 bis 9. Der EKR nutzt 4.
   sachkontenlaenge: 4
-  # Wirtschaftsjahresbeginn als MM-TT, zum Beispiel "07-01" für ein
-  # Wirtschaftsjahr von Juli bis Juni. Exporte reichen nie über ihn hinweg.
-  wjBeginn: "01-01"
-  # Kontenrahmen des Mandanten: "03" (SKR03) oder "04" (SKR04). Bleibt der Wert
-  # leer, nimmt das Tool den SKR aus der Kontenzuordnung, die init-mapping schreibt.
-  skr:
-  # 1 schreibt den importierten Stapel in DATEV fest (Festschreibung), 0 lässt
-  # ihn bearbeitbar. Frag die Kanzlei; 0 ist die sichere Wahl, solange du testest.
-  festschreibung: 0
+  # Personenkontenlänge (Debitoren), 5 bis 9, zum Beispiel 6 für 200000.
+  personenkontenlaenge: 6
+  # "ntcs" für BMD NTCS (Standard) oder "bmd55" für BMD 5.5 (andere Spaltennamen,
+  # Datum JJJJMMTT und Steuercode 3 statt 1 für die Umsatzsteuer).
+  dialect: ntcs
 
 posting:
-  # Was in Belegfeld 1 steht, der Belegnummer, mit der DATEV offene Posten
+  # Was in extbelegnr steht, der externen Belegnummer, mit der BMD offene Posten
   # zuordnet: "receipt" nimmt den Beleg aus apaleo (Rechnung, Zahlungsreferenz)
   # und sonst die Reservierungsreferenz; "reference" nimmt immer die
   # Reservierungsreferenz.
-  belegfeld1: receipt
+  extbelegnr: receipt
 
 output:
-  # Ordner für die erzeugten DATEV-Dateien, relativ zum Arbeitsverzeichnis.
+  # Ordner für die erzeugten BMD-Dateien, relativ zum Arbeitsverzeichnis.
   dir: ./exports
 
 # Die apaleo-Hotels, mit denen das Tool arbeitet, jedes mit seiner Kontenzuordnung
 # (CSV, relativ zum Arbeitsverzeichnis; Standard ./mapping-<id>.csv). Leg die
-# Kontenzuordnung mit "apaleo-bmd init-mapping --property BSP --skr 04" an und
-# lass sie von deiner Steuerberatung prüfen. Die IDs listet "apaleo-bmd properties".
-# "apaleo-bmd export --month 2026-10" exportiert jedes hier eingetragene Hotel;
-# ein Hotel, das die Kanzlei unter einer eigenen Mandantennummer bucht, setzt sie hier.
+# Kontenzuordnung mit "apaleo-bmd init-mapping --property BSP --template ekr" an
+# und lass sie von deiner Steuerberatung prüfen. Die IDs listet "apaleo-bmd properties".
+# "apaleo-bmd export --month 2026-10" exportiert jedes hier eingetragene Hotel.
+# Bucht die Kanzlei zwei Hotels in einen Mandanten, braucht jedes ein eigenes
+# Buchungssymbol, sonst wiederholen sich die Belegnummern (W-BUCHSYMBOL-SHARED).
 # properties:
 #   - id: BSP
 #     mapping: ./mapping-BSP.csv
 #   - id: BSP2
 #     mapping: ./mapping-BSP2.csv
-#     mandantennummer: 43
+#     buchsymbol: HO2
 
 checks:
   # Vergleicht das Buchungsjournal zusätzlich mit den Tagessummen von apaleo pro
@@ -84,7 +81,7 @@ schedule:
   # "Heute" ist das Datum in dieser IANA-Zeitzone. Auch APALEO_BMD_TIMEZONE.
   timezone: Europe/Berlin
   # Ein Rhythmus pro Installation, damit nie tägliche und monatliche Dateien bei
-  # DATEV ankommen: "monthly" (ein Stapel pro Monat für die Kanzlei) oder "daily"
+  # BMD ankommen: "monthly" (ein Stapel pro Monat für die Kanzlei) oder "daily"
   # (etwa 30 Importe im Monat).
   cadence: monthly
   monthly:

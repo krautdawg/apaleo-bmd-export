@@ -2,6 +2,7 @@ import { extname, resolve } from 'node:path';
 import { LineCounter, parseDocument, type ErrorCode } from 'yaml';
 import { z } from 'zod';
 import { UserError } from './errors.js';
+import type { Finding } from './findings.js';
 import { parseClockTime } from './date.js';
 
 export type Env = Readonly<Record<string, string | undefined>>;
@@ -13,7 +14,7 @@ const ENV_PREFIX = 'APALEO_BMD_';
 
 // ---------------------------------------------------------------------------
 // Schema. Each section is exported so later slices can extend it, for example
-// `datevSection.extend({ skr: ... })`, and add new sections to `configSections`.
+// `bmdSection.extend({ ... })`, and add new sections to `configSections`.
 // ---------------------------------------------------------------------------
 
 function wholeNumber(min: number, max: number) {
@@ -50,45 +51,36 @@ export const outputSection = z.strictObject({
   dir: z.string().min(1, 'must not be empty').default('./exports'),
 });
 
-const MONTH_DAY_MESSAGE = 'must be a month and day written MM-DD, for example "01-01" or "07-01" (29 February is not allowed)';
-const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+export const BMD_DIALECTS = ['ntcs', 'bmd55'] as const;
+export type BmdDialectName = (typeof BMD_DIALECTS)[number];
 
-/** `MM-DD` of a day that exists in every year. */
-const monthDay = z.string({ error: MONTH_DAY_MESSAGE }).refine((value) => {
-  const match = /^(\d{2})-(\d{2})$/.exec(value);
-  const month = Number(match?.[1]);
-  const day = Number(match?.[2]);
-  return match !== null && day >= 1 && day <= (DAYS_IN_MONTH[month - 1] ?? 0);
-}, MONTH_DAY_MESSAGE);
+/** Longest Buchungssymbol per dialect: NTCS takes 4 characters, BMD 5.5 two. */
+export const MAX_SYMBOL_LENGTH: Readonly<Record<BmdDialectName, number>> = { ntcs: 4, bmd55: 2 };
 
-const SKR_MESSAGE = 'must be "03" (SKR03) or "04" (SKR04)';
+const SYMBOL_MESSAGE = 'must be 1 to 4 characters of A-Z and 0-9 (a Buchungssymbol the Kanzlei created in BMD)';
+const buchsymbol = z.string({ error: SYMBOL_MESSAGE }).regex(/^[A-Z0-9]{1,4}$/, SYMBOL_MESSAGE);
 
-/** `03` or `04`. YAML reads an unquoted `03` as the number 3, so numbers and `SKR03` are accepted too. */
-const skr = z
-  .union([z.string(), z.number()], { error: SKR_MESSAGE })
-  .transform((value, context) => {
-    const match = /^(?:skr\s*)?0?([34])$/i.exec(String(value).trim());
-    if (match) return `0${match[1]}` as '03' | '04';
-    context.addIssue({ code: 'custom', message: SKR_MESSAGE });
-    return z.NEVER;
-  });
+/** Where the docs explain how the Kanzlei creates the Buchungssymbol; named in the "is required" error. */
+export const BUCHSYMBOL_DOC = 'docs/bmd-import.md';
 
-export const datevSection = z.strictObject({
-  beraternummer: wholeNumber(1001, 9_999_999),
-  mandantennummer: wholeNumber(1, 99_999),
-  sachkontenlaenge: wholeNumber(4, 8).default(4),
-  /** Start of the fiscal year (Wirtschaftsjahresbeginn) as `MM-DD`. */
-  wjBeginn: monthDay.default('01-01'),
-  /** The Mandant's chart of accounts. Unset means the SKR named in the mapping file. */
-  skr: skr.optional(),
-  /** 1 locks the imported batch in DATEV (Festschreibung); 0 leaves it editable. */
-  festschreibung: z.union([z.literal(0), z.literal(1)], { error: 'must be 0 or 1' }).default(0),
+/** What the Kanzlei's BMD Mandant decides about every file. */
+export const bmdSection = z.strictObject({
+  /** `ntcs` (BMD NTCS, default) or `bmd55` (BMD 5.5 header names, dates and Steuercodes). */
+  dialect: z.enum(BMD_DIALECTS, { error: 'must be "ntcs" or "bmd55"' }).default('ntcs'),
+  /** Digits of a Sachkonto in the Kanzlei's Kontenplan (4 in the EKR). */
+  sachkontenlaenge: wholeNumber(4, 9).default(4),
+  /** Digits of a Personenkonto (Debitor). */
+  personenkontenlaenge: wholeNumber(5, 9).default(6),
+  /** The Buchungssymbol of every booking. No default: the Kanzlei must create it in BMD first. */
+  buchsymbol,
+  /** The Buchungssymbol of payment lines; default `buchsymbol`. */
+  buchsymbolZahlung: buchsymbol.optional(),
 });
 
-/** How the posting rules fill DATEV fields. */
+/** How the posting rules fill BMD fields. */
 export const postingSection = z.strictObject({
-  /** Belegfeld 1: the receipt (invoice) number when there is one (default), or always the reservation reference. */
-  belegfeld1: z.enum(['receipt', 'reference'], { error: 'must be "receipt" or "reference"' }).default('receipt'),
+  /** extbelegnr: the receipt (invoice) number when there is one (default), or always the reservation reference. */
+  extbelegnr: z.enum(['receipt', 'reference'], { error: 'must be "receipt" or "reference"' }).default('receipt'),
 });
 
 export const propertyEntry = z.strictObject({
@@ -96,8 +88,10 @@ export const propertyEntry = z.strictObject({
   id: z.string().trim().min(1, 'must not be empty'),
   /** The mapping CSV, relative to the working directory. Default `./mapping-<id>.csv`. */
   mapping: z.string().trim().min(1, 'must not be empty').optional(),
-  /** Overrides `datev.mandantennummer` for this property's files. */
-  mandantennummer: wholeNumber(1, 99_999).optional(),
+  /** Overrides `bmd.buchsymbol` for this property's bookings. */
+  buchsymbol: buchsymbol.optional(),
+  /** Overrides `bmd.buchsymbolZahlung` for this property's payment lines. */
+  buchsymbolZahlung: buchsymbol.optional(),
 });
 
 export const propertiesSection = z
@@ -144,7 +138,7 @@ const finalAfterTime = z.string({ error: FINAL_AFTER_MESSAGE }).refine((value) =
  */
 export const MIN_CATCH_UP_DAYS = { daily: 5, monthly: 3 } as const;
 
-/** When `schedule --once` exports what. One cadence per install, so daily and monthly files never both reach DATEV. */
+/** When `schedule --once` exports what. One cadence per install, so daily and monthly files never both reach BMD. */
 export const scheduleSection = z
   .strictObject({
     /** "Today" for the due-period computation is the date in this zone. */
@@ -177,20 +171,70 @@ export const scheduleSection = z
 export const configSections = {
   apaleo: apaleoSection.prefault({}),
   output: outputSection.prefault({}),
-  datev: datevSection,
+  bmd: bmdSection,
   posting: postingSection.prefault({}),
   properties: propertiesSection.default([]),
   checks: checksSection.prefault({}),
   schedule: scheduleSection.prefault({}),
 };
 
-export const configSchema = z.strictObject(configSections);
+export const configSchema = z.strictObject(configSections).superRefine((config, issue) => {
+  // Every Buchungssymbol must fit the dialect: BMD 5.5 takes only two characters.
+  const max = MAX_SYMBOL_LENGTH[config.bmd.dialect];
+  const symbols: [PropertyKey[], string | undefined][] = [
+    [['bmd', 'buchsymbol'], config.bmd.buchsymbol],
+    [['bmd', 'buchsymbolZahlung'], config.bmd.buchsymbolZahlung],
+    ...config.properties.flatMap((p, i): [PropertyKey[], string | undefined][] => [
+      [['properties', i, 'buchsymbol'], p.buchsymbol],
+      [['properties', i, 'buchsymbolZahlung'], p.buchsymbolZahlung],
+    ]),
+  ];
+  for (const [path, symbol] of symbols) {
+    if (symbol !== undefined && symbol.length > max) {
+      issue.addIssue({ code: 'custom', path, message: `must have at most ${max} characters with bmd.dialect ${config.bmd.dialect}` });
+    }
+  }
+});
 
 export type Config = z.infer<typeof configSchema>;
 export type PostingConfig = z.infer<typeof postingSection>;
-export type DatevConfig = z.infer<typeof datevSection>;
+export type BmdConfig = z.infer<typeof bmdSection>;
 export type PropertyConfig = z.infer<typeof propertyEntry>;
 export type ScheduleConfig = z.infer<typeof scheduleSection>;
+
+/** The Buchungssymbole of one property: its own, else the `bmd` section's; payments default to the main symbol. */
+export interface Buchsymbole {
+  buchsymbol: string;
+  buchsymbolZahlung: string;
+}
+
+export function buchsymboleOf(config: Pick<Config, 'bmd' | 'properties'>, propertyId: string): Buchsymbole {
+  const property = config.properties.find((p) => p.id === propertyId);
+  const buchsymbol = property?.buchsymbol ?? config.bmd.buchsymbol;
+  return { buchsymbol, buchsymbolZahlung: property?.buchsymbolZahlung ?? config.bmd.buchsymbolZahlung ?? buchsymbol };
+}
+
+/**
+ * `W-BUCHSYMBOL-SHARED` for each Buchungssymbol that two or more configured
+ * properties use: the Belegnummern of their files start alike (`MMDD` and a
+ * counter), so in one BMD Mandant they would repeat under that symbol.
+ */
+export function sharedBuchsymbolFindings(config: Pick<Config, 'bmd' | 'properties'>): Finding[] {
+  const users = new Map<string, string[]>();
+  for (const { id } of config.properties) {
+    const { buchsymbol, buchsymbolZahlung } = buchsymboleOf(config, id);
+    for (const symbol of new Set([buchsymbol, buchsymbolZahlung])) users.set(symbol, [...(users.get(symbol) ?? []), id]);
+  }
+  return [...users]
+    .filter(([, ids]) => ids.length > 1)
+    .map(([symbol, ids]) => ({
+      code: 'W-BUCHSYMBOL-SHARED',
+      message:
+        `the properties ${ids.join(', ')} all book under the Buchungssymbol ${symbol}. If the Kanzlei imports them into one BMD Mandant, ` +
+        'their Belegnummern would repeat; give each property its own symbol (properties[].buchsymbol) or its own Mandant',
+      value: symbol,
+    }));
+}
 
 // ---------------------------------------------------------------------------
 // Environment. Overrides are an explicit allow-list of scalar keys; there is
@@ -206,8 +250,6 @@ export interface EnvOverride {
 export const ENV_OVERRIDES: readonly EnvOverride[] = [
   { variable: 'APALEO_BMD_OUTPUT_DIR', path: ['output', 'dir'], type: 'string' },
   { variable: 'APALEO_CLIENT_ID', path: ['apaleo', 'clientId'], type: 'string' },
-  { variable: 'APALEO_BMD_BERATERNUMMER', path: ['datev', 'beraternummer'], type: 'integer' },
-  { variable: 'APALEO_BMD_MANDANTENNUMMER', path: ['datev', 'mandantennummer'], type: 'integer' },
   { variable: 'APALEO_BMD_TIMEZONE', path: ['schedule', 'timezone'], type: 'string' },
 ];
 
@@ -261,6 +303,7 @@ export async function loadConfig({ path, env, readFile }: LoadConfigOptions): Pr
   checkEnvVariables(env);
   const raw = parseConfigText(await readConfigFile(path, readFile), path);
   rejectSecretsInFile(raw, path);
+  rejectDatevSection(raw, path);
   const fromEnv = applyEnvOverrides(raw, env);
 
   const result = configSchema.safeParse(raw);
@@ -393,6 +436,22 @@ function rejectSecretsInFile(raw: Record<string, unknown>, path: string): void {
   }
 }
 
+/** A config of the DATEV tool this one started from: say so instead of listing every DATEV key as unknown. */
+function rejectDatevSection(raw: Record<string, unknown>, path: string): void {
+  if (raw.datev === undefined) return;
+  throw new UserError(
+    `datev is not a section of apaleo-bmd (${path}): this tool writes BMD files. ` +
+      'Replace the datev section with a bmd section (bmd.buchsymbol, bmd.sachkontenlaenge, bmd.personenkontenlaenge, bmd.dialect); ' +
+      `see ${EXAMPLE_CONFIG_FILE} and docs/configuration.md.`,
+  );
+}
+
+/** Extra words for a missing required key: what to do before the key can be filled in. */
+const REQUIRED_HINTS: Readonly<Record<string, string>> = {
+  bmd: `add a bmd section with bmd.buchsymbol, the Buchungssymbol the Kanzlei created in BMD (see ${BUCHSYMBOL_DOC})`,
+  'bmd.buchsymbol': `name the Buchungssymbol the Kanzlei created in BMD for these bookings, for example HO (see ${BUCHSYMBOL_DOC})`,
+};
+
 /** Writes env values into the raw object and returns which key paths they set. */
 function applyEnvOverrides(raw: Record<string, unknown>, env: Env): Map<string, string> {
   const fromEnv = new Map<string, string>();
@@ -420,7 +479,7 @@ function describeIssue(issue: z.core.$ZodIssue, raw: unknown, fromEnv: Map<strin
   }
   const key = path.join('.') || '(top level)';
   const value = getAtPath(raw, path);
-  if (value === undefined) return [`${key}: is required`];
+  if (value === undefined) return [`${key}: is required${REQUIRED_HINTS[key] ? `: ${REQUIRED_HINTS[key]}` : ''}`];
   const source = fromEnv.get(key);
   return [`${key}: ${issue.message} (got ${JSON.stringify(value)}${source ? ` from ${source}` : ''})`];
 }
