@@ -61,6 +61,20 @@ describe('apaleo-bmd mapping check (offline)', () => {
     expect(ctx.out()).toContain('Result: 1 error, 0 warnings.');
   });
 
+  it('reports E-STEUERCODE-INPUT-TAX for the BMD 5.5 code 3 on a deposit row in NTCS, where 3 is the Vorsteuer-Berichtigung, and exits 1', async () => {
+    const { ctx } = context({ 'mapping-BSP.csv': csv('*;Liabilities;;10;3200;3;10;;') });
+    expect(await runCli(['mapping', 'check', '--property', BSP], ctx)).toBe(1);
+    expect(ctx.out()).toContain('E-STEUERCODE-INPUT-TAX');
+    expect(ctx.out()).toContain('line 2: Steuercode 3 means Vorsteuer-Berichtigung in BMD NTCS, but apaleo type Liabilities');
+    expect(ctx.out()).toContain('Result: 1 error, 0 warnings.');
+  });
+
+  it('passes a deposit row at 10 % with Steuercode 1 in NTCS', async () => {
+    const { ctx } = context({ 'mapping-BSP.csv': csv('*;Liabilities;;10;3200;1;10;;') });
+    expect(await runCli(['mapping', 'check', '--property', BSP], ctx)).toBe(0);
+    expect(ctx.out()).toContain('Result: mapping OK.');
+  });
+
   it('accepts the BMD 5.5 Soll-USt code 3 with bmd.dialect bmd55', async () => {
     const { ctx } = context({ 'mapping-BSP.csv': csv(`${ACC10};Revenues;Revenues Accommodation (10%);10;4000;3;10;;`) }, undefined, withBmd('  dialect: bmd55\n'));
     expect(await runCli(['mapping', 'check', '--property', BSP], ctx)).toBe(0);

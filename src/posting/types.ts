@@ -46,7 +46,7 @@ export interface BmdAccountTotal {
 }
 
 /**
- * Revenue or deposits booked at one rate, signed as owed (allowances and
+ * Revenue, deposits or write-offs booked at one rate, signed as owed (allowances and
  * releases reduce it): net, tax and gross as passed to BMD, and the precise VAT
  * apaleo charged on the same lines.
  */
@@ -86,6 +86,12 @@ export interface PostingSummary {
   revenueByRate: VatTotal[];
   /** Deposits (Liabilities) per VAT rate: received minus released. */
   depositVatByRate: VatTotal[];
+  /**
+   * Written-off guest receivables (LossOfAccountsReceivable) per VAT rate, signed
+   * as written off (a reversed write-off reduces it): net, the USt-Berichtigung as
+   * tax, gross, and apaleo's precise VAT on the same lines.
+   */
+  writeOffsByRate: VatTotal[];
   /** City tax, second city tax and guest levies, signed. */
   cityTaxCents: number;
   payments: PaymentTotal[];

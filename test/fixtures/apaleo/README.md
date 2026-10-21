@@ -20,4 +20,6 @@ Business days (September 2026, so the demo month 2026-09 is always closed):
 
 The amounts are chosen so that BMD's check of every booking (Betrag × rate) equals apaleo's tax rounded to cents: the fixture month has no `W-VAT-ROUNDING`; the recorded VIE day in `live/` has one.
 
+The fabricated Austrian fixture month (Hotel Beispiel Tirol, August 2026: deposit received, released and partly refunded, a cancellation fee at 0 %, an invoice on accounts receivable and a write-off with VAT correction) is in [`at-month/`](at-month/README.md).
+
 Recorded real responses of an apaleo DEV sandbox (properties `BER` and `VIE`, with eight-decimal net and tax amounts) are in [`live/`](live/README.md); the regression tests run the whole pipeline on them. More real responses are welcome: if you run `apaleo-bmd live-smoke` against a real account and the shapes differ, please run the privacy scan (`node test/helpers/fixture-scan.ts <folder>`), anonymise names, reservation ids and amounts, and add them as a new fixture day.

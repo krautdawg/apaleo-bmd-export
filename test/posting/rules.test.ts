@@ -367,6 +367,124 @@ describe('skipped lines', () => {
   });
 });
 
+describe('bad debt and cancellation fees (b05)', () => {
+  /** The EKR template's bad-debt wildcards and a 4091 row for the cancellation fee, as init-mapping writes them. */
+  const lossRows = [
+    mappingRow({ apaleoAccount: '*', apaleoType: 'LossOfAccountsReceivable', apaleoVatPercent: '10', bmdAccount: '7800', steuercode: '1', bmdVatPercent: '10' }),
+    mappingRow({ apaleoAccount: '*', apaleoType: 'LossOfAccountsReceivable', apaleoVatPercent: '20', bmdAccount: '7801', steuercode: '1', bmdVatPercent: '20' }),
+    mappingRow({ apaleoAccount: '*', apaleoType: 'LossOfAccountsReceivable', apaleoVatPercent: '0', bmdAccount: '7809', bmdVatPercent: '0' }),
+  ];
+  const cancellation = { number: 'RevenueCancellationFees_Without:0.00', name: 'Stornogebühr', type: 'Revenues', parentNumber: '5000' };
+  const mapping = mappingWith(
+    ...lossRows,
+    mappingRow({ apaleoAccount: cancellation.number, apaleoType: 'Revenues', apaleoVatPercent: '0', bmdAccount: '4091', bmdVatPercent: '0' }),
+  );
+  /**
+   * A per-reservation bad-debt account. No write-off is recorded: the shape is
+   * assumed by analogy with AR's `AHTJTGFK-1_AccountsReceivable` under `9999`.
+   */
+  const lossAccount = (parentNumber: string) => ({
+    number: 'BSP-ABCDEF-1_LossOfAccountsReceivable',
+    name: 'LossOfAccountsReceivable for Reservation BSP-ABCDEF-1',
+    type: 'LossOfAccountsReceivable',
+    parentNumber,
+  });
+  const writeOff = (parentNumber: string, overrides: Partial<LedgerLine> = {}) =>
+    ledgerLine({
+      debit: lossAccount(parentNumber),
+      credit: ACCOUNTS.receivables,
+      command: 'PostToLossOfAccountsReceivables',
+      grossCents: 5_500,
+      netCents: 5_000,
+      taxes: tax(10, 500),
+      ...overrides,
+    });
+
+  it.each(['6900', 'CollectiveDebitor_LossOfAccountsReceivable'])(
+    'books a write-off of 55.00 at the 10 percent rate under parent %s as Konto 7800, Betrag 50.00 and Steuer 5.00 positive (USt-Berichtigung), Gegenkonto 2390',
+    (parent) => {
+      const { booking, findings, summary } = single(writeOff(parent), mapping);
+      expect(findings).toEqual([]);
+      expect(booking).toMatchObject({ konto: '7800', gkonto: '2390', betragCents: 5_000, tax: { steuercode: 1, prozent: 10, steuerCents: 500 }, text: 'Forderungsverlust 10 %' });
+      expect(summary.writeOffsByRate).toEqual([{ ratePercent: 10, netCents: 5_000, vatCents: 500, grossCents: 5_500, apaleoVat: '5' }]);
+      expect(summary.revenueByRate).toEqual([]);
+      expect(summary.depositVatByRate).toEqual([]);
+    },
+  );
+
+  it('books a write-off at 20 % on 7801', () => {
+    const { booking, findings } = single(writeOff('6900', { grossCents: 2_400, netCents: 2_000, taxes: tax(20, 400) }), mapping);
+    expect(findings).toEqual([]);
+    expect(booking).toMatchObject({ konto: '7801', gkonto: '2390', betragCents: 2_000, tax: { steuercode: 1, prozent: 20, steuerCents: 400 } });
+  });
+
+  it('books a write-off at 13 % on 7802', () => {
+    const { booking, findings, summary } = single(writeOff('6900', { grossCents: 1_130, netCents: 1_000, taxes: tax(13, 130) }), mappingWith(...lossRows.slice(0, 1), mappingRow({ apaleoAccount: '*', apaleoType: 'LossOfAccountsReceivable', apaleoVatPercent: '13', bmdAccount: '7802', steuercode: '1', bmdVatPercent: '13' })));
+    expect(findings).toEqual([]);
+    expect(booking).toMatchObject({ konto: '7802', gkonto: '2390', betragCents: 1_000, tax: { steuercode: 1, prozent: 13, steuerCents: 130 }, text: 'Forderungsverlust 13 %' });
+    expect(summary.writeOffsByRate).toEqual([{ ratePercent: 13, netCents: 1_000, vatCents: 130, grossCents: 1_130, apaleoVat: '1.3' }]);
+  });
+
+  /** The reversal of a write-off: the bad-debt account is credited and the receivable debited. */
+  const reversal = (line: LedgerLine): LedgerLine => ({ ...line, debit: line.credit, credit: line.debit });
+
+  it('books the reversal of a 10 % write-off on 7800 with negative Betrag and Steuer, and nets writeOffsByRate to 0', () => {
+    const original = writeOff('6900');
+    const { bookings, findings, summary } = post([original, reversal(original)], mapping);
+    expect(findings).toEqual([]);
+    expect(bookings[1]).toMatchObject({ konto: '7800', gkonto: '2390', betragCents: -5_000, tax: { steuercode: 1, prozent: 10, steuerCents: -500 } });
+    expect(summary.writeOffsByRate).toEqual([{ ratePercent: 10, netCents: 0, vatCents: 0, grossCents: 0, apaleoVat: '0' }]);
+    expect(summary.accounts.find((a) => a.account === '7800')?.balanceCents).toBe(0);
+  });
+
+  it('books the reversal of an untaxed write-off on 7809 with negative Betrag and no tax fields, and nets writeOffsByRate to 0', () => {
+    const original = writeOff('6900', { grossCents: 3_000, netCents: 3_000, taxes: [] });
+    const { bookings, findings, summary } = post([original, reversal(original)], mapping);
+    expect(findings).toEqual([]);
+    expect(bookings[1]).toMatchObject({ konto: '7809', gkonto: '2390', betragCents: -3_000 });
+    expect(bookings[1]?.tax).toBeUndefined();
+    expect(summary.writeOffsByRate).toEqual([{ ratePercent: 0, netCents: 0, vatCents: 0, grossCents: 0, apaleoVat: '0' }]);
+    expect(summary.accounts.find((a) => a.account === '7809')?.balanceCents).toBe(0);
+  });
+
+  it('books a write-off 30.00 without tax entries on 7809 without tax fields, and sums write-offs per rate', () => {
+    const { bookings, findings, summary } = post([writeOff('6900', { grossCents: 3_000, netCents: 3_000, taxes: [] }), writeOff('6900')], mapping);
+    expect(findings).toEqual([]);
+    expect(bookings[0]).toMatchObject({ konto: '7809', gkonto: '2390', betragCents: 3_000, text: 'Forderungsverlust 0 %' });
+    expect(bookings[0]?.tax).toBeUndefined();
+    expect(summary.writeOffsByRate).toEqual([
+      { ratePercent: 0, netCents: 3_000, vatCents: 0, grossCents: 3_000, apaleoVat: '0' },
+      { ratePercent: 10, netCents: 5_000, vatCents: 500, grossCents: 5_500, apaleoVat: '5' },
+    ]);
+  });
+
+  it('blocks a taxed write-off on a bad-debt row without Steuercode with E-VAT-MISSING', () => {
+    const untaxed = mappingWith(mappingRow({ apaleoAccount: '*', apaleoType: 'LossOfAccountsReceivable', apaleoVatPercent: '10', bmdAccount: '7800', bmdVatPercent: '' }));
+    const { bookings, findings } = single(writeOff('6900'), untaxed);
+    expect(bookings).toEqual([]);
+    expect(codes(findings)).toEqual(['E-VAT-MISSING']);
+    expect(findings[0]?.message).toContain('Change the row for BSP-ABCDEF-1_LossOfAccountsReceivable (LossOfAccountsReceivable) on mapping line 2 (BMD 7800)');
+  });
+
+  it('books an untaxed cancellation fee 80.00 on 4091 without tax fields, with the revenue account leading', () => {
+    const { booking, findings, summary } = single(ledgerLine({ credit: cancellation, grossCents: 8_000, netCents: 8_000, taxes: [] }), mapping);
+    expect(findings).toEqual([]);
+    expect(booking).toMatchObject({ konto: '4091', gkonto: '2390', betragCents: -8_000, text: 'Erlös Stornogebühr 0 %' });
+    expect(booking?.tax).toBeUndefined();
+    expect(summary.revenueByRate).toEqual([{ ratePercent: 0, netCents: 8_000, vatCents: 0, grossCents: 8_000, apaleoVat: '0' }]);
+  });
+
+  it('blocks a no-show taxed at 10 % on an account mapped without Steuercode with E-VAT-MISSING naming the row, and never changes its tax', () => {
+    const noShow = { number: 'RevenueNoShow_VeryReduced:10.00', name: 'Revenues No-show (10%)', type: 'Revenues', parentNumber: '5000' };
+    const untaxed = mappingWith(mappingRow({ apaleoAccount: noShow.number, apaleoType: 'Revenues', apaleoVatPercent: '10', bmdAccount: '4091', bmdVatPercent: '0' }));
+    const { bookings, findings } = single(ledgerLine({ credit: noShow, grossCents: 8_800, netCents: 8_000, taxes: tax(10, 800) }), untaxed);
+    expect(bookings).toEqual([]);
+    expect(codes(findings)).toEqual(['E-VAT-MISSING']);
+    expect(findings[0]?.message).toContain('carries 8.00 VAT at 10 %');
+    expect(findings[0]?.message).toContain('Change the row for RevenueNoShow_VeryReduced:10.00 (Revenues) on mapping line 2 (BMD 4091)');
+  });
+});
+
 describe('movement model in the summary', () => {
   it('gives Konto the Betrag and Gegenkonto the Betrag plus Steuer', () => {
     const { summary } = post([ledgerLine(), payment({ grossCents: 11_000 })]);

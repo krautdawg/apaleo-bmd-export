@@ -1,7 +1,7 @@
 import type { BmdBooking } from '../bmd/types.js';
 import { depositMovement } from '../core/deposits.js';
 import type { Finding } from '../core/findings.js';
-import { sumDecimals } from '../core/money.js';
+import { negateDecimal, sumDecimals } from '../core/money.js';
 import type { LedgerLine } from '../core/source.js';
 import type { ApaleoVat } from './apaleo-vat.js';
 import type { PostedSide } from './guard.js';
@@ -41,6 +41,7 @@ export class SummaryBuilder {
   private readonly accounts = new Map<string, { soll: number; haben: number }>();
   private readonly revenue = new Map<number, VatEntry>();
   private readonly depositVat = new Map<number, VatEntry>();
+  private readonly writeOffs = new Map<number, VatEntry>();
   private readonly payments = new Map<string, number>();
   private readonly skipped = new Map<SkipReason, { lines: number; gross: number }>();
   private cityTax = 0;
@@ -65,12 +66,15 @@ export class SummaryBuilder {
       // Owed (positive) when the revenue or deposit account is credited.
       const owed = booking.tax && vatSide.vat ? { net: -booking.betragCents, vat: -booking.tax.steuerCents } : { net: creditedAmount(line, vatSide.ref.type), vat: 0 };
       const rate = booking.tax && vatSide.vat ? booking.tax.prozent : 0;
-      const totals = revenue ? this.revenue : this.depositVat;
-      const entry = totals.get(rate) ?? { net: 0, vat: 0, apaleo: [] };
-      entry.net += owed.net;
-      entry.vat += owed.vat;
-      entry.apaleo.push(...apaleoVat.map((vat) => vat.precise));
-      totals.set(rate, entry);
+      addVat(revenue ? this.revenue : this.depositVat, rate, owed, apaleoVat.map((vat) => vat.precise));
+    }
+    const loss = vatSide ? undefined : side('LossOfAccountsReceivable');
+    if (loss) {
+      // Written off (positive) when the bad-debt account is debited, so apaleo's VAT (signed as owed) is negated.
+      // A taxed bad-debt side leads as konto: Betrag and Steuer are signed from it.
+      const tax = loss.vat ? booking.tax : undefined;
+      const written = tax ? { net: booking.betragCents, vat: tax.steuerCents } : { net: -creditedAmount(line, loss.ref.type), vat: 0 };
+      addVat(this.writeOffs, tax?.prozent ?? 0, written, apaleoVat.map((vat) => negateDecimal(vat.precise)));
     }
     this.cityTax += creditedAmount(line, CITY_TAX_TYPES);
     for (const payment of [debit, credit]) {
@@ -101,6 +105,7 @@ export class SummaryBuilder {
         .map(([account, { soll, haben }]) => ({ account, sollCents: soll, habenCents: haben, balanceCents: soll - haben })),
       revenueByRate: vatTotals(this.revenue),
       depositVatByRate: vatTotals(this.depositVat),
+      writeOffsByRate: vatTotals(this.writeOffs),
       cityTaxCents: this.cityTax,
       payments: [...this.payments].sort(([a], [b]) => byNumber(a, b)).map(([account, cents]) => ({ account, cents })),
       deposits: { ...this.deposits },
@@ -122,6 +127,14 @@ export class SummaryBuilder {
     }
     return entry;
   }
+}
+
+function addVat(totals: Map<number, VatEntry>, rate: number, { net, vat }: { net: number; vat: number }, apaleoPrecise: readonly string[]): void {
+  const entry = totals.get(rate) ?? { net: 0, vat: 0, apaleo: [] };
+  entry.net += net;
+  entry.vat += vat;
+  entry.apaleo.push(...apaleoPrecise);
+  totals.set(rate, entry);
 }
 
 function vatTotals(entries: ReadonlyMap<number, VatEntry>): VatTotal[] {

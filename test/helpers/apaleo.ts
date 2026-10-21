@@ -60,9 +60,17 @@ export function readLiveFixture(property: LiveProperty, relative: string): unkno
   return readFixture(`live/${property}/${relative}`);
 }
 
+/**
+ * The fabricated Austrian fixture month (`test/fixtures/apaleo/at-month/`, see its
+ * README): property TIR, Hotel Beispiel Tirol, business days in August 2026.
+ */
+export const AT_MONTH = 'TIR';
+
 export interface FixtureServerOptions {
   /** Serve the live recordings (properties BER and VIE) instead of Hotel Beispiel. */
   live?: boolean;
+  /** Serve the Austrian fixture month (property TIR) instead of Hotel Beispiel. */
+  atMonth?: boolean;
   /** Answer a request differently; return undefined to fall through to the fixtures. */
   override?: (request: Request, url: URL) => Response | undefined | Promise<Response | undefined>;
   /** Seconds the issued token is valid. Default 3600. */
@@ -80,21 +88,22 @@ export function apaleoFixtureHandler(options: FixtureServerOptions = {}) {
     }
     if (url.origin !== API) return undefined;
     if (request.headers.get('authorization') !== `Bearer ${ACCESS_TOKEN}`) return new Response(null, { status: 401 });
-    return apiResponse(request.method, url, options.live === true);
+    return apiResponse(request.method, url, options.live ? 'live' : options.atMonth ? 'at-month' : 'beispiel');
   };
 }
 
-function apiResponse(method: string, url: URL, live: boolean): Response | undefined {
+function apiResponse(method: string, url: URL, fixtures: 'beispiel' | 'live' | 'at-month'): Response | undefined {
   const query = url.searchParams;
   const route = `${method} ${url.pathname}`;
   if (route === 'GET /inventory/v1/properties') {
     if (query.get('pageNumber') !== '1') return noContent();
-    return Response.json(live ? LIVE_PROPERTY_LIST : readFixture('properties/page-1.json'));
+    if (fixtures === 'live') return Response.json(LIVE_PROPERTY_LIST);
+    return Response.json(readFixture(fixtures === 'at-month' ? 'at-month/properties/page-1.json' : 'properties/page-1.json'));
   }
   const propertyId = query.get('propertyId') ?? '';
-  const known: readonly string[] = live ? LIVE_PROPERTIES : [BSP];
+  const known: readonly string[] = fixtures === 'live' ? LIVE_PROPERTIES : fixtures === 'at-month' ? [AT_MONTH] : [BSP];
   if (!known.includes(propertyId)) return new Response('{"messages":["Property not found"]}', { status: 404 });
-  const folder = live ? `live/${propertyId}/` : '';
+  const folder = fixtures === 'live' ? `live/${propertyId}/` : fixtures === 'at-month' ? 'at-month/' : '';
   if (route === 'GET /finance/v1/accounts/schema') return Response.json(readFixture(`${folder}accounts-schema.json`));
   const daily: Record<string, string> = {
     'POST /finance/v1/accounts/export-gross-daily': 'export-gross-daily',
@@ -176,6 +185,16 @@ export async function loadBeispielData(): Promise<FakeSourceData> {
     charts: { [BSP]: await source.getChartOfAccounts(BSP) },
     ledger: { [BSP]: await source.getLedger(BSP, first, '2026-09-23') },
     totals: { [BSP]: await Promise.all(LEDGER_DAYS.map((day) => source.getAccountTotals(BSP, day))) },
+  };
+}
+
+/** The Austrian fixture month read through the real apaleo adapter, as canonical `FakeSource` data (no aggregates). */
+export async function loadAtMonthData(): Promise<FakeSourceData> {
+  const { source } = createFixtureSource({ atMonth: true });
+  return {
+    properties: await source.listProperties(),
+    charts: { [AT_MONTH]: await source.getChartOfAccounts(AT_MONTH) },
+    ledger: { [AT_MONTH]: await source.getLedger(AT_MONTH, '2026-08-01', '2026-09-01') },
   };
 }
 

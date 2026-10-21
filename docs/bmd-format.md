@@ -128,7 +128,9 @@ Mach den ersten Import mit deiner Kanzlei in einem Testmandanten oder mit einer 
 - [ ] Der Dialekt stimmt: BMD erkennt alle Spalten der Kopfzeile, und Belegdatum und Buchungsdatum kommen richtig an.
 - [ ] Eine Erlösbuchung mit Steuercode 1 landet in der UVA-Vorschau in der Kennzahl ihres Steuersatzes (KZ 022 für 20 %, KZ 029 für 10 %), nicht in KZ 062.
 - [ ] Unter dem Buchungssymbol gibt es keine Warnung wegen doppelter Belegnummern, auch nicht mit einer zweiten Datei desselben Monats.
-- [ ] Die Konten für Erlöse mit 0 % und für die Ortstaxe haben im Kontenplan keinen fest hinterlegten Steuercode, den BMD bei leerem Feld anwenden würde.
+- [ ] Die Konten für Erlöse mit 0 % und für die Ortstaxe haben im Kontenplan keinen fest hinterlegten Steuercode, den BMD bei leerem Feld anwenden würde: Konten 4090/4091 und das Ortstaxe-Konto haben keinen fixen Steuercode.
+- [ ] Anzahlungen erscheinen in KZ 000/022/029 (in der UVA-Vorschau unter „+ Anzahlungen“), und ihre Auflösung bucht die USt wieder zurück.
+- [ ] USt-Berichtigung bei Forderungsverlust erscheint als Minderung in KZ 029/022 (bzw. 090).
 - [ ] BMD nimmt `4,9` in `prozent` an.
 - [ ] Umlaute, ß und € sind im Buchungstext lesbar.
 - [ ] BMD bucht die Gegenbuchung auf `gkonto` und die Steuer auf das Steuerkonto, ohne dass die Datei Steuerzeilen enthält.

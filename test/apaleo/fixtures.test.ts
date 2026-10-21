@@ -7,12 +7,16 @@ import { validateSwagger, type SwaggerSchema } from '../helpers/swagger.js';
 const excerpt = readFixture('swagger-excerpt.json') as { definitions: Record<string, SwaggerSchema> };
 const definitions = excerpt.definitions;
 
-/** Which Swagger model each fixture folder or file holds, for Hotel Beispiel and the live recordings (`live/<property>/`). Every fixture must be listed. */
+/**
+ * Which Swagger model each fixture folder or file holds, for Hotel Beispiel, the
+ * live recordings (`live/<property>/`) and the Austrian fixture month (`at-month/`).
+ * Every fixture must be listed.
+ */
 const MODELS: [RegExp, string][] = [
-  [/^(live\/[A-Z]+\/)?export-gross-daily\/\d{4}-\d{2}-\d{2}\.json$/, 'ExportGrossTransactionListModel'],
+  [/^(live\/[A-Z]+\/|at-month\/)?export-gross-daily\/\d{4}-\d{2}-\d{2}\.json$/, 'ExportGrossTransactionListModel'],
   [/^(live\/[A-Z]+\/)?aggregate-daily\/\d{4}-\d{2}-\d{2}\.json$/, 'AggregateTransactionListModel'],
-  [/^(live\/[A-Z]+\/)?accounts-schema\.json$/, 'ChartOfAccountsModel'],
-  [/^properties\/page-\d+\.json$/, 'PropertyListModel'],
+  [/^(live\/[A-Z]+\/|at-month\/)?accounts-schema\.json$/, 'ChartOfAccountsModel'],
+  [/^(at-month\/)?properties\/page-\d+\.json$/, 'PropertyListModel'],
 ];
 
 const fixtures = readdirSync(fileURLToPath(fixturePath('.')), { recursive: true, encoding: 'utf8' })

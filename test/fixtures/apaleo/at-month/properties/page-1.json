@@ -1,0 +1,30 @@
+{
+  "properties": [
+    {
+      "id": "TIR",
+      "code": "TIR",
+      "isTemplate": false,
+      "name": "Hotel Beispiel Tirol",
+      "description": "Hotel Beispiel Tirol, a fabricated 30-room hotel in Innsbruck for the Austrian fixture month",
+      "companyName": "Beispiel Tirol Hotelbetriebs GmbH",
+      "commercialRegisterEntry": "FN 000001b (fictitious)",
+      "taxId": "ATU00000001",
+      "location": {
+        "addressLine1": "Beispielweg 3",
+        "postalCode": "6020",
+        "city": "Innsbruck",
+        "countryCode": "AT"
+      },
+      "paymentTerms": {
+        "de": "Zahlbar bei Abreise",
+        "en": "Payment on departure"
+      },
+      "timeZone": "Europe/Vienna",
+      "currencyCode": "EUR",
+      "created": "2026-01-05T09:00:00Z",
+      "status": "Live",
+      "isArchived": false
+    }
+  ],
+  "count": 1
+}

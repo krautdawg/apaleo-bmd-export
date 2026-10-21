@@ -1,12 +1,16 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/core/config.js';
 import { runExport, type ExportRequest } from '../../src/export/index.js';
 import { buildBookings } from '../../src/posting/index.js';
 import { ApaleoPermissionError } from '../../src/sources/apaleo/index.js';
-import { BSP } from '../helpers/apaleo.js';
+import { DIALECTS } from '../../src/bmd/index.js';
+import { AT_MONTH, FIXTURE_FILES, BSP, loadAtMonthData } from '../helpers/apaleo.js';
+import { createTestContext } from '../helpers/context.js';
 import { addSecondProperty, exportConfig, exportSetup, type ExportSetup } from '../helpers/export.js';
+import { FakeSource } from '../helpers/fake-source.js';
+import { describeDifference } from '../helpers/golden.js';
 
 const SEPTEMBER = { from: '2026-09-01', to: '2026-09-30' } as const;
 
@@ -246,6 +250,31 @@ describe('plausibility checks in the pipeline', () => {
     expect(outcome?.status).toBe('failed');
     expect(outcome?.findings[0]?.code).toBe('E-AGGREGATE-CHECK');
     expect(outcome?.findings[0]?.message).toContain('core.subledger_aggregate.create, or set checks.aggregates: false');
+  });
+});
+
+describe('the Austrian fixture month through the export pipeline (b05)', () => {
+  /** After an intended change to the output, run `UPDATE_GOLDEN=1 pnpm test` and review the diff. */
+  const GOLDEN = new URL('../golden/bmd/at-month.csv', import.meta.url);
+  const MAPPING = readFileSync(new URL('../fixtures/mapping/ekr-at-month.csv', import.meta.url), 'utf8');
+  const CONFIG = `${FIXTURE_FILES['apaleo-bmd.config.yaml']}properties:\n  - id: ${AT_MONTH}\n    buchsymbol: AR\n`;
+
+  it('writes the golden BMD file with no E- finding and the plausibility checks passing', async () => {
+    const fake = new FakeSource(await loadAtMonthData());
+    const ctx = createTestContext({ files: { 'apaleo-bmd.config.yaml': CONFIG, [`mapping-${AT_MONTH}.csv`]: MAPPING }, sourceFactory: () => fake });
+    const loaded = await loadConfig({ path: join(ctx.cwd, 'apaleo-bmd.config.yaml'), env: ctx.env, readFile: ctx.fs.readFile });
+    const request: ExportRequest = { period: { from: '2026-08-01', to: '2026-08-31' }, propertyIds: [AT_MONTH], dryRun: false, overwrite: false };
+    const [outcome] = await runExport(request, { loaded, source: fake, ctx });
+    expect(outcome?.status).toBe('written');
+    expect(outcome?.bookings).toBe(22);
+    expect(outcome?.findings.filter((f) => f.code.startsWith('E-'))).toEqual([]);
+    expect(outcome?.summary).toContain('Written-off receivables (Forderungsverluste) and the VAT correction per rate:\n  10 %: net 50.00, tax 5.00, gross 55.00');
+    expect(outcome?.summary).toContain('Deposits: received 330.00, released 330.00, of it refunded 110.00');
+
+    const file = readFileSync(join(ctx.cwd, 'exports', AT_MONTH, '2026-08', `BMD_Buchungsimport_20260801-20260831_${AT_MONTH}.csv`));
+    if (process.env.UPDATE_GOLDEN === '1') writeFileSync(GOLDEN, file);
+    const difference = describeDifference(readFileSync(GOLDEN), file, (_line, index) => DIALECTS.ntcs.header[index] ?? '?');
+    expect(difference, `at-month.csv differs from the golden file:\n${difference}`).toBeUndefined();
   });
 });
 

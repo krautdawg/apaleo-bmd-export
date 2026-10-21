@@ -1,14 +1,16 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ChartIndex } from '../../src/core/chart.js';
 import { sumDecimals } from '../../src/core/money.js';
 import { parseMapping } from '../../src/mapping/index.js';
 import { buildBookings } from '../../src/posting/index.js';
-import { LIVE_DAY, fixturePath, loadLiveData } from '../helpers/apaleo.js';
+import { LIVE_DAY, loadLiveData } from '../helpers/apaleo.js';
+import { VIE_NO_SHOW, VIE_TEMPLATE_MAPPING, vieMapping } from '../helpers/live-mapping.js';
 
 /**
  * The recorded VIE business day 2026-10-21 (test/fixtures/apaleo/live/README.md)
- * posted with the committed live EKR mapping (init-mapping --template ekr).
+ * posted with the committed live EKR mapping (init-mapping --template ekr), after
+ * the Kanzlei filled in the one row the template leaves empty: the no-show at 13 %
+ * on 4040 with Steuercode 1 (b05 design decision 7).
  * Hand-checked totals (BMD gets net Betrag and apaleo's tax as Steuer):
  *
  * Revenue 10 % (4010): 38.40 + 46.80 = 85.20; Steuer 3.49 + 4.25 = 7.74, apaleo
@@ -16,7 +18,7 @@ import { LIVE_DAY, fixturePath, loadLiveData } from '../helpers/apaleo.js';
  * Revenue 13 % (4040): 65 + 95.02 + 60 (no-show) + 105 − 10 + 95 = 410.02; Steuer
  *   7.48 + 10.93 + 6.90 + 12.08 − 1.15 + 10.93 = 47.17 (precise 47.17044248).
  * Revenue 20 % (4020): 12.50 + 19.98 + 14.90 = 47.38; Steuer 2.08 + 3.33 + 2.48 =
- *   7.89 (precise 7.89666666, 7.90 rounded once). Revenue 0 % (4090): 45.00.
+ *   7.89 (precise 7.89666666, 7.90 rounded once). Revenue 0 % (4091, the cancellation fee): 45.00.
  * Deposits at 13 % (3202): 83 + 65 + 188.04 + 105 − 65 − 95.02 − 105 = 176.02,
  *   Steuer 20.25; at 20 % (3201): 39.96 − 19.98 = 19.98, Steuer 3.33.
  * Deposits received 83 + 65 + 39.96 + 188.04 + 105 + 10 (parked at 0 %) = 491.00;
@@ -32,8 +34,17 @@ import { LIVE_DAY, fixturePath, loadLiveData } from '../helpers/apaleo.js';
 const data = await loadLiveData();
 const lines = (data.ledger.VIE ?? []).filter((line) => line.businessDate === LIVE_DAY);
 const chart = new ChartIndex(data.charts.VIE ?? []);
-const mapping = parseMapping(readFileSync(fixturePath('live/VIE/mapping-VIE.live.csv')), { path: 'mapping-VIE.live.csv', sachkontenlaenge: 4 });
-const result = buildBookings(lines, mapping, chart, { extbelegnr: 'receipt', dialect: 'ntcs', sachkontenlaenge: 4, buchsymbol: 'HO', buchsymbolZahlung: 'HO' });
+const options = { extbelegnr: 'receipt', dialect: 'ntcs', sachkontenlaenge: 4, buchsymbol: 'HO', buchsymbolZahlung: 'HO' } as const;
+const result = buildBookings(lines, vieMapping(), chart, options);
+
+describe('the template mapping of VIE before the Kanzlei review', () => {
+  it('stops with E-UNMAPPED for the no-show at 13 %, which the template leaves empty', () => {
+    const template = parseMapping(new TextEncoder().encode(VIE_TEMPLATE_MAPPING), { path: 'mapping-VIE.live.csv', sachkontenlaenge: 4 });
+    const unmapped = buildBookings(lines, template, chart, options).findings.filter((f) => f.code.startsWith('E-'));
+    expect(unmapped.map((f) => [f.code, f.value])).toEqual([['E-UNMAPPED', VIE_NO_SHOW]]);
+    expect(unmapped[0]?.message).toContain('(1 line, gross 60.00): fill in bmd_account on line');
+  });
+});
 
 describe('posting the recorded VIE day 2026-10-21', () => {
   it('books 29 of the 35 lines and skips the six /Offset second lines', () => {
@@ -76,6 +87,8 @@ describe('posting the recorded VIE day 2026-10-21', () => {
     expect(summary.accountsReceivableCents).toBe(9_500);
     expect(summary.accounts.find((account) => account.account === '200000')).toEqual({ account: '200000', sollCents: 9_500, habenCents: 0, balanceCents: 9_500 });
     expect(summary.roundingCents).toBe(1);
+    expect(summary.accounts.find((account) => account.account === '4091')).toEqual({ account: '4091', sollCents: 0, habenCents: 4_500, balanceCents: -4_500 });
+    expect(summary.accounts.find((account) => account.account === '4090')).toBeUndefined();
   });
 
   it('writes no text with an English apaleo name or a guest name', () => {

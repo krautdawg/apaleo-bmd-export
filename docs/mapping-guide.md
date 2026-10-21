@@ -71,31 +71,76 @@ Beim Export prüft das Tool zusätzlich jede Buchung: Der Satz muss der Satz der
 
 ## Steuersätze in Österreich
 
-Nach UStG 1994 § 10 (Fassung ab 2026-07-01):
+Nach UStG 1994 § 10 (RIS, Fassung ab 2026-07-01). Das Tool bucht den Satz, den apaleo auf der Buchung hat; die Liste hilft dir und der Kanzlei, die Erlöskonten in apaleo richtig einzurichten.
 
-- **Beherbergung**: 10 %, mit einem ortsüblichen Frühstück, das im Zimmerpreis enthalten ist.
-- **Speisen**: 10 %.
-- **Getränke**: 20 %, ebenso die meisten anderen Leistungen (Parken, Spa-Behandlungen).
-- **13 %**: zum Beispiel Schwimmbad und Therme.
-- **4,9 %**: seit 2026-07-01 für ausgewählte Grundnahrungsmittel, nur Lieferungen, nicht für Restaurationsumsätze.
+- **Beherbergung**: 10 % (§ 10 Abs. 2 Z 3 lit. c), mit einem ortsüblichen Frühstück, das im Zimmerpreis enthalten ist.
+- **Speisen**: 10 %, auch im Restaurant und beim Frühstück, das extra verrechnet wird.
+- **13 %**: Eintritt in Schwimmbad und Therme und die Thermalbehandlung (§ 10 Abs. 3 Z 5), Eintritt zu Theater, Konzert und Museum (Z 6) und zu Sportveranstaltungen (Z 12). Die 13-%-Zeile der Vorlage (`4040`) deckt Schwimmbad und Therme ab.
+- **Getränke**: 20 %, ebenso Massagen, Spa-Behandlungen, Parken und die meisten anderen Leistungen.
+- **4,9 %**: seit 2026-07-01 nur für die Lieferung ausgewählter Grundnahrungsmittel (Anlage 3), nicht für Restaurations- oder Cateringumsätze.
 - **5 %** galt von 1. Juli 2020 bis 31. Dezember 2021. apaleo legt diese Konten in jedem Kontenplan an; die Vorlage lässt sie leer, damit eine Buchung darauf den Export stoppt (`E-UNMAPPED`). Exporte für diesen Zeitraum klärst du mit der Kanzlei.
 
 ## Ortstaxe, Nächtigungsabgabe, Gästeabgaben
 
 Die Zeilen für CityTaxes, SecondCityTax und GuestLevies bleiben in der Vorlage leer. Das ist Absicht: Name und Buchung hängen vom Bundesland und von der Gemeinde ab, und die Entscheidung trifft die Kanzlei.
 
-- **Der Gast schuldet die Abgabe** (Ortstaxe in Wien und Salzburg, Aufenthaltsabgabe in Tirol, Nächtigungsabgabe in der Steiermark): Das Hotel sammelt sie nur ein. Verbindlichkeit gegenüber der Gemeinde ohne Steuercode (EKR 350-359) oder der durchlaufende Posten der Kanzlei.
-- Unterwirft apaleo eine Abgabe der USt, gehört sie auf ein Erlöskonto mit Steuercode und Satz; dann prüft die USt-Prüfung sie wie jeden Erlös.
+In jedem Bundesland schuldet der Gast die Abgabe für seine Nächtigung, und das Hotel hebt sie ein und führt sie ab. Sie ist kein Erlös des Hotels. Die üblichen Namen (Stand 2026-10, ohne Gewähr; maßgeblich sind das Landesgesetz und die Verordnung deiner Gemeinde):
+
+| Bundesland | üblicher Name | schuldet | hebt ein |
+|---|---|---|---|
+| Burgenland | Ortstaxe | Gast | Hotel |
+| Kärnten | Ortstaxe, Nächtigungstaxe | Gast | Hotel |
+| Niederösterreich | Nächtigungstaxe | Gast | Hotel |
+| Oberösterreich | Ortstaxe | Gast | Hotel, abgeführt an die Gemeinde |
+| Salzburg | Ortstaxe | Gast | Hotel |
+| Steiermark | Nächtigungsabgabe | Gast | Hotel |
+| Tirol | Aufenthaltsabgabe | Gast | Hotel, abgeführt an den Tourismusverband |
+| Vorarlberg | Gästetaxe | Gast | Hotel |
+| Wien | Ortstaxe | Gast | Hotel |
+
+Nicht gemeint ist der Tourismusbeitrag (Interessentenbeitrag, in Oberösterreich die Tourismusabgabe nach dem Oö. Tourismusgesetz 2018), den das Hotel selbst schuldet: Den bucht apaleo nicht, und er ist kein durchlaufender Posten.
+
+Zwei Möglichkeiten für die Zeile, beide ohne Steuercode:
+
+- **(a) Verbindlichkeit** gegenüber der Gemeinde, dem Land oder dem Tourismusverband: EKR 350-359 (Abgaben) oder 370-389 (übrige sonstige Verbindlichkeiten). Die Beispielzuordnung nimmt `3580`.
+- **(b) Durchlaufender Posten** nach dem Kontenplan der Kanzlei.
+
+Das BMD-Konto darf keinen fixen Steuercode haben: Sonst trägt BMD ihn in das leere Feld ein, und die Abgabe landet in der UVA. Unterwirft apaleo eine Abgabe der USt, gehört sie auf ein Erlöskonto mit Steuercode und Satz; dann prüft die USt-Prüfung sie wie jeden Erlös.
 
 Bis eine Zeile ausgefüllt ist, blockieren `mapping check --from --to` und der Export mit `E-UNMAPPED`. Die Beispielzuordnung bucht die Ortstaxe auf die Verbindlichkeit gegenüber der Gemeinde 3580 und sagt das im Kommentar.
 
 ## Anzahlungen
 
-Anzahlungen der Gäste (Liabilities) gehen auf erhaltene Anzahlungen (EKR 320), je USt-Satz eine `*`-Zeile: 3200 (10 %), 3202 (13 %) und 3201 (20 %) mit dem Umsatzsteuer-Code, 3209 (0 %) ohne. Sollversteuerer schulden die USt auf eine Anzahlung schon bei Erhalt (Mindest-Istbesteuerung); in BMD NTCS erscheint sie in der UVA bei Steuercode 1 unter „+ Anzahlungen“. Wird die Anzahlung mit der Rechnung verrechnet, bucht apaleo eine negative Belastung auf dieselbe Anzahlung, und das Tool bucht die USt dort wieder zurück.
+Anzahlungen der Gäste (Liabilities) gehen auf erhaltene Anzahlungen (EKR 320), je USt-Satz eine `*`-Zeile: 3200 (10 %), 3202 (13 %) und 3201 (20 %) mit dem Umsatzsteuer-Code, 3209 (0 %) ohne. Auch Sollversteuerer schulden die USt auf eine Anzahlung schon bei Erhalt (Mindest-Istbesteuerung, § 19 Abs. 2 Z 1 lit. a UStG). In BMD NTCS ist das die normale Umsatzsteuer mit Steuercode `1`: Die UVA zählt sie in KZ 000/022/029 unter „+ Anzahlungen“ (BMD NTCS Buchen, Anhang A). Ob Soll- oder Istversteuerung, steht im Firmen- und FIBU-Stamm, nicht auf der Buchung. Wird die Anzahlung mit der Rechnung verrechnet, bucht apaleo eine negative Belastung auf dieselbe Anzahlung, und das Tool bucht die USt dort wieder zurück; eine Rückzahlung an den Gast (eine negative Anzahlung) ebenso.
 
-Führt die Kanzlei Anzahlungen über das BMD-Anzahlungskonto mit noch nicht fälliger USt, stimmst du Konto und Steuercode mit ihr ab. apaleos eigene USt-Konten (Vat, VatOnLiabilities) brauchen keine Zuordnung: Diese Buchungen überspringt das Tool, denn BMD bucht die Steuer aus dem Feld `steuer` der Erlös- oder Anzahlungsbuchung.
+BMD NTCS kennt zwei Einrichtungen (BMD NTCS Buchen, Anhang C):
+
+1. **USt direkt am Anzahlungskonto** (Vorschlag der Vorlage): Das Konto 3200, 3202 oder 3201 bekommt den Steuercode `1` und den Satz, BMD bucht die USt bei Erhalt.
+2. **Anzahlungskonto der Kanzlei je Steuersatz** (im Anhang C zum Beispiel 3290 und 3292) mit einem Konto für noch nicht fällige USt (dort 3510): Dann trägst du die Anzahlungskonten der Kanzlei und ihren Steuercode in die `*`-Zeilen ein.
+
+Jeder Umsatzsteuer-Code des Dialekts geht durch. Ein Vorsteuer-Code (`2` oder `3` in NTCS) auf einer Anzahlungszeile ist ein Fehler (`E-STEUERCODE-INPUT-TAX`): In NTCS ist `3` die Vorsteuer-Berichtigung (KZ 062), nicht die Soll-USt von BMD 5.5. Welche Einrichtung gilt, bestätigt der erste Testimport mit der Kanzlei. apaleos eigene USt-Konten (Vat, VatOnLiabilities) brauchen keine Zuordnung: Diese Buchungen überspringt das Tool, denn BMD bucht die Steuer aus dem Feld `steuer` der Erlös- oder Anzahlungsbuchung.
 
 Wird eine Anzahlung verrechnet, ohne dass apaleo dabei einen USt-Betrag mitschickt, nimmt das Tool Satz und Steuer aus der `PostPrepaymentVat`-Buchung desselben Tages und derselben Reservierung, sonst den Satz aus dem Kontenplan (Warnung `W-VAT-INFERRED`), nie 0 %. Lässt sich kein Satz finden, stoppt es mit `E-VAT-RATE-UNKNOWN`.
+
+## Forderungsverlust
+
+Schreibt das Hotel eine Gastforderung ab, bucht apaleo den Forderungsverlust (LossOfAccountsReceivable) gegen die Gastforderung, mit der USt, wenn es die USt berichtigt (§ 16 Abs. 3 UStG). Die Vorlage ordnet Forderungsverluste nach USt-Satz zu, mit `*`-Zeilen:
+
+- `7800` (10 %), `7802` (13 %) und `7801` (20 %) mit dem Umsatzsteuer-Code (NTCS `1`) und dem Satz,
+- `7809` (0 %) ohne Steuercode.
+
+Mit dem Umsatzsteuer-Code steht das Forderungsverlust-Konto vorn (`konto`), Betrag und Steuer sind positiv: eine Soll-Buchung auf das USt-Konto, die die Umsatzsteuer mindert, wie eine Gutschrift an einen Kunden. In der UVA sollte die Berichtigung als Minderung in KZ 029/022 (oder KZ 090) erscheinen; das prüft der erste Import (Checkliste in [bmd-format.md](bmd-format.md)). Ein Vorsteuer-Code auf dieser Zeile ist ein Fehler (`E-STEUERCODE-INPUT-TAX`).
+
+Warum `*`-Zeilen: apaleo bucht Forderungsverluste wohl auf Konten je Reservierung unter den Containern `6900` und `CollectiveDebitor_LossOfAccountsReceivable`, wie bei den Debitoren. Belegt ist das noch nicht, denn keine aufgezeichnete Buchung enthält einen Forderungsverlust. Die `*`-Zeilen greifen nach Typ und Satz, egal unter welchem Container das Konto hängt; für die Container selbst schreibt die Vorlage keine Zeile. Bucht apaleo direkt auf einen Container, stoppt der Export mit `E-UNMAPPED`.
+
+## Stornogebühr und No-Show
+
+Eine Stornogebühr ist meist echter Schadenersatz und nicht steuerbar; ein No-Show kann steuerbar sein (die Leistung stand bereit). Das entscheidet nicht dieses Tool: Es bucht die USt, die apaleo auf der Buchung hat, und prüft nur, ob die Zeile dazu passt.
+
+- **Ohne USt** (apaleos Konten `RevenueCancellationFees…` und `RevenueNoShow…` mit 0 %, oder ein Erlöskonto, dessen Name Storno, Stornogebühr, Cancellation, No-Show oder Noshow enthält): Die Vorlage schlägt `4091` Stornoerlöse (nicht steuerbar) ohne Steuercode vor. Wie bei `4090` gilt `W-UNTAXED-REVENUE`, bis die Kanzlei bestätigt, dass das Konto in BMD keinen fixen Steuercode hat, oder ihren Steuercode für nicht steuerbare Umsätze einträgt.
+- **Mit USt** (zum Beispiel apaleos `RevenueNoShow_Reduced:13.00`): Die Vorlage lässt die Zeile leer, mit dem Kommentar „No-Show kann steuerbar sein, Stornogebühr meist nicht“, auch dort, wo sonst die 13-%- oder 20-%-Regel greifen würde. Ist die USt richtig, trägst du ein Erlöskonto mit Umsatzsteuer-Code und dem Satz von apaleo ein; sonst korrigierst du die USt in apaleo. Bis dahin stoppen `mapping check --from --to` und der Export mit `E-UNMAPPED`.
+
+Hat apaleo eine Gebühr besteuert, die Zeile aber keinen Steuercode, stoppt der Export mit `E-VAT-MISSING`: Das Tool ändert die USt von apaleo nie.
 
 ## Zahlungen, Forderungen, Debitoren
 
@@ -120,15 +165,19 @@ Die Vorlage steht in `templates/ekr-hotel.rules.csv` (Version `ekr-hotel@1`). Si
 | sonstige Erlöse 20 % | `4030` | 1 | 20 % |
 | Erlöse 13 % | `4040` | 1 | 13 % |
 | Erlöse 4,9 % | `4050` | 1 | 4,9 % |
-| Erlöse ohne USt (zum Beispiel Stornogebühr) | `4090` | leer | 0 % |
+| Erlöse ohne USt | `4090` | leer | 0 % |
+| Stornogebühr und No-Show ohne USt | `4091` | leer | 0 % |
+| Stornogebühr und No-Show mit USt | leer, Kanzlei entscheidet | | |
 | Barzahlung | `2700` Kassa | | |
 | Karte, Überweisung, andere unbare Zahlungen | `2890` Schwebende Geldbewegungen | | |
 | Gast-, externe und Buchungsfolios | `2390` Verrechnung Gastforderungen | | |
 | Rechnungen an Firmen (Sammeldebitor) | `200000` | | |
 | Anzahlungen 10 % / 13 % / 20 % | `3200` / `3202` / `3201` | 1 | 10 / 13 / 20 % |
 | Anzahlungen ohne USt | `3209` | leer | 0 % |
+| Forderungsverlust 10 % / 13 % / 20 % | `7800` / `7802` / `7801` | 1 | 10 / 13 / 20 % |
+| Forderungsverlust ohne USt | `7809` | leer | 0 % |
 
-Mit `bmd.dialect: bmd55` schreibt die Vorlage auf denselben Zeilen den Steuercode 3. Für einen Container wie `3000` (Anzahlungen) schreibt sie keine Zeile, weil die `*`-Zeilen dessen Konten je Reservierung abdecken.
+Mit `bmd.dialect: bmd55` schreibt die Vorlage auf denselben Zeilen den Steuercode 3. Für einen Container wie `3000` (Anzahlungen) oder `6900` (Forderungsverluste) schreibt sie keine Zeile, weil die `*`-Zeilen dessen Konten je Reservierung abdecken.
 
 ### Was die Kanzlei entscheiden muss
 
@@ -136,9 +185,12 @@ Diese Vorlagenzeilen lassen das BMD-Konto leer oder verlangen eine Entscheidung:
 
 - **Ortstaxe, Nächtigungsabgabe, Gästeabgaben** (CityTaxes, SecondCityTax, GuestLevies): bleiben leer, siehe oben.
 - **Erlöse zu 10 % ohne erkennbaren Namen** bleiben leer („weder Beherbergung noch Speisen“).
-- **Erlöse ohne USt** auf 4090: Hat das Konto in BMD einen fixen Steuercode, oder braucht es den Steuercode der Kanzlei für nicht steuerbare Umsätze?
+- **Erlöse ohne USt** auf 4090 und **Stornoerlöse** auf 4091: Hat das Konto in BMD einen fixen Steuercode, oder braucht es den Steuercode der Kanzlei für nicht steuerbare Umsätze?
+- **Stornogebühr und No-Show mit USt** bleiben leer: Ist die USt von apaleo richtig?
+- **Anzahlungen**: USt direkt am Anzahlungskonto oder das Anzahlungskonto der Kanzlei mit noch nicht fälliger USt?
+- **Forderungsverluste** zu 4,9 % oder 5 % haben keine `*`-Zeile.
 - **Erlöse und Anzahlungen zu 5 %**: bleiben leer, historischer Satz.
-- **Forderungsverluste (LossOfAccountsReceivable)**, **Hauskonten (House)** und **durchlaufende Posten aus apaleo (TransitoryItems)** haben noch keine Vorlage.
+- **Hauskonten (House)** und **durchlaufende Posten aus apaleo (TransitoryItems)** haben noch keine Vorlage.
 - **Vat, VatOnLiabilities**: brauchen kein Konto; diese Buchungen werden übersprungen.
 
 ## Umstieg vom DATEV-Export oder von einem bezahlten Connector
@@ -157,7 +209,9 @@ Bevor die erste Datei in BMD importiert wird:
 - [ ] Buchungssymbol, Sachkontenlänge, Personenkontenlänge und Dialekt in der Konfiguration stimmen (`bmd.buchsymbol`, `bmd.sachkontenlaenge`, `bmd.personenkontenlaenge`, `bmd.dialect`), und das Buchungssymbol ist in BMD angelegt ([bmd-import.md](bmd-import.md)).
 - [ ] Jede Zeile mit BMD-Konto ist geprüft; jede leere Zeile ist ausgefüllt oder bewusst leer (ein solches Konto darf dann nicht gebucht werden).
 - [ ] Die Erlöskonten haben den Steuercode und den Satz, den apaleo bucht (Beherbergung und Speisen 10 %, Getränke 20 %), und auf keiner Erlös- oder Anzahlungszeile steht ein Vorsteuer-Code.
-- [ ] Die Ortstaxe ist für die Gemeinde des Hotels entschieden.
+- [ ] Die Ortstaxe ist für die Gemeinde des Hotels entschieden, und ihr BMD-Konto hat keinen fixen Steuercode.
+- [ ] Die Einrichtung der Anzahlungen (USt direkt am Anzahlungskonto oder Anzahlungskonto der Kanzlei) ist entschieden.
+- [ ] Stornogebühren und No-Shows sind geklärt: ohne USt auf 4091 (oder dem Konto der Kanzlei), mit USt nur, wenn apaleos Satz stimmt.
 - [ ] Anzahlungen gehen auf die erhaltenen Anzahlungen mit Steuercode, Zahlungen außer bar auf Schwebende Geldbewegungen, Firmenrechnungen auf den Sammeldebitor, der im Mandanten angelegt ist.
 - [ ] Die Erlöskonten ohne Steuercode haben in BMD keinen fixen Steuercode.
 - [ ] `apaleo-bmd mapping check --property <id> --from <Monatsanfang> --to <Monatsende>` endet ohne Fehler für einen echten Monat.

@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { BmdDialect } from '../../src/bmd/types.js';
-import type { SourceAccount } from '../../src/core/source.js';
+import { ChartIndex } from '../../src/core/chart.js';
+import type { AccountRef, SourceAccount } from '../../src/core/source.js';
 import {
   OUTPUT_TAX_MARKER,
   SUGGESTION_MARK,
@@ -10,6 +11,7 @@ import {
   mappingHeaderComment,
   parseTemplate,
   renderMappingFile,
+  resolve,
   scaleAccount,
   shippedTemplate,
   suggestRows,
@@ -98,9 +100,15 @@ describe('EKR hotel template', () => {
       ['Liabilities', '5', '', '', ''],
       ['Receivables', '', '2390', '', ''],
       ['AccountsReceivable', '', '200000', '', ''],
+      ['LossOfAccountsReceivable', '10', '7800', '1', '10'],
+      ['LossOfAccountsReceivable', '13', '7802', '1', '13'],
+      ['LossOfAccountsReceivable', '20', '7801', '1', '20'],
+      ['LossOfAccountsReceivable', '0', '7809', '', '0'],
     ]);
     // Parents get no row, nor do containers of wildcard types that no rule maps.
-    for (const parent of ['1000', '5000', 'RevenueAccommodation', '3000', '9999', '6900']) expect(find(rows, parent), parent).toBeUndefined();
+    for (const parent of ['1000', '5000', 'RevenueAccommodation', '3000', '9999', '6900', 'CollectiveDebitor_LossOfAccountsReceivable']) {
+      expect(find(rows, parent), parent).toBeUndefined();
+    }
   });
 
   it('does not guess House and TransitoryItems', async () => {
@@ -136,8 +144,16 @@ describe('EKR hotel template', () => {
     ]);
   });
 
+  it('matches patterns against the apaleo account number too, without letting a number containing "Room" override a 20 % drink', async () => {
+    const chart = [account('RoomBarDrinks', 'Getränke Hotelbar', 'Revenues', rate(20)), account('RevenueNoShow_VeryReduced:10.00', 'Revenues (10%)', 'Revenues', rate(10))];
+    const { rows } = suggestRows(chart, await loadTemplate(), settings());
+    expect(find(rows, 'RoomBarDrinks')).toMatchObject({ bmdAccount: '4020', steuercode: '1', bmdVatPercent: '20' });
+    expect(find(rows, 'RevenueNoShow_VeryReduced:10.00')?.bmdAccount).toBe('');
+    expect(find(rows, 'RevenueNoShow_VeryReduced:10.00')?.comment).toContain('No-Show kann steuerbar sein');
+  });
+
   it('proposes 4040 at 13 %, 4050 at 4.9 % and 4090 without Steuercode at 0 %, with the comment on the fixed Steuercode', async () => {
-    const chart = [account('A', 'Therme', 'Revenues', rate(13)), account('B', 'Brot', 'Revenues', rate(4.9)), account('C', 'Storno', 'Revenues', rate(0))];
+    const chart = [account('A', 'Therme', 'Revenues', rate(13)), account('B', 'Brot', 'Revenues', rate(4.9)), account('C', 'Gutschein ohne USt', 'Revenues', rate(0))];
     const { rows } = suggestRows(chart, await loadTemplate(), settings());
     expect(['A', 'B', 'C'].map((n) => find(rows, n)).map((r) => [r?.bmdAccount, r?.steuercode, r?.bmdVatPercent])).toEqual([
       ['4040', '1', '13'],
@@ -176,6 +192,8 @@ describe('EKR hotel template', () => {
     expect(find(rows, 'B')?.steuercode).toBe('');
     expect(['10', '13', '20'].map((p) => wildcard(rows, 'Liabilities', p)?.steuercode)).toEqual(['3', '3', '3']);
     expect(wildcard(rows, 'Liabilities', '0')?.steuercode).toBe('');
+    expect(['10', '13', '20'].map((p) => wildcard(rows, 'LossOfAccountsReceivable', p)?.steuercode)).toEqual(['3', '3', '3']);
+    expect(wildcard(rows, 'LossOfAccountsReceivable', '0')?.steuercode).toBe('');
   });
 
   it('writes no row for an empty container outside the global ledger, but keeps one a rule maps', async () => {
@@ -194,8 +212,9 @@ describe('EKR hotel template', () => {
     expect(find(rows, '9999')).toBeUndefined();
     expect(find(rows, '1200')?.bmdAccount).toBe('2390');
     expect(find(rows, 'CollectiveDebitor_AccountsReceivable')?.bmdAccount).toBe('200000');
-    // Bad debt has no wildcard rule yet (b05): its container keeps its empty row.
-    expect(find(rows, 'CollectiveDebitor_LossOfAccountsReceivable')).toMatchObject({ bmdAccount: '', comment: expect.stringContaining('Forderungsverluste') });
+    // Bad debt is a wildcard type (b05): neither container gets a row.
+    expect(find(rows, '6900')).toBeUndefined();
+    expect(find(rows, 'CollectiveDebitor_LossOfAccountsReceivable')).toBeUndefined();
     expect(find(rows, '9000')).toBeDefined();
   });
 
@@ -287,8 +306,8 @@ describe('EKR template on the recorded VIE chart', () => {
     const historical = rows.filter((row) => row.apaleoAccount.endsWith('_Special:5.00') && row.apaleoType === 'Revenues');
     expect(historical.length).toBeGreaterThanOrEqual(5);
     for (const row of historical) expect(row).toMatchObject({ bmdAccount: '', comment: expect.stringContaining('1.7.2020 bis 31.12.2021') });
-    // Bad debt keeps its empty container row until b05 makes it a wildcard type.
-    expect(find(rows, 'CollectiveDebitor_LossOfAccountsReceivable')?.bmdAccount).toBe('');
+    expect(find(rows, '6900')).toBeUndefined();
+    expect(find(rows, 'CollectiveDebitor_LossOfAccountsReceivable')).toBeUndefined();
   });
 
   it('is the committed live mapping of VIE, byte for byte', async () => {
@@ -299,4 +318,106 @@ describe('EKR template on the recorded VIE chart', () => {
     const committed = readFileSync(new URL('../fixtures/apaleo/live/VIE/mapping-VIE.live.csv', import.meta.url));
     expect(Buffer.from(written).equals(committed)).toBe(true);
   });
+});
+
+describe('EKR template rows for the Austrian special cases (b05)', () => {
+  const NO_SHOW_COMMENT = 'No-Show kann steuerbar sein, Stornogebühr meist nicht';
+
+  it.each([
+    ['ntcs', '1'],
+    ['bmd55', '3'],
+  ] as const)('writes the deposit wildcards with the output-tax code and a comment naming both NTCS setups (%s)', async (dialect, code) => {
+    const { rows } = suggestRows([], await loadTemplate(), settings({ dialect }));
+    for (const [percent, bmdAccount] of [['10', '3200'], ['13', '3202'], ['20', '3201']] as const) {
+      const row = wildcard(rows, 'Liabilities', percent);
+      expect(row).toMatchObject({ bmdAccount, steuercode: code, bmdVatPercent: percent });
+      expect(row?.comment).toContain('die USt direkt am Anzahlungskonto');
+      expect(row?.comment).toContain('Anzahlungskonto der Kanzlei je Steuersatz mit einem Konto für noch nicht fällige USt');
+      expect(row?.comment).toContain('docs/mapping-guide.md');
+    }
+  });
+
+  it('maps bad debt by rate: 7800 at 10 %, 7802 at 13 %, 7801 at 20 % with the output-tax code, 7809 at 0 % without', async () => {
+    const { rows } = suggestRows([], await loadTemplate(), settings());
+    expect(['10', '13', '20', '0'].map((p) => wildcard(rows, 'LossOfAccountsReceivable', p)).map((r) => [r?.bmdAccount, r?.steuercode, r?.bmdVatPercent])).toEqual([
+      ['7800', '1', '10'],
+      ['7802', '1', '13'],
+      ['7801', '1', '20'],
+      ['7809', '', '0'],
+    ]);
+    for (const p of ['10', '13', '20', '0']) expect(wildcard(rows, 'LossOfAccountsReceivable', p)?.comment).toMatch(/^Vorschlag \(ungeprüft\): Forderungsverlust/);
+  });
+
+  it('maps cancellation and no-show fees at 0 % to 4091 by group number or by German or English name, before any other rule', async () => {
+    const chart = [
+      account('RevenueCancellationFees', 'Gebühren', 'Revenues', { hasChildren: true }),
+      account('RevenueCancellationFees_Without:0.00', 'Gebühren (0%)', 'Revenues', { parentNumber: 'RevenueCancellationFees', ...rate(0, 'Without') }),
+      account('RevenueNoShow_Null:0.00', 'Nicht erschienen', 'Revenues', rate(0, 'Null')),
+      account('S1', 'Stornogebühr', 'Revenues', rate(0)),
+      account('S2', 'No-Show Zimmer', 'Revenues', rate(0)),
+      account('S3', 'Noshow fee', 'Revenues', rate(0)),
+      account('S4', 'Cancellation fee', 'Revenues', rate(0)),
+    ];
+    const { rows } = suggestRows(chart, await loadTemplate(), settings());
+    for (const number of ['RevenueCancellationFees_Without:0.00', 'RevenueNoShow_Null:0.00', 'S1', 'S2', 'S3', 'S4']) {
+      const row = find(rows, number);
+      expect([row?.bmdAccount, row?.steuercode, row?.bmdVatPercent], number).toEqual(['4091', '', '0']);
+      expect(row?.comment, number).toContain('prüfe, dass 4091 in BMD keinen fixen Steuercode hat');
+    }
+  });
+
+  it.each([
+    ['No-Show Gebühr', 10],
+    ['No-Show Zimmer', 10],
+    ['Stornogebühr', 20],
+    ['Revenues No-show (13%)', 13],
+  ])('leaves a taxed fee "%s" at %i %% empty with the no-show comment, also where a rate rule would match', async (name, percent) => {
+    const { rows } = suggestRows([account('F', name, 'Revenues', rate(percent))], await loadTemplate(), settings());
+    expect(find(rows, 'F')).toMatchObject({ bmdAccount: '', steuercode: '', bmdVatPercent: '', comment: expect.stringContaining(NO_SHOW_COMMENT) });
+    expect(find(rows, 'F')?.comment).toMatch(/^Vorschlag \(ungeprüft\)/);
+  });
+
+  it('keeps the historical 5 % comment on a cancellation fee at 5 %', async () => {
+    const { rows } = suggestRows([account('RevenueCancellationFees_Special:5.00', 'Revenues Cancellation fees (5%)', 'Revenues', rate(5, 'Special'))], await loadTemplate(), settings());
+    expect(find(rows, 'RevenueCancellationFees_Special:5.00')?.comment).toContain('historischer Satz 5 %');
+  });
+
+  it('leaves a CityTaxes row empty with both booking options, the fixed-Steuercode check and the Bundesland table', async () => {
+    const { rows } = suggestRows([account('3501', 'City Tax (no VAT)', 'CityTaxes', rate(0, 'Without'))], await loadTemplate(), settings());
+    const row = find(rows, '3501');
+    expect(row?.bmdAccount).toBe('');
+    expect(row?.comment).toContain('Verbindlichkeit gegenüber der Gemeinde ohne Steuercode');
+    expect(row?.comment).toContain('durchlaufende Posten der Kanzlei');
+    expect(row?.comment).toContain('Das BMD-Konto darf keinen fixen Steuercode haben');
+    expect(row?.comment).toContain('Tabelle nach Bundesland in docs/mapping-guide.md');
+  });
+});
+
+describe('b05 rows on the recorded VIE chart', () => {
+  const loadVie = async () => (await loadLiveData()).charts.VIE ?? [];
+
+  it('maps RevenueCancellationFees_Without:0.00 to 4091 without Steuercode and leaves RevenueNoShow_Reduced:13.00 empty with the no-show comment', async () => {
+    const { rows } = suggestRows(await loadVie(), await loadTemplate(), settings());
+    expect(find(rows, 'RevenueCancellationFees_Without:0.00')).toMatchObject({ bmdAccount: '4091', steuercode: '', bmdVatPercent: '0' });
+    expect(find(rows, 'RevenueNoShow_Reduced:13.00')).toMatchObject({ bmdAccount: '', steuercode: '', comment: expect.stringContaining('No-Show kann steuerbar sein') });
+  });
+
+  it.each(['6900', 'CollectiveDebitor_LossOfAccountsReceivable'])(
+    'resolves a write-off on a per-reservation bad-debt account under %s through the rate wildcards, and writes no container row',
+    async (parentNumber) => {
+      const vie = await loadVie();
+      const { rows } = suggestRows(vie, await loadTemplate(), settings());
+      expect(find(rows, '6900')).toBeUndefined();
+      expect(find(rows, 'CollectiveDebitor_LossOfAccountsReceivable')).toBeUndefined();
+      const mapping = mappingOf(rows);
+      const chart = new ChartIndex(vie);
+      // Assumed shape (no write-off is recorded): like AR's AHTJTGFK-1_AccountsReceivable under 9999.
+      const account: AccountRef = { number: 'AHTJTGFK-1_LossOfAccountsReceivable', name: 'LossOfAccountsReceivable for Reservation AHTJTGFK-1', type: 'LossOfAccountsReceivable', parentNumber };
+      const at = (rate: number) => resolve(mapping, account, { rate, chart });
+      expect([at(10), at(20)].map((row) => [row?.bmdAccount, row?.steuercode, row?.bmdVatPercent])).toEqual([
+        ['7800', '1', '10'],
+        ['7801', '1', '20'],
+      ]);
+    },
+  );
 });

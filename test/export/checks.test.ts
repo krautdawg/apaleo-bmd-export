@@ -1,11 +1,10 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { AccountTotals } from '../../src/core/source.js';
 import { checkAccountMovements, checkAggregates, checkConservation, checkVatByRate, plausibilityFindings, type CheckOptions } from '../../src/export/index.js';
-import { parseMapping } from '../../src/mapping/index.js';
 import { buildBookings, type PostingResult } from '../../src/posting/index.js';
 import { ChartIndex } from '../../src/core/chart.js';
-import { BSP, LIVE_DAY, LIVE_PROPERTIES, fixturePath, loadLiveData } from '../helpers/apaleo.js';
+import { BSP, LIVE_DAY, LIVE_PROPERTIES, loadLiveData } from '../helpers/apaleo.js';
+import { vieMapping } from '../helpers/live-mapping.js';
 import { FakeSource } from '../helpers/fake-source.js';
 import { BEISPIEL, CHART, EKR_MAPPING, LEDGER, OPTIONS as POSTING_OPTIONS, post } from '../helpers/posting.js';
 
@@ -124,7 +123,7 @@ describe('tax per rate (E-VAT-TOTAL)', () => {
     const live = await loadLiveData();
     const lines = (live.ledger.VIE ?? []).filter((line) => line.businessDate === LIVE_DAY);
     const chart = new ChartIndex(live.charts.VIE ?? []);
-    const mapping = parseMapping(readFileSync(fixturePath('live/VIE/mapping-VIE.live.csv')), { path: 'mapping-VIE.live.csv', sachkontenlaenge: 4 });
+    const mapping = vieMapping();
     const result = buildBookings(lines, mapping, chart, POSTING_OPTIONS);
     expect(result.summary.revenueByRate.find((r) => r.ratePercent === 10)).toMatchObject({ vatCents: 774, apaleoVat: '7.74545454' });
     expect(plausibilityFindings(lines, result, { mapping, chart })).toEqual([]);

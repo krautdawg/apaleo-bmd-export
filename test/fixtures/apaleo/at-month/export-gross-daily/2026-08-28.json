@@ -1,0 +1,38 @@
+{
+  "transactions": [
+    {
+      "timestamp": "2026-08-28T12:00:00Z",
+      "date": "2026-08-28",
+      "debitedAccount": {
+        "name": "LossOfAccountsReceivable for Reservation TIR-FOXTROT-1",
+        "number": "TIR-FOXTROT-1_LossOfAccountsReceivable",
+        "parentNumber": "6900",
+        "type": "LossOfAccountsReceivable"
+      },
+      "creditedAccount": {
+        "name": "Receivables for Reservation TIR-FOXTROT-1",
+        "number": "TIR-FOXTROT-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "command": "PostToLossOfAccountsReceivables",
+      "currency": "EUR",
+      "grossAmount": 55,
+      "netAmount": 50,
+      "taxes": [
+        {
+          "type": "VeryReduced",
+          "percent": 10,
+          "amount": 5
+        }
+      ],
+      "receipt": {
+        "type": "Reservation",
+        "number": "TIR-FOXTROT-1-V0"
+      },
+      "sourceEntryNumber": "000000022",
+      "reference": "TIR-FOXTROT-1",
+      "referenceType": "Guest"
+    }
+  ]
+}
