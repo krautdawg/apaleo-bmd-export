@@ -82,7 +82,7 @@ schedule:
   # Auch APALEO_BMD_TIMEZONE.
   timezone: Europe/Vienna
   # Ein Rhythmus pro Installation, damit nie tägliche und monatliche Dateien bei
-  # BMD ankommen: "monthly" (ein Stapel pro Monat für die Kanzlei) oder "daily"
+  # BMD ankommen: "monthly" (eine Importdatei pro Monat für die Kanzlei) oder "daily"
   # (etwa 30 Importe im Monat).
   cadence: monthly
   monthly:

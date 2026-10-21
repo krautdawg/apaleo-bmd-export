@@ -8,7 +8,7 @@ Das Tool liest eine Konfigurationsdatei im Format YAML oder JSON und dazu ein pa
 2. die Umgebungsvariable `APALEO_BMD_CONFIG`, sonst
 3. `./apaleo-bmd.config.yaml` im Arbeitsverzeichnis.
 
-Eine Datei, deren Name auf `.json` endet, wird als JSON gelesen, jede andere als YAML. Unbekannte Schlüssel lehnt das Tool mit ihrem Namen ab, damit ein Tippfehler nie unbemerkt bleibt. Ein Schlüssel ohne Wert (`buchsymbol:`) gilt als nicht gesetzt. Eine Konfiguration des DATEV-Exports mit einem Abschnitt `datev` lehnt das Tool ab und nennt den Abschnitt `bmd`, der ihn ersetzt. `apaleo-bmd doctor` zeigt, welche Datei verwendet wird und ob sie gültig ist.
+Eine Datei, deren Name auf `.json` endet, wird als JSON gelesen, jede andere als YAML. Unbekannte Schlüssel lehnt das Tool mit ihrem Namen ab, damit ein Tippfehler nie unbemerkt bleibt. Ein Schlüssel ohne Wert (`buchsymbol:`) gilt als nicht gesetzt. Eine Konfiguration aus dem Vorgängerprojekt mit einem Abschnitt `datev` lehnt das Tool ab und nennt den Abschnitt `bmd`, der ihn ersetzt ([troubleshooting.md](troubleshooting.md#einrichtung-aus-deutschland-übernommen)). `apaleo-bmd doctor` zeigt, welche Datei verwendet wird und ob sie gültig ist.
 
 ## Secrets
 

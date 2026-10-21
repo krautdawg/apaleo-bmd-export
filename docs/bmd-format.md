@@ -4,7 +4,7 @@ Diese Seite hält fest, was `src/bmd` schreibt, gegen welche Quellen es geprüft
 
 Zuletzt geprüft: **2026-10-21**.
 
-Keine Gewähr, keine Steuerberatung: BMD veröffentlicht keine aktuelle Spezifikation des Buchungsimports, und eine BMD-Installation stand nicht zur Verfügung. Der Writer folgt dem, worin die Quellen unten übereinstimmen. Ob BMD NTCS die Datei ohne Nacharbeit liest, bestätigt erst ein Testimport mit deiner Kanzlei. Lass deine Kontenzuordnung von deiner Steuerberatung prüfen.
+Keine Gewähr, keine Steuerberatung: BMD veröffentlicht keine aktuelle Spezifikation des Buchungsimports, und eine BMD-Installation stand nicht zur Verfügung. Der Writer folgt dem, worin die Quellen unten übereinstimmen: Die Datei folgt dem dokumentierten BMD-Importformat (PR08/PR08A, dvo); ein erster Testimport mit einer Kanzlei steht noch aus. Ob BMD NTCS die Datei ohne Nacharbeit liest, bestätigt erst dieser Testimport, festgehalten unter [Testimporte](maintainers.md#testimporte). Lass deine Kontenzuordnung von deiner Steuerberatung prüfen.
 
 ## Geprüfte Quellen
 
@@ -36,7 +36,7 @@ satzart;konto;gkonto;belegnr;belegdatum;buchdatum;buchsymbol;buchcode;prozent;st
 
 ## Dialekte: NTCS und BMD 5.5
 
-Kopfzeile, Datumsformat und die Bedeutung der Steuercodes gehören zusammen. Ein Schalter wählt alle drei, damit eine Datei sie nie mischt. Standard ist `ntcs`; `bmd55` ist für Kanzleien, die noch mit BMD 5.5 importieren. Ab b03 heißt der Schalter in der Konfiguration `bmd.dialect`.
+Kopfzeile, Datumsformat und die Bedeutung der Steuercodes gehören zusammen. Ein Schalter wählt alle drei, damit eine Datei sie nie mischt. Standard ist `ntcs`; `bmd55` ist für Kanzleien, die noch mit BMD 5.5 importieren. In der Konfiguration heißt der Schalter `bmd.dialect`.
 
 | | `ntcs` (Standard) | `bmd55` |
 |---|---|---|
@@ -96,7 +96,7 @@ Zwei Hotels, die in denselben BMD-Mandanten buchen, brauchen verschiedene Buchun
 
 ## Kostenstelle
 
-`kost` hat in BMD zwei Bedeutungen: an Erlös- und Aufwandszeilen die Kostenstelle, an Zahlungen die Belegnummer der bezahlten Rechnung. Der Writer prüft nur das Format (1 bis 9 Ziffern, sonst `E-BMD-KOST`). Wann eine Zeile eine Kostenstelle bekommt, entscheiden die Buchungsregeln (ab b03 nur an Erfolgskonten).
+`kost` hat in BMD zwei Bedeutungen: an Erlös- und Aufwandszeilen die Kostenstelle, an Zahlungen die Belegnummer der bezahlten Rechnung. Der Writer prüft nur das Format (1 bis 9 Ziffern, sonst `E-BMD-KOST`). Wann eine Zeile eine Kostenstelle bekommt, entscheiden die Buchungsregeln: nur an Erlös- und Forderungsverlustzeilen ([posting-rules.md](posting-rules.md#felder)).
 
 ## Texte bereinigen
 
@@ -119,18 +119,19 @@ Jede Antwort ist eine Einstellung an einer Stelle, `src/bmd/format.ts` oder ein 
 2. Zeichensatz: Windows-1252 oder UTF-8 mit BOM?
 3. Höchstlänge von `text` in der aktuellen NTCS (angenommen 40).
 4. Nimmt das Buchungssymbol die Belegnummern aus `MMTT` und Zähler ohne Warnung wegen Duplikaten an?
-5. Lehnt BMD NTCS eine `steuer` ab, die um einen Cent von `prozent` mal `betrag` abweicht? (Die Buchungsregeln ab b03 halten Abweichungen bei höchstens einem Cent und melden sie.)
+5. Lehnt BMD NTCS eine `steuer` ab, die um einen Cent von `prozent` mal `betrag` abweicht? (Die Buchungsregeln halten Abweichungen bei höchstens einem Cent und melden sie als `W-VAT-ROUNDING`.)
 
 ## Checkliste für den ersten Testimport
 
 Mach den ersten Import mit deiner Kanzlei in einem Testmandanten oder mit einer Datei, die sie danach wieder löscht:
 
 - [ ] Der Dialekt stimmt: BMD erkennt alle Spalten der Kopfzeile, und Belegdatum und Buchungsdatum kommen richtig an.
-- [ ] Eine Erlösbuchung mit Steuercode 1 landet in der UVA-Vorschau in der Kennzahl ihres Steuersatzes (KZ 022 für 20 %, KZ 029 für 10 %), nicht in KZ 062.
+- [ ] Die Saldenliste des Monats zeigt pro Konto dieselben Summen wie das Protokoll des Tools.
+- [ ] Eine Erlösbuchung mit Steuercode 1 landet in der UVA-Vorschau in der Kennzahl ihres Steuersatzes (KZ 022 für 20 %, KZ 029 für 10 %, KZ 006 für 13 %), nicht in KZ 062.
 - [ ] Unter dem Buchungssymbol gibt es keine Warnung wegen doppelter Belegnummern, auch nicht mit einer zweiten Datei desselben Monats.
-- [ ] Die Konten für Erlöse mit 0 % und für die Ortstaxe haben im Kontenplan keinen fest hinterlegten Steuercode, den BMD bei leerem Feld anwenden würde: Konten 4090/4091 und das Ortstaxe-Konto haben keinen fixen Steuercode.
-- [ ] Anzahlungen erscheinen in KZ 000/022/029 (in der UVA-Vorschau unter „+ Anzahlungen“), und ihre Auflösung bucht die USt wieder zurück.
-- [ ] USt-Berichtigung bei Forderungsverlust erscheint als Minderung in KZ 029/022 (bzw. 090).
+- [ ] Die Konten für Erlöse mit 0 % und für die Ortstaxe haben im Kontenplan keinen fest hinterlegten Steuercode, den BMD bei leerem Feld anwenden würde: Konten 4090/4091, 3209 und 7809 und das Ortstaxe-Konto der Kanzlei (Beispiel 3580) haben keinen fixen Steuercode.
+- [ ] Anzahlungen erscheinen in KZ 000/022/029/006 (KZ 022 für 20 %, 029 für 10 %, 006 für 13 %; in der UVA-Vorschau unter „+ Anzahlungen“), und ihre Auflösung bucht die USt wieder zurück.
+- [ ] USt-Berichtigung bei Forderungsverlust erscheint als Minderung in KZ 022/029/006 (bzw. 090).
 - [ ] BMD nimmt `4,9` in `prozent` an.
 - [ ] Umlaute, ß und € sind im Buchungstext lesbar.
 - [ ] BMD bucht die Gegenbuchung auf `gkonto` und die Steuer auf das Steuerkonto, ohne dass die Datei Steuerzeilen enthält.

@@ -5,11 +5,14 @@ import { parse } from 'yaml';
 import { COMMANDS } from '../src/cli/commands/index.js';
 import { ENV_OVERRIDES, SECRET_KEYS } from '../src/core/config.js';
 import { APALEO_PERMISSIONS } from '../src/sources/apaleo/index.js';
-import { ROOT, commandPhrases, configPaths, readRepoFile } from './helpers/docs.js';
+import { ROOT, checkCompatibilityClaims, commandPhrases, configPaths, readRepoFile, recordedTestImports } from './helpers/docs.js';
 
 const README = readRepoFile('README.md');
 const ENGLISH_README = readRepoFile('README.en.md');
-const GERMAN_TAGLINE = 'Kostenloser apaleo DATEV Export: Buchungsstapel (EXTF) für DATEV Rechnungswesen, Open Source';
+const MAINTAINERS = readRepoFile('docs/maintainers.md');
+const GERMAN_TAGLINE = 'Kostenloser apaleo BMD Export: Buchungsimport für BMD NTCS aus apaleo, Open Source';
+const PRICE = '18-51 EUR pro Monat (je nach Anbieter und Anzahl der Betriebe), laut apaleo Store, Oktober 2026';
+const PENDING_IMPORT = 'Die Datei folgt dem dokumentierten BMD-Importformat (PR08/PR08A); ein erster Testimport mit einer Kanzlei steht noch aus.';
 /** The install block of the German quick start (s09 design decision 3), which CI runs. */
 const INSTALL_BLOCK = [
   'git clone https://github.com/krautdawg/apaleo-bmd-export.git',
@@ -44,11 +47,11 @@ describe('README first screen', () => {
   it('opens with the H1, the link to the English README, the tagline, badges, the intro and the disclaimer notice before any install detail', () => {
     const [title = '', ...rest] = README.split('\n');
     expect(title).toMatch(/^# /);
-    for (const term of ['apaleo DATEV Export', 'kostenlos', 'Open Source']) expect(title).toContain(term);
+    for (const term of ['apaleo BMD Export', 'kostenlos', 'Open Source']) expect(title).toContain(term);
     expect(rest.find((line) => line.trim() !== '')).toContain('](README.en.md)');
     expect(firstScreen).toContain(GERMAN_TAGLINE);
     for (const badge of ['actions/workflows/ci.yml/badge.svg', 'licence-MIT', 'node.js-24']) expect(firstScreen).toContain(badge);
-    expect(firstScreen).toContain('apaleo-datev-export ist');
+    expect(firstScreen).toMatch(/apaleo-bmd-export ist .*Hotels in Österreich.*Kanzlei/);
     expect(firstScreen).toContain('Keine Gewähr, keine Steuerberatung');
     expect(firstScreen).toContain('Lass deine Kontenzuordnung von deiner Steuerberatung prüfen');
     expect(firstScreen).toContain('](DISCLAIMER.md)');
@@ -58,9 +61,21 @@ describe('README first screen', () => {
   });
 
   it('uses the search terms people use in the title, tagline and intro', () => {
-    for (const term of ['apaleo', 'DATEV', 'DATEV-Export', 'Buchungsstapel', 'EXTF', 'DATEV-Format', 'SKR03', 'SKR04', 'Steuerberater', 'Hotel', 'Open Source', 'kostenlos']) {
+    for (const term of ['apaleo', 'BMD', 'BMD NTCS', 'BMD-Export', 'Buchungsimport', 'Einheitskontenrahmen', 'EKR', 'Steuerberater', 'Buchhaltung', 'Hotel', 'Österreich', 'Open Source', 'kostenlos']) {
       expect(firstScreen.toLowerCase(), term).toContain(term.toLowerCase());
     }
+  });
+
+  it('Pending test import: says on the first screen that the file follows the documented layout and the first test import is pending', () => {
+    expect(recordedTestImports(MAINTAINERS)).toEqual([]);
+    expect(firstScreen).toContain(PENDING_IMPORT);
+  });
+
+  it('Claim without a recorded import: makes no tested-with-BMD claim while docs/maintainers.md records no import', () => {
+    expect(checkCompatibilityClaims('README.md', README, recordedTestImports(MAINTAINERS).length)).toEqual([]);
+    expect(checkCompatibilityClaims('README.md', `${README}\nDie Datei ist getestet mit BMD NTCS.\n`, recordedTestImports(MAINTAINERS).length)).toEqual([
+      expect.stringMatching(/^README\.md: "getestet mit BMD"/),
+    ]);
   });
 
   it('is German only, with the sections in order', () => {
@@ -90,7 +105,7 @@ describe('README quick start', () => {
     const quickStart = section(README, '## Schnellstart');
     const numbered = [...quickStart.matchAll(/^(\d)\. \*\*(.+?)\*\*/gm)].map((m) => `${m[1]} ${m[2]}`);
     expect(numbered).toEqual(['1 apaleo Custom App anlegen.', '2 Installieren', '3 Kontenzuordnung anlegen', '4 Probelauf', '5 Export']);
-    for (const command of ['init-mapping --property', 'export --month 2026-09 --dry-run', 'export --month 2026-09\n']) {
+    for (const command of ['init-mapping --property BSP --template ekr', 'export --month 2026-09 --dry-run', 'export --month 2026-09\n']) {
       expect(quickStart).toContain(command);
     }
   });
@@ -123,27 +138,45 @@ describe('README quick start', () => {
 describe('README scope and comparison', () => {
   it('says what the tool does not do', () => {
     const limits = section(README, '## Was es nicht macht');
-    for (const phrase of ['Übertragung an DATEV online', 'Debitoren-Stammdaten', 'Gebühren der Zahlungsdienstleister', 'Provisionen der Buchungsportale', 'Weboberfläche', 'gehosteter Dienst']) {
+    for (const phrase of [
+      'Keine Übertragung an BMD und kein BMD Com',
+      'Keine Personenkonten-Stammdaten',
+      'Gebühren der Zahlungsdienstleister',
+      'Rückbuchungen (Chargebacks)',
+      'Provisionen der Buchungsportale',
+      'Weboberfläche',
+      'gehosteter Dienst',
+      'keine anderen Zielformate wie DATEV oder RZL',
+    ]) {
       expect(limits).toContain(phrase);
     }
   });
 
-  it('compares with paid connectors on six points, with dated prices and no vendor name', () => {
+  it('Comparison table: compares with paid connectors on eight points, with the dated price and no vendor name', () => {
     const table = section(README, '## Vergleich mit kostenpflichtigen Connectoren');
     const rows = [...table.matchAll(/^\| ([^|]+?) \|/gm)].map((m) => m[1]?.trim());
-    expect(rows).toEqual(expect.arrayContaining(['Preis', 'Betrieb', 'Einrichtung', 'Übertragung an DATEV online', 'Support', 'Vorlagen für die Zuordnung']));
-    expect(table).toContain('laut apaleo Store, Oktober 2026');
+    expect(rows).toEqual(
+      expect.arrayContaining(['Preis', 'Betrieb', 'Einrichtung', 'Zustellung der Dateien', 'Personenkonten-Datei', 'Gebühren aus Abrechnungsdateien', 'Support', 'Vorlagen für die Zuordnung']),
+    );
+    expect(table).toContain(PRICE);
     expect(table).toContain('Selbst betreiben heißt');
-    for (const vendor of ['grman', 'omniboost', 'datev connector']) {
-      expect(README.toLowerCase()).not.toContain(vendor);
-      expect(ENGLISH_README.toLowerCase()).not.toContain(vendor);
+    for (const vendor of ['grman', 'hotecholution', 'omniboost', 'bmd connector', 'datev connector']) {
+      expect(README.toLowerCase(), vendor).not.toContain(vendor);
+      expect(ENGLISH_README.toLowerCase(), vendor).not.toContain(vendor);
     }
+  });
+
+  it('names the origin project in one sentence and links it for DATEV users', () => {
+    const origin = README.split('\n').filter((line) => line.includes('apaleo-datev-export'));
+    expect(origin).toHaveLength(1);
+    expect(origin[0]).toContain('](https://github.com/krautdawg/apaleo-datev-export)');
+    expect(origin[0]).toMatch(/wer .*mit DATEV bucht/);
   });
 
   it('answers the FAQ questions', () => {
     const faq = section(README, '## Häufige Fragen');
-    for (const topic of ['Was kostet es', 'Wohin gehen meine Daten', 'DATEV online', 'Festschreibung', 'Mehrere Hotels', 'wechseln', 'Österreich (BMD)']) {
-      expect(faq).toContain(topic);
+    for (const topic of ['Was kostet es', 'Wohin gehen meine Daten', 'BMD Com', 'Testimport', 'rückgängig', 'Mehrere Hotels', 'wechseln', 'BMD 5.5', 'DATEV']) {
+      expect(faq, topic).toContain(topic);
     }
   });
 });
@@ -151,7 +184,8 @@ describe('README scope and comparison', () => {
 describe('README.en.md', () => {
   it('is a short English README that links the German one, the disclaimer and the licence', () => {
     expect(ENGLISH_README.split('\n').length).toBeLessThanOrEqual(80);
-    expect(ENGLISH_README.startsWith('# apaleo-datev-export\n')).toBe(true);
+    expect(ENGLISH_README.startsWith('# apaleo-bmd-export\n')).toBe(true);
+    for (const phrase of ['BMD Buchungsimport', 'BMD NTCS', 'a first test import with a Kanzlei is still pending']) expect(ENGLISH_README).toContain(phrase);
     for (const link of ['](README.md)', '](DISCLAIMER.md)', '](LICENSE)']) expect(ENGLISH_README).toContain(link);
     expect(ENGLISH_README).toContain('There is no npm package or container image release yet. You install from source.');
     expect(ENGLISH_README).toMatch(/issues and pull requests in English are welcome/i);
@@ -185,7 +219,7 @@ describe('docs folder', () => {
     ]) {
       expect(existsSync(join(ROOT, 'docs', file)), file).toBe(true);
     }
-    for (const file of ['setup-apaleo.de.md', 'mapping-guide.de.md']) expect(existsSync(join(ROOT, 'docs', file)), file).toBe(false);
+    for (const file of ['setup-apaleo.de.md', 'mapping-guide.de.md', 'datev-import.md', 'datev-format.md']) expect(existsSync(join(ROOT, 'docs', file)), file).toBe(false);
   });
 
   it('docs/setup-apaleo.md lists the exact permissions, the optional one marked optional', () => {
@@ -231,6 +265,10 @@ describe('docs folder', () => {
     expect(guide).not.toContain('English summary');
     expect(guide).toContain('**Beherbergung**: 10 %');
     expect(guide).toContain('**Getränke**: 20 %');
+    for (const rule of ['§ 10 Abs. 2 Z 3 lit. c', 'ortsüblichen Frühstück', '§ 10 Abs. 3 Z 5', '(Z 6)', '(Z 12)', '**4,9 %**: seit 2026-07-01']) expect(guide, rule).toContain(rule);
+    for (const topic of ['## Steuercode und USt-Satz', '## Ortstaxe, Nächtigungsabgabe, Gästeabgaben', '## Anzahlungen', '## Forderungsverlust', '## Zahlungen, Forderungen, Debitoren']) {
+      expect(guide).toContain(`${topic}\n`);
+    }
     expect(guide).toContain('](examples/mapping-BSP.example.csv)');
     const rules = readRepoFile('templates/ekr-hotel.rules.csv')
       .split(/\r?\n/)
@@ -241,23 +279,51 @@ describe('docs folder', () => {
     expect(section(guide, '## Checkliste zur Freigabe durch die Kanzlei').match(/^- \[ \]/gm)?.length).toBeGreaterThanOrEqual(5);
   });
 
-  it('explains the SourceAdapter contract, the canonical ledger line and where tests and fixtures go', () => {
+  it('Contributor adds a target: explains the SourceAdapter contract, the TargetWriter boundary with BmdBooking and where golden files go, announcing no other target', () => {
     const architecture = readRepoFile('docs/architecture.md');
-    for (const phrase of ['SourceAdapter', 'LedgerLine', 'Smoobu', 'test/fixtures/', 'FakeSource', 'BMD', 'lexoffice']) {
+    for (const phrase of ['SourceAdapter', 'LedgerLine', 'Smoobu', 'test/fixtures/', 'FakeSource', '## Die Schnittstelle TargetWriter', 'BmdBooking', 'test/golden/<ziel>/', 'Ein Beispiel ohne Zusage']) {
       expect(architecture).toContain(phrase);
+    }
+    expect(architecture).not.toMatch(/lexoffice|geplant ist (ein|der)/i);
+  });
+
+  it('First import in BMD: docs/bmd-import.md names the menu path, the Buchungssymbol per property, the period and the checklist', () => {
+    const guide = readRepoFile('docs/bmd-import.md');
+    for (const phrase of ['**Buchen > Buchungen importieren**', '**Menü > Extras > Buchungen importieren**', 'Vorerfassung', '## Buchungssymbol anlegen', '`properties[].buchsymbol`', '## Periode und Datum', 'Buchungsperiode']) {
+      expect(guide, phrase).toContain(phrase);
+    }
+    const checklist = section(guide, '## Erster Import: bitte prüfen');
+    for (const item of ['Saldenliste', 'UVA-Vorschau', 'Steuercode 1 in KZ 022', 'KZ 029', 'KZ 000/022/029', 'Forderungsverlust erscheint als Minderung', 'Ortstaxe', 'keinen fixen Steuercode', 'Belegnummern-Duplikate']) {
+      expect(checklist, item).toContain(item);
     }
   });
 
-  it('has the "Vor der Veröffentlichung" checklist and the later backlog in docs/maintainers.md', () => {
-    const maintainers = readRepoFile('docs/maintainers.md');
-    expect(maintainers).toContain('**niemand außerhalb kann sie sehen, bis der Maintainer das Repository öffentlich macht**');
-    const checklist = section(maintainers, '## Vor der Veröffentlichung');
+  it('Going public later: docs/maintainers.md has the "Vor der Veröffentlichung" checklist, starting with the test import', () => {
+    expect(MAINTAINERS).toContain('**niemand außerhalb kann sie sehen, bis der Maintainer das Repository öffentlich macht**');
+    const checklist = section(MAINTAINERS, '## Vor der Veröffentlichung');
+    const steps = checklist.split('\n').filter((line) => /^\d+\. \[ \] /.test(line));
+    expect(steps[0]).toMatch(/Testimport in BMD NTCS.*\[Testimporte\]\(#testimporte\)/);
     for (const step of ['--visibility public', 'Vorschaubild (Social Preview)', 'Discussions', 'v0.1.0']) expect(checklist).toContain(step);
-    expect(checklist).not.toContain('## Deutsch');
-    const backlog = section(maintainers, '## Später geplant');
-    for (const item of ['E-Mail-Versand', 'Verdichtung pro Tag', 'Dauerprozess mit eigenem Zeitplan', 'Überwachung und Alarme', 'Dependabot', 'Veröffentlichung auf npm oder in einer Registry']) {
+    expect(checklist).not.toContain('[x]');
+  });
+
+  it('records test imports under "Testimporte" in a table with date, BMD version, dialect and result', () => {
+    expect(section(MAINTAINERS, '## Testimporte')).toContain('| Datum | BMD-Version | Dialekt | Ergebnis |');
+  });
+
+  it('plans later only items inside this product, no other target formats', () => {
+    const backlog = section(MAINTAINERS, '## Später geplant');
+    for (const item of ['Personenkonten-Datei', 'Summendatei', 'Gebühren aus Abrechnungsdateien', 'E-Mail-Versand', 'Dauerprozess mit eigenem Zeitplan', 'Überwachung und Alarme', 'Dependabot', 'Veröffentlichung auf npm oder in einer Registry']) {
       expect(backlog).toContain(item);
     }
+    expect(backlog).not.toMatch(/DATEV|RZL|lexoffice|Mews|Smoobu|Zielformat/);
+  });
+
+  it('Metadata applied: lists the German description and every topic for discoverability', () => {
+    const topics = ['apaleo', 'bmd', 'bmd-ntcs', 'bmd-export', 'buchungsimport', 'ekr', 'hotel', 'hospitality', 'accounting', 'buchhaltung', 'steuerberater', 'austria', 'oesterreich'];
+    expect(MAINTAINERS).toContain(`--add-topic ${topics.join(',')}`);
+    expect(MAINTAINERS).toMatch(/--description "Kostenloser apaleo BMD Export.*BMD NTCS/);
+    expect(section(MAINTAINERS, '## Das Repository ist vorerst privat')).not.toContain('--visibility');
   });
 });
 

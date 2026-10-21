@@ -3,9 +3,11 @@ import type { Command } from '../src/cli/command.js';
 import { COMMANDS } from '../src/cli/commands/index.js';
 import {
   checkCommandLines,
+  checkCompatibilityClaims,
   checkConfigKeys,
   checkFindingCodes,
   checkGerman,
+  checkGermanPracticeTerms,
   checkInformalAddress,
   checkLinks,
   configPaths,
@@ -15,6 +17,7 @@ import {
   headingSlugs,
   linkTargets,
   readRepoFile,
+  recordedTestImports,
   shellLines,
   sourceFiles,
   splitLanguageFiles,
@@ -25,6 +28,8 @@ import {
  * an sh/bash fence, every backticked config key and every finding code in the
  * documentation must exist in the code. Since s09 (design decision 7) every
  * relative link and anchor must resolve, and the docs are German, with "du".
+ * Since b08 (design decisions 1 and 4) they use Austrian BMD terms, name DATEV
+ * only where they must, and claim no tested BMD import before one is recorded.
  */
 const FILES = documentationFiles();
 const TROUBLESHOOTING = 'docs/troubleshooting.md';
@@ -49,6 +54,8 @@ describe('README and docs match the code', () => {
         'DISCLAIMER.md',
         'CHANGELOG.md',
         'docs/examples/README.md',
+        'docs/bmd-import.md',
+        'docs/bmd-format.md',
         'examples/demo/README.md',
       ]),
     );
@@ -78,6 +85,19 @@ describe('README and docs match the code', () => {
 
   it.each(FILES.filter((file) => file !== 'CODE_OF_CONDUCT.md'))('%s: addresses the reader with "du", never "Sie"', (file) => {
     expect(checkInformalAddress(file, germanPart(file))).toEqual([]);
+  });
+
+  it.each(FILES.filter((file) => file !== ENGLISH_README))('%s: uses Austrian BMD terms and names DATEV only where allowed', (file) => {
+    expect(checkGermanPracticeTerms(file, germanPart(file))).toEqual([]);
+  });
+
+  it.each(FILES)('%s: claims no tested BMD import while docs/maintainers.md records none', (file) => {
+    expect(checkCompatibilityClaims(file, readRepoFile(file), recordedTestImports(readRepoFile('docs/maintainers.md')).length)).toEqual([]);
+  });
+
+  it('has no docs/datev-*.md guide', () => {
+    expect(FILES.filter((file) => /^docs\/datev-/.test(file))).toEqual([]);
+    expect(FILES).toEqual(expect.arrayContaining(['docs/bmd-import.md', 'docs/bmd-format.md']));
   });
 
   it('README.en.md and the translation in DISCLAIMER.md are the only English texts', () => {
@@ -148,7 +168,7 @@ describe('the docs checks', () => {
     expect(checkConfigKeys('docs/x.md', '`properties[].buchsymbol` and `properties[].kanzlei`')).toEqual([
       'docs/x.md: `properties[].kanzlei` is not a config key',
     ]);
-    expect(checkConfigKeys('docs/x.md', '`datev.beraternummer`')).toEqual(['docs/x.md: `datev.beraternummer` is not a config key']);
+    expect(checkConfigKeys('docs/configuration.md', 'Trag `bmd.beraternummer` ein.')).toEqual(['docs/configuration.md: `bmd.beraternummer` is not a config key']);
   });
 
   it('ignores other backticked text and keys inside code fences', () => {
@@ -245,5 +265,110 @@ describe('the language checks', () => {
     expect(checkInformalAddress('docs/x.md', 'Wenn das passt, senden Sie die Datei.')).toHaveLength(1);
     expect(checkInformalAddress('docs/x.md', 'Danke, Ihr Team')).toHaveLength(1);
     expect(checkInformalAddress('docs/x.md', 'Die Kanzlei bucht. Sie prüft die Datei.\n- Sie bekommt das Protokoll.\n**Sie** entscheidet.')).toEqual([]);
+  });
+});
+
+describe('the Austrian terms check', () => {
+  const problemsOf = (file: string, text: string) => checkGermanPracticeTerms(file, text);
+
+  it('Copied DATEV paragraph: names the file and the term', () => {
+    expect(problemsOf('docs/mapping-guide.md', '## Spalten\n\nTrag den BU-Schlüssel ein.\n')).toEqual([
+      'docs/mapping-guide.md: "Trag den BU-Schlüssel ein.": "BU-Schlüssel" is a term of German DATEV practice; use the Austrian BMD term',
+    ]);
+    for (const term of ['Buchungsstapel', 'SKR03', 'SKR04', 'Automatikkonto', 'Beraternummer', 'Mandantennummer', 'EXTF', 'Belegfeld', 'Festschreibung', 'UStVA', 'ELSTER']) {
+      expect(problemsOf('docs/x.md', `Hier steht ${term} im Text.`), term).toEqual([expect.stringContaining(`"${term}"`)]);
+    }
+  });
+
+  it('German levy or rate: names the file and the term', () => {
+    expect(problemsOf('docs/posting-rules.md', 'Die Kurtaxe wird ohne Steuer gebucht.')).toEqual([expect.stringMatching(/^docs\/posting-rules\.md: .*"Kurtaxe"/)]);
+    expect(problemsOf('docs/posting-rules.md', 'Getränke mit 19 %.')).toEqual([expect.stringMatching(/^docs\/posting-rules\.md: .*"19 %"/)]);
+    expect(problemsOf('docs/x.md', 'Frühstück mit 7% und die Beherbergungssteuer, die Übernachtungssteuer.')).toHaveLength(3);
+  });
+
+  it('passes the Austrian rates and ignores code', () => {
+    expect(problemsOf('docs/x.md', 'Beherbergung 10 %, Therme 13 %, Getränke 20 %, Grundnahrungsmittel 4,9 % und 17 % nirgends. `SKR03` und `datev`.\n\n```text\nKurtaxe 19 %\n```\n')).toEqual([]);
+  });
+
+  it('Regional rate: passes 19 % in a sentence that names Jungholz or Mittelberg, and only there', () => {
+    expect(problemsOf('docs/posting-rules.md', 'In Jungholz und Mittelberg gilt der Steuersatz 19 % (§ 10 Abs. 4 UStG).')).toEqual([]);
+    expect(problemsOf('docs/x.md', 'Für Mittelberg: Beherbergung 19 %.')).toEqual([]);
+    expect(problemsOf('docs/x.md', 'In Jungholz gilt 19 %. Getränke mit 19 % wie in Deutschland.')).toEqual([expect.stringContaining('"19 %"')]);
+    expect(problemsOf('docs/x.md', 'Getränke mit 19 % im Mittelbergland.')).toEqual([expect.stringContaining('"19 %"')]);
+    expect(problemsOf('docs/x.md', 'In Jungholz Frühstück mit 7 %.')).toEqual([expect.stringContaining('"7 %"')]);
+  });
+
+  it('Bare DATEV mention: names the file and the token', () => {
+    expect(problemsOf('docs/bmd-import.md', 'Das läuft wie beim DATEV-Import.')).toEqual([
+      'docs/bmd-import.md: "Das läuft wie beim DATEV-Import.": "DATEV" is named outside the origin sentence and the findings for a copied German setup',
+    ]);
+    expect(problemsOf('README.md', '## Häufige Fragen\n\n**DATEV?** Nein.\n')).toHaveLength(1);
+  });
+
+  it('Allowed DATEV mention: the README origin sentence and the other target formats, the changelog and the German-setup findings', () => {
+    const readme = [
+      '## Was es nicht macht',
+      '',
+      '- Keine anderen Zielformate wie DATEV oder RZL.',
+      '',
+      '## Häufige Fragen',
+      '',
+      '**Gibt es das für DATEV?** Ja: Das Tool baut auf [apaleo-datev-export](https://github.com/krautdawg/apaleo-datev-export) auf.',
+    ].join('\n');
+    expect(problemsOf('README.md', readme)).toEqual([]);
+    expect(problemsOf('docs/x.md', readme)).toHaveLength(2);
+    expect(problemsOf('CHANGELOG.md', 'Entfernt: der DATEV-Buchungsstapel (EXTF) und SKR03.')).toEqual([]);
+    const troubleshooting = `## Kontenzuordnung\n\nKein DATEV hier.\n\n## Einrichtung aus Deutschland übernommen\n\nEine DATEV-Zuordnung mit 7 % und BU-Schlüssel.\n`;
+    expect(problemsOf('docs/troubleshooting.md', troubleshooting)).toEqual([expect.stringContaining('"Kein DATEV hier."')]);
+  });
+});
+
+describe('the compatibility claim check', () => {
+  const maintainers = (rows: string[]) => ['## Testimporte', '', '| Datum | BMD-Version | Dialekt | Ergebnis |', '|---|---|---|---|', ...rows, '', '## Später geplant', '| x | y |'].join('\n');
+
+  it('counts the recorded test imports, not the header, an empty row or a partial row', () => {
+    expect(recordedTestImports(maintainers([]))).toEqual([]);
+    expect(recordedTestImports(maintainers(['|  |  |  |  |']))).toEqual([]);
+    expect(recordedTestImports(maintainers(['| 2026-11-10 |  |  |  |']))).toEqual([]);
+    expect(recordedTestImports(maintainers(['| 2026-11-10 | BMD NTCS 2026.1 | ntcs |  |', '| TBD |']))).toEqual([]);
+    expect(checkCompatibilityClaims('README.md', 'Getestet mit BMD NTCS.', recordedTestImports(maintainers(['| 2026-11-10 |  |  |  |'])).length)).toHaveLength(1);
+    expect(recordedTestImports(maintainers(['| 2026-11-10 | BMD NTCS 2026.1 | ntcs | ohne Fehler |']))).toEqual([['2026-11-10', 'BMD NTCS 2026.1', 'ntcs', 'ohne Fehler']]);
+    expect(recordedTestImports(readRepoFile('docs/maintainers.md'))).toEqual([]);
+  });
+
+  it('Claim without a recorded import: names the README and the phrase', () => {
+    expect(checkCompatibilityClaims('README.md', 'Die Datei ist getestet mit BMD NTCS.', 0)).toEqual([
+      'README.md: "getestet mit BMD" claims a tested BMD import, but docs/maintainers.md records no import under ## Testimporte',
+    ]);
+    expect(checkCompatibilityClaims('docs/x.md', 'Kompatibel mit BMD NTCS und BMD-zertifiziert.', 0)).toHaveLength(2);
+    expect(checkCompatibilityClaims('README.md', 'Die Datei ist getestet mit BMD NTCS.', 1)).toEqual([]);
+  });
+
+  it.each([
+    'Die Datei ist mit BMD NTCS getestet.',
+    'Die Datei wurde mit\nBMD 5.5 erfolgreich getestet.',
+    'Der Export ist BMD-kompatibel.',
+    'Die Datei ist kompatibel zu BMD.',
+    'Die Datei ist mit BMD NTCS kompatibel.',
+    'Die Datei wird von BMD NTCS akzeptiert.',
+    'Zertifiziert durch BMD.',
+    'The file is tested with BMD NTCS.',
+    'A BMD-compatible import file.',
+    'The file is compatible with BMD NTCS.',
+    'BMD certified.',
+    'The file is accepted by BMD NTCS.',
+  ])('Claim in other words or in English: finds "%s"', (text) => {
+    expect(checkCompatibilityClaims('README.en.md', text, 0)).toHaveLength(1);
+  });
+
+  it('passes the pending-import wording and other uses of the words', () => {
+    for (const text of [
+      'Die Datei folgt dem dokumentierten BMD-Importformat (PR08/PR08A); ein erster Testimport mit einer Kanzlei steht noch aus.',
+      'The file follows the documented BMD import layout; a first test import with a Kanzlei is pending.',
+      'Zwei Lint-Regeln (getestet in `test/lint/`) sorgen dafür, dass das so bleibt.',
+      'Kein zertifiziertes Archiv. BMD nimmt `4,9` in `prozent` an.',
+    ]) {
+      expect(checkCompatibilityClaims('README.md', text, 0), text).toEqual([]);
+    }
   });
 });

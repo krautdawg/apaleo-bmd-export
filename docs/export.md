@@ -55,7 +55,7 @@ Ein Zeitraum wird an Monatsgrenzen geteilt, damit jede Datei in einem Kalendermo
 Für jedes Hotel und jeden Monat, in dieser Reihenfolge:
 
 1. Das Hotel und jede apaleo-Zeile des Monats sind in EUR (`E-CURRENCY`). Eine Zeile des BMD-Buchungsimports hat kein Feld für die Währung: BMD bucht jeden Betrag in der Grundwährung des Mandanten (EUR), und das Tool rechnet nicht um. Ein Hotel in CHF oder einer anderen Währung wird deshalb abgelehnt, bevor das Buchungsjournal gelesen wird.
-2. Die Kontenzuordnung lässt sich lesen; eine Kontenzuordnung des DATEV-Exports lehnt das Tool ab (`E-EXPORT`).
+2. Die Kontenzuordnung lässt sich lesen; eine Kontenzuordnung aus einer deutschen Einrichtung lehnt das Tool ab (`E-EXPORT`, siehe [troubleshooting.md](troubleshooting.md#einrichtung-aus-deutschland-übernommen)).
 3. Jedes im Zeitraum gebuchte Konto ist zugeordnet (`E-UNMAPPED`, `E-VAT-MISMATCH`, `E-VAT-RATE-UNKNOWN`, wie bei `mapping check --from --to`).
 4. Die Buchungsregeln und ihre USt-Prüfung pro Zeile ([posting-rules.md](posting-rules.md)).
 5. Plausibilitätsprüfungen auf dem Ergebnis, die nachrechnen, was die Buchungen ergeben müssen:
@@ -78,7 +78,7 @@ Revenue and VAT per rate:
   13 %: net 362.85, tax 47.17, gross 410.02, apaleo VAT 47.17, difference 0.00 (apaleo precise 47.17044248)
 ```
 
-Jede Buchung trägt die Steuer ihrer apaleo-Zeile, auf den Cent gerundet; apaleo hält die Steuer jeder Zeile genau (bis zu acht Nachkommastellen) und rundet erst die Summe. Die Differenz von ein paar Cent ist diese Rundung, kein Fehler, und kein Grund, Buchungen zu ändern. In der Umsatzsteuer-Voranmeldung zählt, was BMD gebucht hat.
+Jede Buchung trägt die Steuer ihrer apaleo-Zeile, auf den Cent gerundet; apaleo hält die Steuer jeder Zeile genau (bis zu acht Nachkommastellen) und rundet erst die Summe. Die Differenz von ein paar Cent ist diese Rundung, kein Fehler, und kein Grund, Buchungen zu ändern. In der UVA zählt, was BMD gebucht hat.
 
 BMD kontrolliert beim Import jede Buchung selbst (Betrag mal Satz, auf den Cent gerundet). Weicht das um einen Cent von der Steuer aus apaleo ab, meldet der Export `W-VAT-ROUNDING`, und die Buchung behält die Steuer von apaleo; am Live-Tag VIE ist das eine Zeile (46,80 brutto zu 10 %: Steuer 4,25, BMDs Kontrolle 4,26).
 

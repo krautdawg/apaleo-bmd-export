@@ -20,16 +20,16 @@ describe('licence and disclaimer', () => {
     expect(readme).toContain('](DISCLAIMER.md)');
   });
 
-  it('DISCLAIMER.md is German and binding first, then a non-binding English translation, both covering warranty, liability, advice and the Steuerberater', () => {
+  it('DISCLAIMER.md is German and binding first, then a non-binding English translation, both covering warranty, liability, advice, the Steuerberater and the BMD imports', () => {
     const text = read('DISCLAIMER.md');
     expect(text.startsWith('# Haftungsausschluss\n')).toBe(true);
     expect(text).toContain('Verbindlich ist die deutsche Fassung.');
     const [german = '', english = ''] = text.split('\n## English (non-binding translation)\n');
     expect(english).not.toBe('');
-    for (const phrase of ['ohne ausdrückliche oder stillschweigende Gewährleistung', 'haften', 'keine Steuerberatung', 'Kontenzuordnung']) {
+    for (const phrase of ['ohne ausdrückliche oder stillschweigende Gewährleistung', 'haften', 'keine Steuerberatung', 'Kontenzuordnung', 'BMD-Importe']) {
       expect(german).toContain(phrase);
     }
-    for (const phrase of ['without warranty', 'not liable', 'not tax advice', 'must review the account mapping', 'Steuerberater']) {
+    for (const phrase of ['without warranty', 'not liable', 'not tax advice', 'must review the account mapping', 'Steuerberater', 'first BMD imports']) {
       expect(english).toContain(phrase);
     }
   });

@@ -41,7 +41,6 @@ Diese Befunde kommen aus `mapping check`, `init-mapping` und jedem Export, denn 
 | `E-STEUERCODE-NOT-ALLOWED` | Auf einer Zeile für Zahlungen (Payments), Gastforderungen (Receivables) oder Debitoren (AccountsReceivable) steht ein Steuercode. BMD würde die Steuer dann auf diesem Konto buchen, aus einem Verkauf würde eine Minderung der Umsatzsteuer. `mapping check` meldet die Zeile, der Export stoppt bei der ersten Buchung, die sie trifft. | Lass `steuercode` und `bmd_vat_percent` auf dieser Zeile leer und trag den Steuercode auf der Erlös- oder Anzahlungszeile ein. |
 | `W-STEUERCODE-UNCHECKED` | Das Tool kennt den Steuercode nicht, zum Beispiel `81` für nicht steuerbare Umsätze. Es prüft nur die Umsatzsteuer-Codes des Dialekts. | Lass dir von der Kanzlei bestätigen, was BMD mit diesem Code bucht. |
 | `W-UNTAXED-REVENUE` | Eine Erlöszeile hat keinen Steuercode, zum Beispiel `4090` oder die Stornoerlöse `4091` der Vorlage. BMD trägt einen Steuercode, der am Konto fix hinterlegt ist, in das leere Feld ein. | Prüfe, dass das BMD-Konto keinen fixen Steuercode hat, oder trag den Steuercode der Kanzlei für nicht steuerbare Umsätze ein. |
-| `W-VAT-RATE-UNUSUAL` | `bmd_vat_percent` ist kein österreichischer Satz (0, 4,9, 10, 13 oder 20 %), zum Beispiel 7 % aus einer deutschen Zuordnung. | Prüfe die Zeile. Österreichische Hotels buchen mit den Sätzen aus UStG § 10. |
 | `E-KOST-FORMAT` | Die Kostenstelle in `kost` hat nicht 1 bis 9 Ziffern. | Trag eine Kostenstelle aus Ziffern ein, oder lass das Feld leer. |
 | `W-KOST-IGNORED` | Auf einer Zeile, die keine Erlös- oder Forderungsverlustzeile ist, steht eine Kostenstelle. Das Tool schreibt sie nie, denn auf einer Zahlung liest BMD `kost` als Belegnummer der bezahlten Rechnung. | Lass `kost` auf dieser Zeile leer. |
 | `E-ACCOUNT-LENGTH` | Das BMD-Konto besteht nicht nur aus Ziffern oder hat nicht genau die Sachkontenlänge (`bmd.sachkontenlaenge`); eine Zeile vom Typ AccountsReceivable darf auch die Personenkontenlänge haben (`bmd.personenkontenlaenge`). | Schreib das Konto in der Länge der Kanzlei, zum Beispiel 28900 statt 2890 bei Sachkontenlänge 5. Vielleicht hat Excel führende Nullen entfernt; formatiere die Spalte als Text. |
@@ -51,7 +50,7 @@ Diese Befunde kommen aus `mapping check`, `init-mapping` und jedem Export, denn 
 | `N-VAT-ROW-IGNORED` | Die Datei hat Zeilen für die apaleo-Konten `Vat` oder `VatOnLiabilities`. Diese Buchungen werden immer übersprungen, weil BMD die Steuer aus der Erlös- oder Anzahlungsbuchung bucht. | Nichts. Du kannst diese Zeilen löschen. |
 | `N-TEMPLATE-SCALED` | `init-mapping` hat an die Konten der Vorlage Nullen angehängt, damit sie zu einer Sachkontenlänge über 4 passen (aus 2890 wird 28900). Der Sammeldebitor 200000 bleibt. | Nichts. Prüfe mit der Kanzlei, dass das ihren Konten entspricht. |
 
-Eine Kontenzuordnung des DATEV-Exports oder der Mapping-Export eines DATEV-Connectors wird nicht gelesen: Das Tool bricht mit einer Meldung ab, die `init-mapping --template ekr` nennt (`E-EXPORT` im Export).
+Eine Zuordnung oder Konfiguration aus Deutschland erkennt das Tool und bricht ab; siehe [Einrichtung aus Deutschland übernommen](#einrichtung-aus-deutschland-übernommen).
 
 ## Buchungsregeln und Umsatzsteuer
 
@@ -112,6 +111,16 @@ Der Writer für den BMD Buchungsimport prüft jedes Feld, bevor er eine Datei sc
 | `E-BMD-FILE-NAME` | Die Property-ID lässt sich nicht im Dateinamen verwenden (erlaubt sind nur Buchstaben, Ziffern, `_` und `-`). | Eröffne ein Issue mit der Property-ID (sie kommt aus apaleo). |
 | `N-BMD-CHARSET` | Ein Zeichen außerhalb von Windows-1252 im Buchungstext wurde durch `?` ersetzt, oder aus der externen Belegnummer wurden Zeichen außerhalb von `A-Z a-z 0-9 - / . _` entfernt. | Nichts, außer der ersetzte Text ist wichtig. |
 | `N-BMD-TRUNCATED` | Der Buchungstext wurde auf 40 Zeichen gekürzt oder die externe Belegnummer auf 35. | Nichts, außer der gekürzte Text ist wichtig. Über die Protokolldatei findest du die Buchung im PMS. |
+
+## Einrichtung aus Deutschland übernommen
+
+Dieses Tool baut auf apaleo-datev-export auf, das DATEV-Dateien für Deutschland schreibt. Diese Prüfungen fangen eine Einrichtung ab, die von dort oder aus einer DATEV-Kanzlei kopiert wurde, damit keine deutschen Konten, Schlüssel oder Sätze in BMD landen.
+
+| Code | Ursache | Lösung |
+|---|---|---|
+| `W-VAT-RATE-UNUSUAL` | `bmd_vat_percent` ist kein österreichischer Satz (0, 4,9, 10, 13 oder 20 %), zum Beispiel 7 % aus einer deutschen Zuordnung. | Prüfe die Zeile. Österreichische Hotels buchen mit den Sätzen aus UStG § 10; siehe [mapping-guide.md](mapping-guide.md#steuersätze-in-österreich). |
+| `E-EXPORT` (beim Lesen der Kontenzuordnung) | Die Kontenzuordnung hat die Spalten der DATEV-Zuordnung von apaleo-datev-export (`datev_account`, `bu_key`) oder ist der Mapping-Export eines DATEV-Connectors aus dem apaleo Store. `mapping check` und `init-mapping --update` brechen mit derselben Meldung ab. Die Datei hat DATEV-Konten und BU-Schlüssel statt BMD-Konten und Steuercodes. | Leg die Datei mit `apaleo-bmd init-mapping --property <id> --template ekr` neu an und übertrag die Kontonummern mit deiner Kanzlei; siehe [mapping-guide.md](mapping-guide.md#umstieg-von-einem-anderen-connector). |
+| kein Code, jeder Befehl bricht ab | Die Konfigurationsdatei hat einen Abschnitt `datev` (aus der Konfiguration von apaleo-datev-export). | Ersetze ihn durch den Abschnitt `bmd` mit `bmd.buchsymbol`, `bmd.sachkontenlaenge`, `bmd.personenkontenlaenge` und `bmd.dialect`; siehe [configuration.md](configuration.md#bmd). |
 
 ## Häufige Fragen nach dem ersten Live-Test
 

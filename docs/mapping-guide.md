@@ -29,7 +29,7 @@ Der Pfad der Datei kann in der Konfiguration stehen (`properties[].mapping`), so
 | `kost` | Kostenstelle, 1 bis 9 Ziffern (optional). Steht nur auf Erlös- und Forderungsverlust-Buchungen in der Datei, siehe unten |
 | `comment` | Freitext, zum Beispiel die Begründung der Kanzlei |
 
-USt-Sätze darfst du mit Komma oder Punkt schreiben (`4,9` oder `4.9`). Eine Kontenzuordnung des DATEV-Exports (Spalten `datev_account`, `bu_key`) oder der Mapping-Export eines DATEV-Connectors liest das Tool nicht; es nennt dann `init-mapping --template ekr`.
+USt-Sätze darfst du mit Komma oder Punkt schreiben (`4,9` oder `4.9`). Eine Kontenzuordnung aus einer deutschen Einrichtung (Spalten `datev_account`, `bu_key`) liest das Tool nicht; es nennt dann `init-mapping --template ekr` ([troubleshooting.md](troubleshooting.md#einrichtung-aus-deutschland-übernommen)).
 
 ### Kontonummern, Sachkontenlänge und Personenkontenlänge
 
@@ -63,7 +63,7 @@ BMD bekommt Nettobetrag und Steuer getrennt: Das Konto mit Steuercode steht vorn
 - Ein Vorsteuer-Code auf einer Erlös-, Anzahlungs-, Abgaben- oder Forderungsverlustzeile ist ein Fehler (`E-STEUERCODE-INPUT-TAX`). Ein Steuercode, den das Tool nicht kennt (zum Beispiel `81` für nicht steuerbare Umsätze), ergibt `W-STEUERCODE-UNCHECKED`: Lass ihn von der Kanzlei bestätigen.
 - Zahlungen (Payments), Gastforderungen (Receivables) und Debitoren (AccountsReceivable) haben nie einen Steuercode (`E-STEUERCODE-NOT-ALLOWED`): Sonst bucht BMD die Steuer auf das Geld- oder Forderungskonto, und aus einem Verkauf wird eine Minderung der Umsatzsteuer.
 - Ein Steuercode braucht einen USt-Satz (`E-VAT-RATE-MISSING`), ein USt-Satz über 0 % einen Steuercode (`E-STEUERCODE-MISSING`). Ein Steuercode mit 0 % ist erlaubt.
-- Ein Satz außer 0, 4,9, 10, 13 und 20 % ergibt `W-VAT-RATE-UNUSUAL`; das fängt zum Beispiel eine aus Deutschland kopierte Zeile mit 7 % ab.
+- Ein Satz außer 0, 4,9, 10, 13 und 20 % ergibt `W-VAT-RATE-UNUSUAL`; das fängt zum Beispiel eine Zeile ab, die mit einem deutschen Satz aus einer anderen Zuordnung kopiert wurde.
 - Der USt-Satz der Zeile muss dem Satz in apaleo entsprechen (`E-VAT-MISMATCH`), auch über eine Elternzeile: Landet ein Konto mit 10 % über `5000;Revenues;…;4030;1;20` auf 4030 mit 20 %, meldet `mapping check --from --to` `E-VAT-MISMATCH` und verlangt eine eigene Zeile.
 - Eine Erlöszeile ohne Steuercode ergibt `W-UNTAXED-REVENUE`: BMD trägt einen Steuercode, der am Konto fix hinterlegt ist, in ein leeres Feld ein. Prüfe, dass das BMD-Konto keinen fixen Steuercode hat, oder trag den Steuercode der Kanzlei für nicht steuerbare Umsätze ein.
 
@@ -111,7 +111,7 @@ Bis eine Zeile ausgefüllt ist, blockieren `mapping check --from --to` und der E
 
 ## Anzahlungen
 
-Anzahlungen der Gäste (Liabilities) gehen auf erhaltene Anzahlungen (EKR 320), je USt-Satz eine `*`-Zeile: 3200 (10 %), 3202 (13 %) und 3201 (20 %) mit dem Umsatzsteuer-Code, 3209 (0 %) ohne. Auch Sollversteuerer schulden die USt auf eine Anzahlung schon bei Erhalt (Mindest-Istbesteuerung, § 19 Abs. 2 Z 1 lit. a UStG). In BMD NTCS ist das die normale Umsatzsteuer mit Steuercode `1`: Die UVA zählt sie in KZ 000/022/029 unter „+ Anzahlungen“ (BMD NTCS Buchen, Anhang A). Ob Soll- oder Istversteuerung, steht im Firmen- und FIBU-Stamm, nicht auf der Buchung. Wird die Anzahlung mit der Rechnung verrechnet, bucht apaleo eine negative Belastung auf dieselbe Anzahlung, und das Tool bucht die USt dort wieder zurück; eine Rückzahlung an den Gast (eine negative Anzahlung) ebenso.
+Anzahlungen der Gäste (Liabilities) gehen auf erhaltene Anzahlungen (EKR 320), je USt-Satz eine `*`-Zeile: 3200 (10 %), 3202 (13 %) und 3201 (20 %) mit dem Umsatzsteuer-Code, 3209 (0 %) ohne. Auch Sollversteuerer schulden die USt auf eine Anzahlung schon bei Erhalt (Mindest-Istbesteuerung, § 19 Abs. 2 Z 1 lit. a UStG). In BMD NTCS ist das die normale Umsatzsteuer mit Steuercode `1`: Die UVA zählt sie in KZ 000/022/029/006 unter „+ Anzahlungen“ (BMD NTCS Buchen, Anhang A). Ob Soll- oder Istversteuerung, steht im Firmen- und FIBU-Stamm, nicht auf der Buchung. Wird die Anzahlung mit der Rechnung verrechnet, bucht apaleo eine negative Belastung auf dieselbe Anzahlung, und das Tool bucht die USt dort wieder zurück; eine Rückzahlung an den Gast (eine negative Anzahlung) ebenso.
 
 BMD NTCS kennt zwei Einrichtungen (BMD NTCS Buchen, Anhang C):
 
@@ -129,7 +129,7 @@ Schreibt das Hotel eine Gastforderung ab, bucht apaleo den Forderungsverlust (Lo
 - `7800` (10 %), `7802` (13 %) und `7801` (20 %) mit dem Umsatzsteuer-Code (NTCS `1`) und dem Satz,
 - `7809` (0 %) ohne Steuercode.
 
-Mit dem Umsatzsteuer-Code steht das Forderungsverlust-Konto vorn (`konto`), Betrag und Steuer sind positiv: eine Soll-Buchung auf das USt-Konto, die die Umsatzsteuer mindert, wie eine Gutschrift an einen Kunden. In der UVA sollte die Berichtigung als Minderung in KZ 029/022 (oder KZ 090) erscheinen; das prüft der erste Import (Checkliste in [bmd-format.md](bmd-format.md)). Ein Vorsteuer-Code auf dieser Zeile ist ein Fehler (`E-STEUERCODE-INPUT-TAX`).
+Mit dem Umsatzsteuer-Code steht das Forderungsverlust-Konto vorn (`konto`), Betrag und Steuer sind positiv: eine Soll-Buchung auf das USt-Konto, die die Umsatzsteuer mindert, wie eine Gutschrift an einen Kunden. In der UVA sollte die Berichtigung als Minderung in KZ 022/029/006 (oder KZ 090) erscheinen; das prüft der erste Import (Checkliste in [bmd-format.md](bmd-format.md)). Ein Vorsteuer-Code auf dieser Zeile ist ein Fehler (`E-STEUERCODE-INPUT-TAX`).
 
 Warum `*`-Zeilen: apaleo bucht Forderungsverluste wohl auf Konten je Reservierung unter den Containern `6900` und `CollectiveDebitor_LossOfAccountsReceivable`, wie bei den Debitoren. Belegt ist das noch nicht, denn keine aufgezeichnete Buchung enthält einen Forderungsverlust. Die `*`-Zeilen greifen nach Typ und Satz, egal unter welchem Container das Konto hängt; für die Container selbst schreibt die Vorlage keine Zeile. Bucht apaleo direkt auf einen Container, stoppt der Export mit `E-UNMAPPED`.
 
@@ -193,9 +193,9 @@ Diese Vorlagenzeilen lassen das BMD-Konto leer oder verlangen eine Entscheidung:
 - **Hauskonten (House)** und **durchlaufende Posten aus apaleo (TransitoryItems)** haben noch keine Vorlage.
 - **Vat, VatOnLiabilities**: brauchen kein Konto; diese Buchungen werden übersprungen.
 
-## Umstieg vom DATEV-Export oder von einem bezahlten Connector
+## Umstieg von einem anderen Connector
 
-Eine Kontenzuordnung des DATEV-Exports oder der Mapping-Export eines DATEV-Connectors lässt sich nicht übernehmen: Sie hat DATEV-Konten und BU-Schlüssel statt BMD-Konten und Steuercodes. Lege die Datei neu an und übertrag die Kontonummern aus der Zuordnung des alten Connectors von Hand:
+Die Kontenzuordnung eines bezahlten Connectors lässt sich nicht einlesen: Jeder Anbieter hat eigene Spalten und eigene Bildschirme, und eine Zuordnung aus einer deutschen Einrichtung hat keine BMD-Konten und keine Steuercodes. Lege die Datei neu an und übertrag die Kontonummern aus der Zuordnung des alten Connectors mit deiner Kanzlei von Hand:
 
 ```sh
 apaleo-bmd init-mapping --property BSP --template ekr
