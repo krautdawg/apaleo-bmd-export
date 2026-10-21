@@ -4,7 +4,7 @@ Fabricated responses shaped exactly like the apaleo Swagger models. No real hote
 
 | File | Swagger model | What it holds |
 |---|---|---|
-| `properties/page-1.json` | PropertyListModel | `BSP` Hotel Beispiel (Salzburg, Europe/Vienna) and `HBW` Hotel Beispiel Wien. Page 2 is answered with 204. |
+| `properties/page-1.json` | PropertyListModel | `BSP` Hotel Beispiel (Wien, Europe/Vienna) and `HBW` Hotel Beispiel Wien. Page 2 is answered with 204. |
 | `accounts-schema.json` | ChartOfAccountsModel | A subset of apaleo's real Austrian chart (the recorded VIE chart in `live/`): revenue groups `RevenueAccommodation`, `RevenueFoodAndBeverages` and `RevenueOther` with leaves per VAT type (`…_VeryReduced:10.00`, `…_Normal:20.00`, `…_Without:0.00`, one archived), payments `1102`, `1104`, `1106`, `1600` under `1000`, `Vat_…` and `LiabilitiesVat_…` accounts, city tax `3501` under `3500`, house `9000`, transitory items `7000`; in the guest, external and booking ledgers the containers `3000`, `1200`, `9999` and `6900` with their `CollectiveDebitor_…` children. |
 | `export-gross-daily/<day>.json` | ExportGrossTransactionListModel | The ledger of one business day (below), in apaleo's real shapes: eight-decimal net and tax, per-reservation accounts with `parentNumber`, `/Offset` second lines for every payment and the AR transfer, releases as negative charges with `taxes[]`, no `PostPrepaymentVat`. Days without a file are answered with 204. |
 | `aggregate-daily/<day>.json` | AggregateTransactionListModel | apaleo's daily totals for the same day in the shape of the real API (see `live/`): leaf global accounts and only the top-level parent of guest accounts (`1200`, `3000`, `9999`); revenue and deposits net, VAT accounts with the taxes, everything else gross, negative amounts in the other column. |
@@ -19,6 +19,8 @@ Business days (September 2026, so the demo month 2026-09 is always closed):
 - **2026-09-22**: logis 165.00 and the release of the `BSP-MNOPQR-1` deposit (−165.00, tax −15.00); an overpayment of 10.00 parked on `BSP-MNOPQR-1_Liabilities/Null:0.00` and refunded to the Maestro card as a negative prepayment.
 
 The amounts are chosen so that BMD's check of every booking (Betrag × rate) equals apaleo's tax rounded to cents: the fixture month has no `W-VAT-ROUNDING`; the recorded VIE day in `live/` has one.
+
+`examples/demo/apaleo/` holds copies of these files plus two demo-only days (an unpaid night on 2026-09-25 and its write-off on 2026-09-29, see `examples/demo/README.md`), so the demo protocol shows every section; the tests here do not use them.
 
 The fabricated Austrian fixture month (Hotel Beispiel Tirol, August 2026: deposit received, released and partly refunded, a cancellation fee at 0 %, an invoice on accounts receivable and a write-off with VAT correction) is in [`at-month/`](at-month/README.md).
 

@@ -28,7 +28,7 @@ apaleo-datev-export ist ein kostenloser DATEV-Export für Hotels mit apaleo. Er 
 
 ## Beispielausgabe ansehen
 
-In [docs/examples/](docs/examples/) liegt eine DATEV-Datei, die das Tool für das erfundene „Hotel Beispiel“ geschrieben hat, mit Protokoll und der Kontenzuordnung, aus der sie entstanden ist. Die Kanzlei kann sie prüfen oder in einen Test-Mandanten importieren, bevor irgendjemand etwas einrichtet.
+In [docs/examples/](docs/examples/) liegt eine BMD-Datei (Buchungsimport), die das Tool für das erfundene „Hotel Beispiel“ geschrieben hat, mit Protokoll und der Kontenzuordnung, aus der sie entstanden ist. Die Kanzlei kann sie prüfen oder in einen Test-Mandanten importieren, bevor irgendjemand etwas einrichtet.
 
 ## Ohne apaleo ausprobieren
 
@@ -38,7 +38,7 @@ Nach der Installation (Schritt 2 unten) läuft der echte Export auf mitgeliefert
 node dist/cli/main.js export --month 2026-09 --demo --dry-run
 ```
 
-Das zeigt die Buchungsübersicht für September 2026 im „Hotel Beispiel“. Ohne `--dry-run` schreibt es die Datei nach `./demo-output/`, markiert mit `DEMO` im Dateinamen (`…_BSP_DEMO.csv`), in der Bezeichnung und im Protokoll. Im Docker-Image: siehe [docs/docker.md](docs/docker.md#die-demo-im-image).
+Das zeigt die Buchungsübersicht für September 2026 im „Hotel Beispiel“. Ohne `--dry-run` schreibt es die Datei nach `./demo-output/`, markiert mit `DEMO` im Dateinamen (`…_BSP_DEMO.csv`), am Anfang jedes Buchungstexts und im Protokoll. Im Docker-Image: siehe [docs/docker.md](docs/docker.md#die-demo-im-image).
 
 ## Schnellstart
 

@@ -36,18 +36,20 @@ properties:
 
 1. Kopiere die Datei unverändert in einen Ordner, den BMD lesen kann.
 2. In BMD NTCS den Import von Buchungen (Erfassungsfile, Buchungsimport im variablen Format) öffnen und den richtigen Mandanten wählen. Die genaue Menüführung hängt von deiner Version ab.
-3. Die Datei einlesen und das **Importprotokoll** prüfen: keine abgelehnten Zeilen, die Anzahl der Buchungen entspricht dem Protokoll des Tools.
-4. Die Summen pro Konto und die Umsatzsteuer pro Satz mit dem Protokoll und mit den Berichten in apaleo vergleichen.
+3. Vor dem Einlesen den Block **Import into BMD** im Protokoll des Tools mit dem Mandanten vergleichen: Dialekt, Buchungssymbole, Bereich der Belegnummern, `verbuchkz A` und `gegenbuchkz E`, Steuercodes mit ihren Sätzen und die Längen der Sach- und Personenkonten.
+4. Die Datei einlesen und das **Importprotokoll** prüfen: keine abgelehnten Zeilen, die Anzahl der Buchungen entspricht der Zeile `Lines` im Protokoll des Tools.
+5. Die Summen pro Konto und die Umsatzsteuer pro Satz mit dem Protokoll und mit den Berichten in apaleo vergleichen.
 
 ## Periode und Datum
 
 Belegdatum und Buchungsdatum jeder Zeile sind der Geschäftstag in apaleo. BMD ordnet die Buchung damit der Periode des Monats zu, auch für die UVA. Eine Datei bleibt immer in einem Kalendermonat. Ein Monat ist erst nach dem Tagesabschluss (Night Audit) des Folgetags vollständig; `schedule --once` wartet deshalb bis `schedule.finalAfter` am zweiten Tag nach dem Monatsende.
 
-## Drei Regeln
+## Vier Regeln
 
 - **Nie in Excel öffnen und speichern.** Excel ändert Zeichensatz, Trennzeichen, Datumsformate und führende Nullen; BMD lehnt die Datei dann ab oder bucht falsch. Zum Ansehen nimm einen Texteditor oder das Protokoll.
+- **Nie eine Demodatei importieren.** `export --demo` schreibt erfundene Daten: Der Dateiname endet auf `_DEMO`, jeder Buchungstext beginnt mit `DEMO ` und das Protokoll mit der Zeile `DEMO`. Ist doch eine Demobuchung im Mandanten gelandet, findest du sie am Buchungstext.
 - **Nie umbenennen.** Der Name zeigt Zeitraum und Hotel, und das Tool erkennt seine eigenen Dateien daran.
-- **Nie zweimal importieren.** BMD erkennt eine schon importierte Datei nicht: Dieselben Buchungen stünden doppelt im Mandanten. Das Tool schreibt einen Monat nur einmal. Kommt später eine Nachbuchung, lehnt es den Monat mit `E-FILE-EXISTS` ab. Hat die Kanzlei die alte Datei importiert, löscht oder storniert sie deren Buchungen zuerst in BMD (sie tragen die Belegnummern der alten Datei unter ihrem Buchungssymbol); danach schreibt `export --overwrite` die neue Datei.
+- **Nie zweimal importieren.** BMD erkennt eine schon importierte Datei nicht: Dieselben Buchungen stünden doppelt im Mandanten. Das Tool schreibt einen Monat nur einmal. Kommt später eine Nachbuchung, lehnt es den Monat mit `E-FILE-EXISTS` ab. Hat die Kanzlei die alte Datei importiert, löscht sie zuerst die importierten Buchungen dieser Datei in BMD (Buchungssymbol und Belegnummern stehen im Protokoll der alten Datei); danach schreibt `export --overwrite` die neue Datei.
 
 ```sh
 apaleo-bmd export --month 2026-10 --dry-run      # was hat sich geändert?

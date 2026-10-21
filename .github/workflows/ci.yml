@@ -58,8 +58,12 @@ jobs:
           grep -q '^node dist/cli/main.js --help' "$RUNNER_TEMP/quickstart.sh"
       - name: Run the README install commands verbatim
         run: bash -euxo pipefail "$RUNNER_TEMP/quickstart.sh"
-      - name: Demo dry run without config, secret or network
-        run: node dist/cli/main.js export --month 2026-09 --demo --dry-run
+      - name: Demo dry run without config, secret or network prints the BMD summary
+        run: |
+          node dist/cli/main.js export --month 2026-09 --demo --dry-run | tee "$RUNNER_TEMP/demo.txt"
+          grep -q '^Import into BMD' "$RUNNER_TEMP/demo.txt"
+          grep -q '^Totals per BMD account' "$RUNNER_TEMP/demo.txt"
+          grep -q '^DEMO Result: dry run, nothing written; 1 file(s) passed every check.' "$RUNNER_TEMP/demo.txt"
 
   docker:
     name: docker image (build and run, never pushed)
