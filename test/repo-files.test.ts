@@ -153,7 +153,7 @@ describe('compose and env examples', () => {
     const paths = [
       'config/apaleo-bmd.config.yaml',
       'config/mapping-BSP.csv',
-      'data/BSP/2026-10/EXTF_Buchungsstapel_1234567_42_20261001-20261031_BSP.csv',
+      'data/BSP/2026-10/BMD_Buchungsimport_20261001-20261031_BSP.csv',
       'data/BSP/2026-10/manifest.json',
       'schedule.log',
       'apaleo-bmd.config.yaml',
