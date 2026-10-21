@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BMD_DEFAULT_SETTINGS, bmdTarget, BmdValidationError, createBmdTarget, renderBuchungsimport } from '../../src/bmd/index.js';
 import type { LocalDate } from '../../src/core/date.js';
-import type { TargetFileMeta } from '../../src/export/index.js';
+import { bodyOf, type TargetFileMeta } from '../../src/export/index.js';
 import { bmdBooking, bmdPayment, octoberOptions } from '../helpers/bmd.js';
 
 /** The default settings read nothing from the config yet (b03 adds `bmd.*`). */
@@ -75,5 +75,16 @@ describe('bmdTarget', () => {
     expect(afterOverwrite).toBeUndefined();
     expect([overlap, headerChange, reimport, bmdTarget.protocolTitle].join(' ')).not.toMatch(/DATEV|datev\.|Festschreibung|EXTF/);
     expect(bmdTarget.id).toBe('bmd');
+  });
+
+  it('names a dialect change in the refusal for a file with bookings, whose lines all change with the dialect', () => {
+    const settings = { ...BMD_DEFAULT_SETTINGS };
+    const target = createBmdTarget(() => settings);
+    const ntcs = target.render([bmdBooking()], meta()).bytes;
+    settings.dialect = 'bmd55';
+    const bmd55 = target.render([bmdBooking()], meta()).bytes;
+    // Not "same bookings, other header": the output folder logic reports other bookings and appends `reimport`.
+    expect(Buffer.from(bodyOf(ntcs)).equals(Buffer.from(bodyOf(bmd55)))).toBe(false);
+    expect(target.advice.reimport).toContain('bmd.dialect');
   });
 });

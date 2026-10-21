@@ -42,8 +42,11 @@ export function createBmdTarget(settingsOf: (meta: TargetFileMeta) => BmdTargetS
       overlap:
         'Importing both files would book those days twice in BMD NTCS. Export the same period as that file, or move it away ' +
         '(and have the Kanzlei reverse its imported bookings in BMD if it was imported) and run again',
+      // The output folder logic compares the lines after the header. A dialect change rewrites the date in every
+      // line too, so it only reaches `headerChange` for a file without bookings; `reimport` names it for the rest.
       headerChange: 'the BMD dialect (bmd.dialect: header names and date format) changed since it was written.',
       reimport:
+        'A change of bmd.dialect also gives every line another date format, so the bookings themselves may be unchanged. ' +
         'A BMD Buchungsimport is not idempotent, so importing both files would book those days twice. ' +
         'If the Kanzlei has imported the old file, it must first delete or reverse those bookings in BMD NTCS ' +
         '(they carry the Belegnummern of the old file under its Buchungssymbol).',
