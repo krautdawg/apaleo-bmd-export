@@ -25,7 +25,7 @@ export interface CommandArgs {
 export interface Command {
   name: string;
   summary: string;
-  /** Usage after `apaleo-datev <name>`, for example `[--config <path>]`. */
+  /** Usage after `apaleo-bmd <name>`, for example `[--config <path>]`. */
   usage: string;
   options: Record<string, OptionSpec>;
   allowPositionals?: boolean;
@@ -44,7 +44,7 @@ export const CONFIG_OPTION: Record<string, OptionSpec> = {
   config: {
     type: 'string',
     valueName: '<path>',
-    description: 'Config file (default: $APALEO_DATEV_CONFIG or ./apaleo-datev.config.yaml)',
+    description: 'Config file (default: $APALEO_BMD_CONFIG or ./apaleo-bmd.config.yaml)',
   },
 };
 

@@ -34,7 +34,7 @@ export function checkMapping(mapping: Mapping, options: CheckMappingOptions): Fi
       code: 'W-GRMAN-LAYOUT',
       message:
         'this is a Grman connector export: it has no BU keys and no VAT rates, and its rows match account numbers ' +
-        'of any type. Run "apaleo-datev init-mapping --update" to convert it and add the missing columns',
+        'of any type. Run "apaleo-bmd init-mapping --update" to convert it and add the missing columns',
     });
   }
   if (!skr) {

@@ -1,8 +1,8 @@
-# apaleo-datev-export container image. Built locally only: there is no
+# apaleo-bmd-export container image. Built locally only: there is no
 # registry image. See docs/docker.md.
 #
-#   docker build -t apaleo-datev-export:local .
-#   docker run --rm --env-file .env -v "$PWD/config:/config:ro" -v "$PWD/data:/data" apaleo-datev-export:local
+#   docker build -t apaleo-bmd-export:local .
+#   docker run --rm --env-file .env -v "$PWD/config:/config:ro" -v "$PWD/data:/data" apaleo-bmd-export:local
 
 # --- build: compile TypeScript, then keep only the runtime dependencies ------
 FROM node:24-bookworm-slim AS build
@@ -17,8 +17,8 @@ RUN pnpm build && pnpm prune --prod
 # --- runtime ------------------------------------------------------------------
 FROM node:24-bookworm-slim
 ENV NODE_ENV=production \
-    APALEO_DATEV_CONFIG=/config/apaleo-datev.config.yaml \
-    APALEO_DATEV_OUTPUT_DIR=/data
+    APALEO_BMD_CONFIG=/config/apaleo-bmd.config.yaml \
+    APALEO_BMD_OUTPUT_DIR=/data
 WORKDIR /app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules

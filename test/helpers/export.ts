@@ -10,7 +10,7 @@ export const BEISPIEL_MAPPING = readFileSync(new URL('../fixtures/mapping/skr03-
 
 /** The fixture config with property BSP and the given lines appended. */
 export function exportConfig(...extra: string[]): string {
-  return `${FIXTURE_FILES['apaleo-datev.config.yaml']}properties:\n  - id: BSP\n${extra.map((line) => `${line}\n`).join('')}`;
+  return `${FIXTURE_FILES['apaleo-bmd.config.yaml']}properties:\n  - id: BSP\n${extra.map((line) => `${line}\n`).join('')}`;
 }
 
 export interface ExportSetup {
@@ -37,7 +37,7 @@ export function exportSetup(options: ExportSetupOptions = {}): ExportSetup {
   options.data?.(data);
   const fake = new FakeSource(data);
   const ctx = createTestContext({
-    files: { 'apaleo-datev.config.yaml': options.config ?? exportConfig(), 'mapping-BSP.csv': BEISPIEL_MAPPING, ...options.files },
+    files: { 'apaleo-bmd.config.yaml': options.config ?? exportConfig(), 'mapping-BSP.csv': BEISPIEL_MAPPING, ...options.files },
     sourceFactory: () => fake,
     ...(options.now ? { now: options.now } : {}),
   });

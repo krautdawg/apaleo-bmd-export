@@ -82,7 +82,7 @@ Geschrieben als `YYYYMMDDHHMMSSFFF` in deutscher Ortszeit (`Europe/Berlin`), una
 | Belegfeld 2 | `[\w$&%*+\-\/]{0,36}` | gekürzt auf 12 | das Design des Projekts und ältere DATEV-Versionen nutzen 12 |
 | KOST1, KOST2 | `[\w ]{0,36}` | nur Länge und CP1252 geprüft | die Namen der Kostenstellen kommen aus deiner Kontenzuordnung; DATEV lehnt ein `-` oder einen Umlaut vielleicht ab |
 | Bezeichnung (Kopfsatz 17) | `[\w.-/ ]{0,30}` | nur Länge geprüft | DATEV lehnt Umlaute vielleicht ab; halte den Namen des Stapels schlicht |
-| Exportiert von (Kopfsatz 9) | `\w{0,25}` | Standard `apaleo-datev-export` (mit `-`) | Projektspezifikation; mit `exportiertVon` änderbar, falls DATEV den Wert ablehnt |
+| Exportiert von (Kopfsatz 9) | `\w{0,25}` | Standard `apaleo-bmd-export` (mit `-`) | Projektspezifikation; mit `exportiertVon` änderbar, falls DATEV den Wert ablehnt |
 
 ## Checkliste für den ersten Import in der Kanzlei
 
@@ -91,5 +91,5 @@ Schick bitte das DATEV-Importprotokoll des ersten Imports (Stapelverarbeitung). 
 1. Die Datei wird ohne Formatfehler angenommen (Zeichensatz, Kopfsatz, Feldanzahl).
 2. Eine Buchung mit BU-Schlüssel (`"3"`) zeigt in DATEV den richtigen Steuerschlüssel (Auffüllen des BU-Schlüssels).
 3. Der Stapel ist nach dem Import nicht festgeschrieben, wenn Festschreibung 0 ist.
-4. Das Feld „Exportiert von“ im Kopfsatz (`apaleo-datev-export`) erzeugt keine Warnung.
+4. Das Feld „Exportiert von“ im Kopfsatz (`apaleo-bmd-export`) erzeugt keine Warnung.
 5. Kostenstellen (KOST1/KOST2) kommen an, falls ihr sie nutzt.

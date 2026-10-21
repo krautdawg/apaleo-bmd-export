@@ -16,7 +16,7 @@ function bareContext(env: Record<string, string> = {}) {
   return createTestContext({ env, fetchHandler: () => Promise.reject(new Error('the demo must not use the network')) });
 }
 
-describe('apaleo-datev export --demo', () => {
+describe('apaleo-bmd export --demo', () => {
   it('runs the dry run on the bundled data without config, secret or network and marks it DEMO', async () => {
     const ctx = bareContext();
     expect(await runCli(['export', '--month', '2026-09', '--demo', '--dry-run'], ctx)).toBe(0);
@@ -41,7 +41,7 @@ describe('apaleo-datev export --demo', () => {
 
   it('writes the same bookings as the golden file into ./demo-output only, with DEMO in the Bezeichnung and the protocol', async () => {
     // A variable that would redirect a real export must not move the demo output.
-    const ctx = bareContext({ APALEO_DATEV_OUTPUT_DIR: 'exports' });
+    const ctx = bareContext({ APALEO_BMD_OUTPUT_DIR: 'exports' });
     expect(await runCli(['export', '--month', '2026-09', '--demo'], ctx)).toBe(0);
     expect(readdirSync(ctx.cwd)).toEqual(['demo-output']);
     const folder = join(ctx.cwd, 'demo-output', 'BSP', '2026-09');

@@ -14,7 +14,7 @@ export class UsageError extends Error {
 }
 
 /** Where users report problems that they cannot fix themselves. */
-export const ISSUES_URL = 'https://github.com/krautdawg/apaleo-datev-export/issues';
+export const ISSUES_URL = 'https://github.com/krautdawg/apaleo-bmd-export/issues';
 
 /**
  * The next step for an error that neither a change in apaleo nor in the config

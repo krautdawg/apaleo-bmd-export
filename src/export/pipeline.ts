@@ -166,7 +166,7 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
   if (!inputs.property) {
     findings.push({
       code: 'E-PROPERTY-UNKNOWN',
-      message: `the property ${inputs.id} is not visible to this apaleo custom app. Run "apaleo-datev properties" to list the ids it can read`,
+      message: `the property ${inputs.id} is not visible to this apaleo custom app. Run "apaleo-bmd properties" to list the ids it can read`,
     });
     return failed();
   }
@@ -394,13 +394,13 @@ export const DEMO_NOTICE =
 function protocolText(summary: string, path: string, bytes: Uint8Array, mappingSha256: string, now: Date, demo: boolean): string {
   return [
     ...(demo ? [DEMO_NOTICE] : []),
-    'apaleo-datev export protocol. No warranty, not tax advice: have your Steuerberater check the bookings.',
+    'apaleo-bmd export protocol. No warranty, not tax advice: have your Steuerberater check the bookings.',
     '',
     summary,
     `File: ${basename(path)}`,
     `SHA-256: ${sha256(bytes)}`,
     `Mapping SHA-256: ${mappingSha256}`,
-    `Tool: apaleo-datev ${VERSION}`,
+    `Tool: apaleo-bmd ${VERSION}`,
     `Created: ${now.toISOString()}`,
     '',
   ].join('\n');

@@ -235,21 +235,21 @@ describe('Idempotency-Key', () => {
 
   it('names property, period and run', async () => {
     expect(await keysOf('run-1')).toEqual([
-      'apaleo-datev-BSP-2026-09-14-2026-09-15-run-1',
-      'apaleo-datev-BSP-2026-09-15-2026-09-16-run-1',
+      'apaleo-bmd-BSP-2026-09-14-2026-09-15-run-1',
+      'apaleo-bmd-BSP-2026-09-15-2026-09-16-run-1',
     ]);
   });
 
   it('is reused when a request is retried within a run', async () => {
     const keys = await keysOf('run-1', true);
     expect(keys).toHaveLength(3);
-    expect(keys.filter((key) => key === 'apaleo-datev-BSP-2026-09-14-2026-09-15-run-1')).toHaveLength(2);
+    expect(keys.filter((key) => key === 'apaleo-bmd-BSP-2026-09-14-2026-09-15-run-1')).toHaveLength(2);
   });
 
   it('differs between runs', async () => {
     const [first] = await keysOf();
     const [second] = await keysOf();
-    expect(first).toMatch(/^apaleo-datev-BSP-2026-09-14-2026-09-15-[0-9a-f-]{36}$/);
+    expect(first).toMatch(/^apaleo-bmd-BSP-2026-09-14-2026-09-15-[0-9a-f-]{36}$/);
     expect(second).not.toBe(first);
   });
 });
@@ -266,7 +266,7 @@ describe('response validation', () => {
       'apaleo sent a response that does not match its API description (property BSP, business day 2026-09-14):\n' +
         '  - transactions[2].sourceEntryNumber: is missing\n' +
         'This cannot be fixed in apaleo or in your config. Please open an issue at ' +
-        'https://github.com/krautdawg/apaleo-datev-export/issues and paste this message, but leave out guest names.',
+        'https://github.com/krautdawg/apaleo-bmd-export/issues and paste this message, but leave out guest names.',
     );
   });
 
@@ -366,7 +366,7 @@ describe('HTTP errors', () => {
     });
     expect(await source.getLedger(BSP, '2026-09-14', '2026-09-15')).not.toEqual([]);
     expect(sleeps).toEqual([1000]);
-    expect(keys).toEqual(['apaleo-datev-BSP-2026-09-14-2026-09-15-run-1', 'apaleo-datev-BSP-2026-09-14-2026-09-15-run-1']);
+    expect(keys).toEqual(['apaleo-bmd-BSP-2026-09-14-2026-09-15-run-1', 'apaleo-bmd-BSP-2026-09-14-2026-09-15-run-1']);
   });
 
   it('reports a body that is not JSON', async () => {
@@ -424,6 +424,6 @@ describe('getAccountTotals', () => {
       accounts: [],
       total: { debited: { value: '0', currency: '' }, credited: { value: '0', currency: '' }, balance: { value: '0', currency: '' } },
     });
-    expect(keys).toEqual(['apaleo-datev-aggregate-BSP-2026-09-17-2026-09-18-run-1']);
+    expect(keys).toEqual(['apaleo-bmd-aggregate-BSP-2026-09-17-2026-09-18-run-1']);
   });
 });

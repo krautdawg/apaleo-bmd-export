@@ -2,7 +2,7 @@ import type { Command, OptionSpec } from './command.js';
 import { COMMON_OPTIONS } from './command.js';
 import { VERSION } from './version.js';
 
-export const BIN = 'apaleo-datev';
+export const BIN = 'apaleo-bmd';
 const DISCLAIMER_LINE =
   'No warranty, not tax advice: have your Steuerberater check the mapping and the first imports. See DISCLAIMER.md.';
 

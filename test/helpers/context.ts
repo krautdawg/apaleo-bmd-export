@@ -36,7 +36,7 @@ export interface TestContext extends CommandContext {
  * directory (removed after the test) for real file system access.
  */
 export function createTestContext(options: TestContextOptions = {}): TestContext {
-  const cwd = mkdtempSync(join(tmpdir(), 'apaleo-datev-test-'));
+  const cwd = mkdtempSync(join(tmpdir(), 'apaleo-bmd-test-'));
   try {
     onTestFinished(() => rmSync(cwd, { recursive: true, force: true }));
   } catch {

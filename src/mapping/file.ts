@@ -7,7 +7,7 @@ import { ANY_TYPE, MAPPING_COLUMNS, ROW_FIELDS, rowKey, type Mapping, type Mappi
 /** The comment line on top of a written mapping file. It names the template, so `mapping check` knows the SKR. */
 export function mappingHeaderComment(template: Template, sachkontenlaenge: number): string {
   return (
-    `apaleo-datev Kontenzuordnung, Vorlage ${template.id}, Sachkontenlänge ${sachkontenlaenge}. ` +
+    `apaleo-bmd Kontenzuordnung, Vorlage ${template.id}, Sachkontenlänge ${sachkontenlaenge}. ` +
     'Alle Vorschläge mit dem Steuerberater prüfen. Spalte datev_account in Excel als Text formatieren.'
   );
 }

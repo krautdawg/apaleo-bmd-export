@@ -7,10 +7,10 @@ Das Repository ist privat. README, Beschreibung und Themen sind für Menschen ge
 Beschreibung und Themen wurden so gesetzt:
 
 ```sh
-gh repo edit krautdawg/apaleo-datev-export \
+gh repo edit krautdawg/apaleo-bmd-export \
   --description "Free open-source apaleo → DATEV export (EXTF Buchungsstapel, SKR03/SKR04) for hotels. Kostenloser apaleo DATEV Export." \
   --add-topic apaleo,datev,datev-export,buchungsstapel,extf,hotel,hospitality,pms,accounting,buchhaltung,steuerberater,skr03,skr04,typescript,cli
-gh repo view krautdawg/apaleo-datev-export --json description,repositoryTopics,visibility
+gh repo view krautdawg/apaleo-bmd-export --json description,repositoryTopics,visibility
 ```
 
 Die Beschreibung bleibt zweisprachig, damit auch englische Suchen das Projekt finden. Die Übersetzung der Dokumentation hat sie nicht geändert.
@@ -32,7 +32,7 @@ In dieser Reihenfolge:
 1. [ ] Lies das README in einem frischen Klon und führe den Schnellstart und `export --month 2026-09 --demo --dry-run` noch einmal aus.
 2. [ ] Starte `pnpm test` (mit dem Docs-Test) und prüfe, dass die CI auf `main` grün ist.
 3. [ ] Durchsuche die Historie nach allem, was nicht öffentlich werden darf: `git log -p | grep -iE 'secret|password|token'` darf nur Code und Dokumentation zeigen, nie einen Wert. Keine echten Gästedaten in den Testdaten.
-4. [ ] Stelle die Sichtbarkeit um: `gh repo edit krautdawg/apaleo-datev-export --visibility public --accept-visibility-change-consequences`.
+4. [ ] Stelle die Sichtbarkeit um: `gh repo edit krautdawg/apaleo-bmd-export --visibility public --accept-visibility-change-consequences`.
 5. [ ] Lade ein Vorschaubild (Social Preview) hoch (Settings > General > Social preview).
 6. [ ] Entscheide, ob es GitHub Discussions für Fragen geben soll. Schaltest du sie ein, leg eine `config.yml` in `.github/ISSUE_TEMPLATE/` an, die auf die Discussions verweist; bis dahin sind die Vorlagen für Issues der einzige Weg.
 7. [ ] Schalte die private Meldung von Sicherheitslücken ein (Settings > Code security), auf die `SECURITY.md` verweist.

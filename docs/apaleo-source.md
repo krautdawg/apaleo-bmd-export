@@ -22,7 +22,7 @@ Clients, die Scopes statt fine-grained permissions nutzen, brauchen `accounting.
 | `POST https://identity.apaleo.com/connect/token` | Token, `grant_type=client_credentials`, `client_secret_basic`; `apaleo.scopes` wird nur gesendet, wenn es gesetzt ist |
 | `GET /inventory/v1/properties?pageNumber&pageSize=500` | Property-ID, Code, Name, Zeitzone, Währung; endet bei einer kurzen Seite oder 204 |
 | `GET /finance/v1/accounts/schema?propertyId&depth=4&includeArchived=true` | Kontenplan, flach gemacht, mit der Liste der Buchungsjournale (global, guest, external, booking) jedes Kontos |
-| `POST /finance/v1/accounts/export-gross-daily?propertyId&from&to` | ein Geschäftstag pro Anfrage (`to` ist ausgeschlossen), Header `Idempotency-Key: apaleo-datev-<property>-<from>-<to>-<run id>`; 204 heißt: keine Buchungen |
+| `POST /finance/v1/accounts/export-gross-daily?propertyId&from&to` | ein Geschäftstag pro Anfrage (`to` ist ausgeschlossen), Header `Idempotency-Key: apaleo-bmd-<property>-<from>-<to>-<run id>`; 204 heißt: keine Buchungen |
 | `POST /finance/v1/accounts/aggregate-daily?propertyId&from&to` | die eigenen Summen von apaleo pro Hauptkonto, ein Geschäftstag pro Anfrage |
 
 Bei Anfragelimits (429) wartet das Tool `Retry-After` ab, höchstens 60 s, und versucht es dann noch einmal; Server- und Netzwerkfehler wiederholt es bis zu viermal mit wachsenden Abständen. Anfragen brechen nach 60 s ab. Höchstens zwei Export-Anfragen laufen gleichzeitig; das hält Entwicklungskonten (5 Anfragen pro Sekunde) unter der Grenze.
@@ -32,7 +32,7 @@ Beträge im Buchungsjournal kommen als Gleitkommazahlen und werden in ganze Cent
 ## Live-Test
 
 ```sh
-APALEO_CLIENT_SECRET=... apaleo-datev live-smoke --property BER [--date 2026-10-18]
+APALEO_CLIENT_SECRET=... apaleo-bmd live-smoke --property BER [--date 2026-10-18]
 ```
 
 Der Befehl holt ein Token, das Hotel, den Kontenplan, einen Geschäftstag des Buchungsjournals (standardmäßig vorgestern in der Zeitzone des Hotels) und die Tagessummen, zeigt Anzahlen und Summen und schreibt keine Dateien. Er endet nur mit 0, wenn jeder erforderliche Schritt klappt; eine fehlende Berechtigung für die Tagessummen meldet er als `SKIP`, nicht als Fehler. Er beantwortet auch Fragen, die die Swagger-Dokumentation offen lässt. Teile seine Ausgabe deshalb bitte (ohne Namen), wenn du ihn zum ersten Mal startest:

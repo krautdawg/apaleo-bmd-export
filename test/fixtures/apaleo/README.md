@@ -22,4 +22,4 @@ Variant (a) (the `BSP-GHIJKL-1` prepayment of 09-14, released on 09-21) has no V
 
 Per-reservation accounts (`BSP-ABCDEF-1_Receivables`, `BSP-GHIJKL-1_Liabilities`, ...) have no `parentNumber` and are not in the chart, like the account `QPMZZTUK-1_Receivables` in the Swagger example.
 
-Real responses are welcome: if you run `apaleo-datev live-smoke` against a real account and the shapes differ, please anonymise names, reservation ids and amounts and add them as a new fixture day.
+Real responses are welcome: if you run `apaleo-bmd live-smoke` against a real account and the shapes differ, please anonymise names, reservation ids and amounts and add them as a new fixture day.

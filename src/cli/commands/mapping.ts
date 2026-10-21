@@ -27,7 +27,7 @@ export const mapping: Command = {
   async run(args, ctx) {
     const [subcommand, ...extra] = args.positionals;
     if (subcommand !== 'check' || extra.length > 0) {
-      throw new UsageError(`Usage: apaleo-datev mapping ${mapping.usage}`);
+      throw new UsageError(`Usage: apaleo-bmd mapping ${mapping.usage}`);
     }
     const period = parseRangeFlags(stringOption(args.values, 'from'), stringOption(args.values, 'to'));
     const skr = parseSkr(stringOption(args.values, 'skr'));
@@ -68,7 +68,7 @@ function coverageSummary(coverage: readonly Finding[]): string {
 }
 
 function describeMapping(mapping: Mapping, skr: string | undefined): string {
-  const layout = mapping.layout === 'grman' ? 'Grman export layout' : 'apaleo-datev layout';
+  const layout = mapping.layout === 'grman' ? 'Grman export layout' : 'apaleo-bmd layout';
   const chart = skr ?? mapping.skr;
   return `${layout}, ${mapping.rows.length} rows${chart ? `, SKR ${chart}` : ''}`;
 }

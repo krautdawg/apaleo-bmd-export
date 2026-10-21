@@ -10,14 +10,14 @@ import { BSP, CLIENT_ID, FIXTURE_FILES, createApaleoContext, loadBeispielData } 
 import { createTestContext, type TestContext } from '../helpers/context.js';
 import { FakeSource, type FakeSourceData } from '../helpers/fake-source.js';
 
-const CONFIG = FIXTURE_FILES['apaleo-datev.config.yaml'];
+const CONFIG = FIXTURE_FILES['apaleo-bmd.config.yaml'];
 
 async function fakeContext(options: { config?: string; files?: Record<string, string>; extraAccounts?: SourceAccount[] } = {}) {
   const data: FakeSourceData = await loadBeispielData();
   data.charts[BSP] = [...(data.charts[BSP] ?? []), ...(options.extraAccounts ?? [])];
   const fake = new FakeSource(data);
   const ctx = createTestContext({
-    files: { 'apaleo-datev.config.yaml': options.config ?? CONFIG, ...options.files },
+    files: { 'apaleo-bmd.config.yaml': options.config ?? CONFIG, ...options.files },
     sourceFactory: () => fake,
   });
   return { ctx, fake };
@@ -41,7 +41,7 @@ const SPA: SourceAccount = {
   hasChildren: false,
 };
 
-describe('apaleo-datev init-mapping', () => {
+describe('apaleo-bmd init-mapping', () => {
   it('writes mapping-BSP.csv with every leaf account and prints mapped and unmapped counts', async () => {
     const { ctx, fake } = await fakeContext();
     expect(await runCli(['init-mapping', '--property', BSP, '--skr', '04'], ctx)).toBe(0);

@@ -21,7 +21,7 @@ describe('help and version', () => {
       expect(line?.trim().replace(/\s+/, ' ')).toBe(`${command.name} ${command.summary}`);
     }
     expect(ctx.out()).toContain('DISCLAIMER.md');
-    expect(ctx.out()).toContain('Usage: apaleo-datev <command> [options]');
+    expect(ctx.out()).toContain('Usage: apaleo-bmd <command> [options]');
   });
 
   it('prints the version from package.json', async () => {
@@ -33,7 +33,7 @@ describe('help and version', () => {
   it('prints command help with its options', async () => {
     const ctx = createTestContext();
     expect(await runCli(['doctor', '--help'], ctx)).toBe(0);
-    expect(ctx.out()).toContain('Usage: apaleo-datev doctor [--config <path>]');
+    expect(ctx.out()).toContain('Usage: apaleo-bmd doctor [--config <path>]');
     expect(ctx.out()).toMatch(/--config <path>\s+Config file/);
     expect(ctx.out()).toMatch(/-h, --help\s+Show help/);
   });
@@ -44,7 +44,7 @@ describe('dispatch and exit codes', () => {
     const ctx = createTestContext();
     expect(await runCli(['frobnicate'], ctx)).toBe(2);
     expect(ctx.err()).toContain('Unknown command "frobnicate"');
-    expect(ctx.err()).toContain('apaleo-datev --help');
+    expect(ctx.err()).toContain('apaleo-bmd --help');
   });
 
   it('exits 2 for an unknown top-level option', async () => {
@@ -57,7 +57,7 @@ describe('dispatch and exit codes', () => {
     const ctx = createTestContext();
     expect(await runCli(['doctor', '--nope'], ctx)).toBe(2);
     expect(ctx.err()).toContain('--nope');
-    expect(ctx.err()).toContain('apaleo-datev doctor --help');
+    expect(ctx.err()).toContain('apaleo-bmd doctor --help');
   });
 
   it('exits 2 for an unexpected positional argument', async () => {
@@ -135,13 +135,24 @@ describe('injected context', () => {
 
     expect(await runCli(['doctor'], ctx)).toBe(0);
 
-    expect(ctx.out()).toContain(`${ctx.cwd}/apaleo-datev.config.yaml`);
+    expect(ctx.out()).toContain(`${ctx.cwd}/apaleo-bmd.config.yaml`);
     expect(ctx.out()).toContain('not found');
     expect(ctx.out()).toContain('Clock:         2026-10-20T08:00:00.000Z');
     expect(ctx.out()).not.toContain('2001');
     expect(ctx.fetchCalls).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+
+  it('reads ./apaleo-bmd.config.yaml and ignores the old APALEO_DATEV_CONFIG', async () => {
+    const ctx = createTestContext({
+      files: { 'apaleo-bmd.config.yaml': 'datev:\n  beraternummer: 1234567\n  mandantennummer: 42\n' },
+      env: { APALEO_DATEV_CONFIG: '/x/old.yaml' },
+    });
+    expect(await runCli(['doctor'], ctx)).toBe(0);
+    expect(ctx.out()).toContain(`${ctx.cwd}/apaleo-bmd.config.yaml`);
+    expect(ctx.out()).toContain('Config:        valid');
+    expect(ctx.out()).not.toContain('/x/old.yaml');
   });
 
   it('output depends only on the context clock', async () => {
@@ -169,8 +180,8 @@ describe('injected context', () => {
   });
 
   it('doctor rejects the unedited example config instead of reporting it valid', async () => {
-    const example = readFileSync(new URL('../../apaleo-datev.config.example.yaml', import.meta.url), 'utf8');
-    const ctx = createTestContext({ files: { 'apaleo-datev.config.yaml': example } });
+    const example = readFileSync(new URL('../../apaleo-bmd.config.example.yaml', import.meta.url), 'utf8');
+    const ctx = createTestContext({ files: { 'apaleo-bmd.config.yaml': example } });
     expect(await runCli(['doctor'], ctx)).toBe(1);
     expect(ctx.out()).not.toContain('Config:        valid');
     expect(ctx.err()).toContain('datev.beraternummer: is required');
@@ -179,7 +190,7 @@ describe('injected context', () => {
 
   it('doctor exits 1 for an invalid config', async () => {
     const ctx = createTestContext({
-      files: { 'apaleo-datev.config.yaml': 'datev:\n  beraternummer: 12\n  mandantennummer: 42\n' },
+      files: { 'apaleo-bmd.config.yaml': 'datev:\n  beraternummer: 12\n  mandantennummer: 42\n' },
     });
     expect(await runCli(['doctor'], ctx)).toBe(1);
     expect(ctx.err()).toContain('datev.beraternummer');

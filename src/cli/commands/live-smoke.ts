@@ -25,7 +25,7 @@ export const liveSmoke: Command = {
   },
   async run(args, ctx) {
     const propertyId = stringOption(args.values, 'property');
-    if (!propertyId) throw new UsageError('live-smoke needs --property <id>. Run "apaleo-datev properties" to list them.');
+    if (!propertyId) throw new UsageError('live-smoke needs --property <id>. Run "apaleo-bmd properties" to list them.');
     const dateFlag = parseDateFlag(stringOption(args.values, 'date'));
 
     const source = createApaleoSource(await loadCommandConfig(args.values, ctx), ctx);

@@ -30,8 +30,8 @@ Bleib deshalb bei 0, bis die Zuordnung ein paar Monate ohne Korrektur durchgelau
 - **Nie zweimal importieren.** DATEV erkennt einen schon importierten Stapel nicht: Dieselben Buchungen stünden doppelt im Mandanten. Das Tool schreibt einen Monat nur einmal. Kommt später eine Nachbuchung, lehnt es den Monat mit `E-FILE-EXISTS` ab. Ist der alte Stapel nicht festgeschrieben (Festschreibung 0), lösche ihn zuerst in DATEV, danach schreibt `export --overwrite` die neue Datei. Ist er festgeschrieben (Festschreibung 1), lässt er sich nicht löschen: Dann importiere keine neue Datei, sondern buche die Differenz von Hand (siehe oben).
 
 ```sh
-apaleo-datev export --month 2026-10 --dry-run      # was hat sich geändert?
-apaleo-datev export --month 2026-10 --overwrite    # nur bei Festschreibung 0, erst nachdem der alte Stapel in DATEV gelöscht ist
+apaleo-bmd export --month 2026-10 --dry-run      # was hat sich geändert?
+apaleo-bmd export --month 2026-10 --overwrite    # nur bei Festschreibung 0, erst nachdem der alte Stapel in DATEV gelöscht ist
 ```
 
 ## Erster Import: bitte prüfen
@@ -39,7 +39,7 @@ apaleo-datev export --month 2026-10 --overwrite    # nur bei Festschreibung 0, e
 1. Die Datei wird ohne Formatfehler angenommen (Zeichensatz, Kopf, Feldanzahl).
 2. Eine Buchung mit BU-Schlüssel (`"3"`) zeigt in DATEV den richtigen Steuerschlüssel.
 3. Der Stapel ist nach dem Import nicht festgeschrieben, wenn Festschreibung 0 ist.
-4. Das Feld „Exportiert von“ (`apaleo-datev-export`) erzeugt keine Warnung.
+4. Das Feld „Exportiert von“ (`apaleo-bmd-export`) erzeugt keine Warnung.
 5. Kostenstellen (KOST1, KOST2) kommen an, falls ihr sie nutzt.
 
 Schick uns gern das Importprotokoll (ohne Namen und Beträge) als Issue, wenn etwas nicht passt. Mehr zum Format: [datev-format.md](datev-format.md).

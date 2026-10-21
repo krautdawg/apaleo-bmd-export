@@ -1,6 +1,6 @@
 # Architektur, für Mitwirkende
 
-apaleo-datev-export ist ein kleines Kommandozeilenprogramm in TypeScript (Node.js 24, ESM, strenge Typen, drei Abhängigkeiten zur Laufzeit: `csv-parse`, `yaml`, `zod`). Es liest ein PMS (apaleo) und schreibt ein Zielformat (DATEV EXTF). Der Code ist so geschnitten, dass eine zweite Quelle (Mews, Smoobu, Stripe) oder ein zweites Zielformat (BMD, lexoffice) dazukommen kann, ohne den Rest anzufassen.
+apaleo-bmd-export ist ein kleines Kommandozeilenprogramm in TypeScript (Node.js 24, ESM, strenge Typen, drei Abhängigkeiten zur Laufzeit: `csv-parse`, `yaml`, `zod`). Es liest ein PMS (apaleo) und schreibt ein Zielformat (DATEV EXTF). Der Code ist so geschnitten, dass eine zweite Quelle (Mews, Smoobu, Stripe) oder ein zweites Zielformat (BMD, lexoffice) dazukommen kann, ohne den Rest anzufassen.
 
 Code, Bezeichner und Commit-Nachrichten sind auf Englisch; diese Seite erklärt sie auf Deutsch.
 

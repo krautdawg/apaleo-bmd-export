@@ -13,7 +13,7 @@ Das schreibt das Tool, noch bevor jemand eine apaleo-App anlegt. Alles hier ist 
 Die EXTF-Datei ist das Golden File der Tests: Ein Test schlägt fehl, sobald sie von dem abweicht, was der aktuelle Code schreibt, und ein weiterer prüft das Protokoll und die Kontenzuordnung. So erzeugst du eine solche Datei selbst, ohne apaleo:
 
 ```sh
-apaleo-datev export --month 2026-09 --demo
+apaleo-bmd export --month 2026-09 --demo
 ```
 
 Die Demo markiert ihre Datei und ihr Protokoll mit `DEMO` und schreibt nach `./demo-output/`.

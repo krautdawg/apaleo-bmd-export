@@ -110,7 +110,7 @@ function postLine(line: LedgerLine, context: PostingContext): LineOutcome {
     return fail(
       'E-DATEV-RATE-UNKNOWN',
       `the VAT rate DATEV applies on ${rowText(row)} is unknown (BU key "${row.buKey}", datev_vat_percent "${row.datevVatPercent}"). ` +
-        'Fill in datev_vat_percent on that line with the rate DATEV books, and run "apaleo-datev mapping check"',
+        'Fill in datev_vat_percent on that line with the rate DATEV books, and run "apaleo-bmd mapping check"',
     );
   }
   if (d.vat && c.vat) {

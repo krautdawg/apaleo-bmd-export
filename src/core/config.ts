@@ -6,10 +6,10 @@ import { parseClockTime } from './date.js';
 
 export type Env = Readonly<Record<string, string | undefined>>;
 
-export const DEFAULT_CONFIG_FILE = 'apaleo-datev.config.yaml';
-export const EXAMPLE_CONFIG_FILE = 'apaleo-datev.config.example.yaml';
-export const CONFIG_PATH_ENV = 'APALEO_DATEV_CONFIG';
-const ENV_PREFIX = 'APALEO_DATEV_';
+export const DEFAULT_CONFIG_FILE = 'apaleo-bmd.config.yaml';
+export const EXAMPLE_CONFIG_FILE = 'apaleo-bmd.config.example.yaml';
+export const CONFIG_PATH_ENV = 'APALEO_BMD_CONFIG';
+const ENV_PREFIX = 'APALEO_BMD_';
 
 // ---------------------------------------------------------------------------
 // Schema. Each section is exported so later slices can extend it, for example
@@ -204,11 +204,11 @@ export interface EnvOverride {
 }
 
 export const ENV_OVERRIDES: readonly EnvOverride[] = [
-  { variable: 'APALEO_DATEV_OUTPUT_DIR', path: ['output', 'dir'], type: 'string' },
+  { variable: 'APALEO_BMD_OUTPUT_DIR', path: ['output', 'dir'], type: 'string' },
   { variable: 'APALEO_CLIENT_ID', path: ['apaleo', 'clientId'], type: 'string' },
-  { variable: 'APALEO_DATEV_BERATERNUMMER', path: ['datev', 'beraternummer'], type: 'integer' },
-  { variable: 'APALEO_DATEV_MANDANTENNUMMER', path: ['datev', 'mandantennummer'], type: 'integer' },
-  { variable: 'APALEO_DATEV_TIMEZONE', path: ['schedule', 'timezone'], type: 'string' },
+  { variable: 'APALEO_BMD_BERATERNUMMER', path: ['datev', 'beraternummer'], type: 'integer' },
+  { variable: 'APALEO_BMD_MANDANTENNUMMER', path: ['datev', 'mandantennummer'], type: 'integer' },
+  { variable: 'APALEO_BMD_TIMEZONE', path: ['schedule', 'timezone'], type: 'string' },
 ];
 
 export interface SecretKey {
@@ -246,7 +246,7 @@ export class ConfigNotFoundError extends UserError {
   }
 }
 
-/** `--config`, else `APALEO_DATEV_CONFIG`, else `./apaleo-datev.config.yaml`, resolved against `cwd`. */
+/** `--config`, else `APALEO_BMD_CONFIG`, else `./apaleo-bmd.config.yaml`, resolved against `cwd`. */
 export function resolveConfigPath(flag: string | undefined, env: Env, cwd: string): string {
   return resolve(cwd, flag || env[CONFIG_PATH_ENV] || DEFAULT_CONFIG_FILE);
 }

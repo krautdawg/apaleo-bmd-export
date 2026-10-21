@@ -4,7 +4,7 @@ import { CLIENT_SECRET, FIXTURE_FILES, TOKEN_URL, createApaleoContext } from '..
 import { createTestContext } from '../helpers/context.js';
 import { FakeSource } from '../helpers/fake-source.js';
 
-describe('apaleo-datev properties', () => {
+describe('apaleo-bmd properties', () => {
   it('prints one line per property with id, code, name, time zone and currency', async () => {
     const ctx = createApaleoContext();
     expect(await runCli(['properties'], ctx)).toBe(0);
@@ -59,7 +59,7 @@ describe('apaleo-datev properties', () => {
   it('exits 1 without any network call when the client id is missing', async () => {
     const ctx = createApaleoContext(
       {},
-      { files: { 'apaleo-datev.config.yaml': 'datev:\n  beraternummer: 1234567\n  mandantennummer: 42\n' } },
+      { files: { 'apaleo-bmd.config.yaml': 'datev:\n  beraternummer: 1234567\n  mandantennummer: 42\n' } },
     );
     expect(await runCli(['properties'], ctx)).toBe(1);
     expect(ctx.err()).toContain('apaleo.clientId is not set');

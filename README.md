@@ -4,7 +4,7 @@
 
 Kostenloser apaleo DATEV Export: Buchungsstapel (EXTF) für DATEV Rechnungswesen, Open Source.
 
-[![CI](https://github.com/krautdawg/apaleo-datev-export/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/krautdawg/apaleo-datev-export/actions/workflows/ci.yml)
+[![CI](https://github.com/krautdawg/apaleo-bmd-export/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/krautdawg/apaleo-bmd-export/actions/workflows/ci.yml)
 [![Lizenz: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![Node.js 24](https://img.shields.io/badge/node.js-24-339933.svg)](https://nodejs.org/)
 
@@ -50,42 +50,42 @@ Es gibt noch kein npm-Paket und kein Container-Image zum Herunterladen. Du insta
 
    <!-- quickstart -->
    ```sh
-   git clone https://github.com/krautdawg/apaleo-datev-export.git
-   cd apaleo-datev-export
+   git clone https://github.com/krautdawg/apaleo-bmd-export.git
+   cd apaleo-bmd-export
    corepack enable
    pnpm install --frozen-lockfile
    pnpm build
-   node dist/cli/main.js --help        # oder: pnpm link --global, dann apaleo-datev --help
+   node dist/cli/main.js --help        # oder: pnpm link --global, dann apaleo-bmd --help
    ```
 
    Dann die Konfiguration ausfüllen und das Secret setzen. Das Secret kommt nie in die Konfigurationsdatei.
 
    ```sh
-   cp apaleo-datev.config.example.yaml apaleo-datev.config.yaml   # apaleo.clientId, Beraternummer, Mandantennummer eintragen
+   cp apaleo-bmd.config.example.yaml apaleo-bmd.config.yaml   # apaleo.clientId, Beraternummer, Mandantennummer eintragen
    export APALEO_CLIENT_SECRET='das Secret aus apaleo'
    node dist/cli/main.js doctor
    node dist/cli/main.js properties
    ```
 
-   Die Befehle unten verwenden `apaleo-datev`. Ohne `pnpm link --global` tippst du stattdessen `node dist/cli/main.js`.
+   Die Befehle unten verwenden `apaleo-bmd`. Ohne `pnpm link --global` tippst du stattdessen `node dist/cli/main.js`.
 
 3. **Kontenzuordnung anlegen** und von deiner Kanzlei mit dem [Leitfaden zur Kontenzuordnung](docs/mapping-guide.md) prüfen lassen:
 
    ```sh
-   apaleo-datev init-mapping --property BSP --skr 03     # schreibt mapping-BSP.csv; --skr 04 für SKR04
-   apaleo-datev mapping check --property BSP --from 2026-09-01 --to 2026-09-30
+   apaleo-bmd init-mapping --property BSP --skr 03     # schreibt mapping-BSP.csv; --skr 04 für SKR04
+   apaleo-bmd mapping check --property BSP --from 2026-09-01 --to 2026-09-30
    ```
 
 4. **Probelauf**: alle Prüfungen und die Übersicht, keine Datei.
 
    ```sh
-   apaleo-datev export --month 2026-09 --dry-run
+   apaleo-bmd export --month 2026-09 --dry-run
    ```
 
 5. **Export**: eine Datei pro Hotel nach `exports/<Hotel>/<JJJJ-MM>/`. Gib sie der Kanzlei für den [DATEV-Import](docs/datev-import.md).
 
    ```sh
-   apaleo-datev export --month 2026-09
+   apaleo-bmd export --month 2026-09
    ```
 
 ## Schnellstart mit Docker
@@ -95,7 +95,7 @@ Das Image wird auf deinem Rechner aus diesem Repository gebaut; nichts wird aus 
 ```sh
 cp .env.example .env                 # APALEO_CLIENT_SECRET eintragen
 mkdir -p config data
-cp apaleo-datev.config.example.yaml config/apaleo-datev.config.yaml   # dann bearbeiten
+cp apaleo-bmd.config.example.yaml config/apaleo-bmd.config.yaml   # dann bearbeiten
 cp mapping-BSP.csv config/           # die von der Kanzlei geprüfte Zuordnung
 sudo chown 1000:1000 data            # der Container läuft als Benutzer node (uid 1000)
 docker compose -f docker-compose.example.yml build
@@ -116,11 +116,11 @@ Die Dateien erscheinen in `./data/<Hotel>/<JJJJ-MM>/`. Cron auf dem Host, einmal
 | `export` | Schreibt die DATEV-Dateien eines Monats oder Zeitraums nach allen Prüfungen; `--dry-run` schreibt nichts, `--demo` nimmt die Demodaten. |
 | `schedule` | `schedule --once` exportiert jeden fälligen Zeitraum, der noch nicht im Ausgabeordner liegt, und endet. Für Cron und Docker. |
 
-`apaleo-datev <Befehl> --help` zeigt die Optionen. Exit-Codes: 0 Erfolg, 1 eine Prüfung oder ein Lauf ist fehlgeschlagen, 2 falscher Aufruf. Jeder Befund-Code mit Lösung: [docs/troubleshooting.md](docs/troubleshooting.md).
+`apaleo-bmd <Befehl> --help` zeigt die Optionen. Exit-Codes: 0 Erfolg, 1 eine Prüfung oder ein Lauf ist fehlgeschlagen, 2 falscher Aufruf. Jeder Befund-Code mit Lösung: [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Konfiguration
 
-Eine YAML-Datei und Umgebungsvariablen für das Secret. Jeder Schlüssel mit Standardwert und Umgebungsvariable: [docs/configuration.md](docs/configuration.md). Die Vorlage zum Kopieren: [apaleo-datev.config.example.yaml](apaleo-datev.config.example.yaml).
+Eine YAML-Datei und Umgebungsvariablen für das Secret. Jeder Schlüssel mit Standardwert und Umgebungsvariable: [docs/configuration.md](docs/configuration.md). Die Vorlage zum Kopieren: [apaleo-bmd.config.example.yaml](apaleo-bmd.config.example.yaml).
 
 ## Was es nicht macht
 

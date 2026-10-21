@@ -11,8 +11,8 @@ Mit deinem Beitrag stimmst du zu, dass er unter der [MIT-Lizenz](LICENSE) steht,
 Du brauchst Node.js 24 (siehe `.nvmrc`) und git. pnpm kommt über corepack.
 
 ```sh
-git clone https://github.com/krautdawg/apaleo-datev-export.git
-cd apaleo-datev-export
+git clone https://github.com/krautdawg/apaleo-bmd-export.git
+cd apaleo-bmd-export
 corepack enable
 pnpm install --frozen-lockfile
 pnpm test && pnpm lint && pnpm typecheck && pnpm build

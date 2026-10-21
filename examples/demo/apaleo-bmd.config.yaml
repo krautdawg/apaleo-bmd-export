@@ -1,4 +1,4 @@
-# Config of "apaleo-datev export --demo". The demo reads only this file, never
+# Config of "apaleo-bmd export --demo". The demo reads only this file, never
 # your own config or environment. The numbers are made up: never import a demo
 # file into a real DATEV Mandant.
 datev:

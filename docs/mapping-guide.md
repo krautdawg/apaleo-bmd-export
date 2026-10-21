@@ -7,11 +7,11 @@ Ein vollständiges Beispiel liegt in [examples/mapping-BSP.example.csv](examples
 ## Ablauf
 
 ```sh
-apaleo-datev init-mapping --property BSP --skr 04      # schreibt mapping-BSP.csv aus dem apaleo-Kontenplan
+apaleo-bmd init-mapping --property BSP --skr 04      # schreibt mapping-BSP.csv aus dem apaleo-Kontenplan
 # Datei mit der Kanzlei prüfen, leere DATEV-Konten ausfüllen
-apaleo-datev mapping check --property BSP              # prüft die Datei
-apaleo-datev mapping check --property BSP --from 2026-09-01 --to 2026-09-30   # ist jedes gebuchte Konto zugeordnet?
-apaleo-datev init-mapping --property BSP --skr 04 --update   # später: neue apaleo-Konten anhängen, bearbeitete Zeilen bleiben
+apaleo-bmd mapping check --property BSP              # prüft die Datei
+apaleo-bmd mapping check --property BSP --from 2026-09-01 --to 2026-09-30   # ist jedes gebuchte Konto zugeordnet?
+apaleo-bmd init-mapping --property BSP --skr 04 --update   # später: neue apaleo-Konten anhängen, bearbeitete Zeilen bleiben
 ```
 
 Der Pfad der Datei kann in der Konfiguration stehen (`properties[].mapping`), sonst heißt sie `mapping-<id>.csv` im Arbeitsverzeichnis. `mapping check --from --to` liest das Buchungsjournal des Zeitraums aus apaleo und meldet jedes gebuchte Konto ohne Zuordnung; die Kanzlei kann die Datei also an einem echten Monat prüfen, bevor ein Export läuft.
@@ -125,8 +125,8 @@ Diese Vorlagenzeilen lassen das DATEV-Konto leer oder verlangen eine Entscheidun
 Eine Export-Datei im Grman-Format mit den Spalten `ApaleoAccountNumber;DatevAccountNumber;CostCenter;CostCenter2` wird direkt gelesen; ihre Zeilen gelten für die Kontonummer unabhängig vom Typ. `mapping check` warnt, dass BU-Schlüssel und USt-Sätze fehlen (`W-GRMAN-LAYOUT`). `init-mapping --update` wandelt die Datei in das Format dieses Tools um, übernimmt DATEV-Konten und Kostenstellen, hängt neue apaleo-Konten an und legt das Original als `<name>.grman.csv` ab. Gibt es diese Datei schon, bricht der Befehl ab und ändert nichts.
 
 ```sh
-apaleo-datev init-mapping --property BSP --skr 03 --update
-apaleo-datev mapping check --property BSP --from 2026-09-01 --to 2026-09-30
+apaleo-bmd init-mapping --property BSP --skr 03 --update
+apaleo-bmd mapping check --property BSP --from 2026-09-01 --to 2026-09-30
 ```
 
 ## Checkliste zur Freigabe durch die Kanzlei
@@ -139,8 +139,8 @@ Bevor die erste Datei in DATEV importiert wird:
 - [ ] Kurtaxe und Beherbergungsteuer sind für die Gemeinde des Hotels entschieden.
 - [ ] Anzahlungen gehen auf die versteuerten Anzahlungen (Automatikkonten), Zahlungen außer bar auf Geldtransit, Firmenrechnungen auf den Sammeldebitor, der im Mandanten angelegt ist.
 - [ ] Auf Automatikkonten steht kein BU-Schlüssel.
-- [ ] `apaleo-datev mapping check --property <id> --from <Monatsanfang> --to <Monatsende>` endet ohne Fehler für einen echten Monat.
-- [ ] Ein Probelauf `apaleo-datev export --month <YYYY-MM> --dry-run` ist ohne `E-` Befund; die Summen pro Konto und USt-Satz stimmen mit den Berichten in apaleo überein.
+- [ ] `apaleo-bmd mapping check --property <id> --from <Monatsanfang> --to <Monatsende>` endet ohne Fehler für einen echten Monat.
+- [ ] Ein Probelauf `apaleo-bmd export --month <YYYY-MM> --dry-run` ist ohne `E-` Befund; die Summen pro Konto und USt-Satz stimmen mit den Berichten in apaleo überein.
 - [ ] Der erste Import läuft mit Festschreibung 0, und das Importprotokoll wurde geprüft ([datev-import.md](datev-import.md)).
 
 Datum, Name der Kanzlei und die geprüfte Version der Datei (SHA-256 aus dem Protokoll) kannst du in die Spalte `comment` oder in eure Unterlagen schreiben.
