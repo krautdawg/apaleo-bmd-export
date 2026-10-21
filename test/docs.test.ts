@@ -290,6 +290,14 @@ describe('the Austrian terms check', () => {
     expect(problemsOf('docs/x.md', 'Beherbergung 10 %, Therme 13 %, Getränke 20 %, Grundnahrungsmittel 4,9 % und 17 % nirgends. `SKR03` und `datev`.\n\n```text\nKurtaxe 19 %\n```\n')).toEqual([]);
   });
 
+  it('Regional rate: passes 19 % in a sentence that names Jungholz or Mittelberg, and only there', () => {
+    expect(problemsOf('docs/posting-rules.md', 'In Jungholz und Mittelberg gilt der Steuersatz 19 % (§ 10 Abs. 4 UStG).')).toEqual([]);
+    expect(problemsOf('docs/x.md', 'Für Mittelberg: Beherbergung 19 %.')).toEqual([]);
+    expect(problemsOf('docs/x.md', 'In Jungholz gilt 19 %. Getränke mit 19 % wie in Deutschland.')).toEqual([expect.stringContaining('"19 %"')]);
+    expect(problemsOf('docs/x.md', 'Getränke mit 19 % im Mittelbergland.')).toEqual([expect.stringContaining('"19 %"')]);
+    expect(problemsOf('docs/x.md', 'In Jungholz Frühstück mit 7 %.')).toEqual([expect.stringContaining('"7 %"')]);
+  });
+
   it('Bare DATEV mention: names the file and the token', () => {
     expect(problemsOf('docs/bmd-import.md', 'Das läuft wie beim DATEV-Import.')).toEqual([
       'docs/bmd-import.md: "Das läuft wie beim DATEV-Import.": "DATEV" is named outside the origin sentence and the findings for a copied German setup',
@@ -318,9 +326,12 @@ describe('the Austrian terms check', () => {
 describe('the compatibility claim check', () => {
   const maintainers = (rows: string[]) => ['## Testimporte', '', '| Datum | BMD-Version | Dialekt | Ergebnis |', '|---|---|---|---|', ...rows, '', '## Später geplant', '| x | y |'].join('\n');
 
-  it('counts the recorded test imports, not the header or an empty row', () => {
+  it('counts the recorded test imports, not the header, an empty row or a partial row', () => {
     expect(recordedTestImports(maintainers([]))).toEqual([]);
     expect(recordedTestImports(maintainers(['|  |  |  |  |']))).toEqual([]);
+    expect(recordedTestImports(maintainers(['| 2026-11-10 |  |  |  |']))).toEqual([]);
+    expect(recordedTestImports(maintainers(['| 2026-11-10 | BMD NTCS 2026.1 | ntcs |  |', '| TBD |']))).toEqual([]);
+    expect(checkCompatibilityClaims('README.md', 'Getestet mit BMD NTCS.', recordedTestImports(maintainers(['| 2026-11-10 |  |  |  |'])).length)).toHaveLength(1);
     expect(recordedTestImports(maintainers(['| 2026-11-10 | BMD NTCS 2026.1 | ntcs | ohne Fehler |']))).toEqual([['2026-11-10', 'BMD NTCS 2026.1', 'ntcs', 'ohne Fehler']]);
     expect(recordedTestImports(readRepoFile('docs/maintainers.md'))).toEqual([]);
   });

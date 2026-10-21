@@ -380,7 +380,23 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&
 const termPattern = (term: string) =>
   /^\d/.test(term) ? new RegExp(`(?<![\\d,.])${escapeRegExp(term).replace(' ', '\\s?')}`, 'u') : new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(term)}`, 'u');
 
-const TERM_PATTERNS = GERMAN_PRACTICE_TERMS.map((term) => ({ term, pattern: termPattern(term) }));
+/**
+ * Narrow exemptions: a term passes in a sentence that names this context. The
+ * Austrian regional 19 % rate of Jungholz and Mittelberg (§ 10 Abs. 4 UStG) is
+ * legal and may be described; every other 19 % stays a German rate.
+ */
+const TERM_EXEMPTIONS: Partial<Record<(typeof GERMAN_PRACTICE_TERMS)[number], RegExp>> = {
+  '19 %': /(?<![\p{L}\p{N}])(?:Jungholz|Mittelberg)(?![\p{L}\p{N}])/u,
+};
+
+const TERM_PATTERNS = GERMAN_PRACTICE_TERMS.map((term) => ({ term, pattern: termPattern(term), exemption: TERM_EXEMPTIONS[term] }));
+
+/** The sentences of a line, split after `.`, `!` or `?` followed by a space. */
+const sentences = (text: string) => text.split(/(?<=[.!?])\s+/);
+
+/** Whether the term appears in a sentence that does not name its exemption. */
+const usesTerm = (text: string, pattern: RegExp, exemption: RegExp | undefined) =>
+  exemption ? sentences(text).some((sentence) => pattern.test(sentence) && !exemption.test(sentence)) : pattern.test(text);
 const DATEV_TOKEN = /(?<![\p{L}\p{N}])DATEV(?![\p{L}\p{N}])/u;
 
 interface ProseLine {
@@ -416,8 +432,8 @@ export function checkGermanPracticeTerms(file: string, markdown: string): string
   for (const line of proseLines(markdown)) {
     if (allowed(line)) continue;
     const quoted = line.text.trim();
-    for (const { term, pattern } of TERM_PATTERNS) {
-      if (pattern.test(line.text)) problems.push(`${file}: "${quoted}": "${term}" is a term of German DATEV practice; use the Austrian BMD term`);
+    for (const { term, pattern, exemption } of TERM_PATTERNS) {
+      if (usesTerm(line.text, pattern, exemption)) problems.push(`${file}: "${quoted}": "${term}" is a term of German DATEV practice; use the Austrian BMD term`);
     }
     if (DATEV_TOKEN.test(line.text)) problems.push(`${file}: "${quoted}": "DATEV" is named outside the origin sentence and the findings for a copied German setup`);
   }
@@ -449,7 +465,10 @@ export const COMPATIBILITY_CLAIMS: readonly RegExp[] = [
   /(?:certified|accepted|approved)\s+(?:by|for)\s+BMD/,
 ].map((pattern) => new RegExp(String.raw`(?<![\p{L}\p{N}])(?:${pattern.source})`, 'giu'));
 
-/** The rows of the `## Testimporte` table in `docs/maintainers.md` that record an import (a non-empty cell). */
+/** Datum, BMD-Version, Dialekt and Ergebnis: a row records an import only when all four are filled. */
+const RECORDED_IMPORT_FIELDS = 4;
+
+/** The rows of the `## Testimporte` table in `docs/maintainers.md` that record an import (all four fields filled). */
 export function recordedTestImports(maintainers: string): string[][] {
   const start = maintainers.search(/^## Testimporte$/m);
   if (start < 0) return [];
@@ -466,7 +485,7 @@ export function recordedTestImports(maintainers: string): string[][] {
         .split('|')
         .map((cell) => cell.trim()),
     );
-  return rows.filter((cells) => cells.some((cell) => cell !== ''));
+  return rows.filter((cells) => cells.length >= RECORDED_IMPORT_FIELDS && cells.slice(0, RECORDED_IMPORT_FIELDS).every((cell) => cell !== ''));
 }
 
 /** Problems where a file claims BMD compatibility while no test import is recorded. */
