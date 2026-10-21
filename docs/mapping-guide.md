@@ -91,14 +91,14 @@ In jedem Bundesland schuldet der Gast die Abgabe für seine Nächtigung, und das
 | Burgenland | Ortstaxe | Gast | Hotel |
 | Kärnten | Ortstaxe, Nächtigungstaxe | Gast | Hotel |
 | Niederösterreich | Nächtigungstaxe | Gast | Hotel |
-| Oberösterreich | Tourismusabgabe | Gast | Hotel, abgeführt an das Land |
+| Oberösterreich | Ortstaxe | Gast | Hotel, abgeführt an die Gemeinde |
 | Salzburg | Ortstaxe | Gast | Hotel |
 | Steiermark | Nächtigungsabgabe | Gast | Hotel |
 | Tirol | Aufenthaltsabgabe | Gast | Hotel, abgeführt an den Tourismusverband |
 | Vorarlberg | Gästetaxe | Gast | Hotel |
 | Wien | Ortstaxe | Gast | Hotel |
 
-Nicht gemeint ist der Tourismusbeitrag (Interessentenbeitrag), den das Hotel selbst schuldet: Den bucht apaleo nicht.
+Nicht gemeint ist der Tourismusbeitrag (Interessentenbeitrag, in Oberösterreich die Tourismusabgabe nach dem Oö. Tourismusgesetz 2018), den das Hotel selbst schuldet: Den bucht apaleo nicht, und er ist kein durchlaufender Posten.
 
 Zwei Möglichkeiten für die Zeile, beide ohne Steuercode:
 
