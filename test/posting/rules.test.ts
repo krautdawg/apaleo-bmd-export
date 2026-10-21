@@ -418,6 +418,35 @@ describe('bad debt and cancellation fees (b05)', () => {
     expect(booking).toMatchObject({ konto: '7801', gkonto: '2390', betragCents: 2_000, tax: { steuercode: 1, prozent: 20, steuerCents: 400 } });
   });
 
+  it('books a write-off at 13 % on 7802', () => {
+    const { booking, findings, summary } = single(writeOff('6900', { grossCents: 1_130, netCents: 1_000, taxes: tax(13, 130) }), mappingWith(...lossRows.slice(0, 1), mappingRow({ apaleoAccount: '*', apaleoType: 'LossOfAccountsReceivable', apaleoVatPercent: '13', bmdAccount: '7802', steuercode: '1', bmdVatPercent: '13' })));
+    expect(findings).toEqual([]);
+    expect(booking).toMatchObject({ konto: '7802', gkonto: '2390', betragCents: 1_000, tax: { steuercode: 1, prozent: 13, steuerCents: 130 }, text: 'Forderungsverlust 13 %' });
+    expect(summary.writeOffsByRate).toEqual([{ ratePercent: 13, netCents: 1_000, vatCents: 130, grossCents: 1_130, apaleoVat: '1.3' }]);
+  });
+
+  /** The reversal of a write-off: the bad-debt account is credited and the receivable debited. */
+  const reversal = (line: LedgerLine): LedgerLine => ({ ...line, debit: line.credit, credit: line.debit });
+
+  it('books the reversal of a 10 % write-off on 7800 with negative Betrag and Steuer, and nets writeOffsByRate to 0', () => {
+    const original = writeOff('6900');
+    const { bookings, findings, summary } = post([original, reversal(original)], mapping);
+    expect(findings).toEqual([]);
+    expect(bookings[1]).toMatchObject({ konto: '7800', gkonto: '2390', betragCents: -5_000, tax: { steuercode: 1, prozent: 10, steuerCents: -500 } });
+    expect(summary.writeOffsByRate).toEqual([{ ratePercent: 10, netCents: 0, vatCents: 0, grossCents: 0, apaleoVat: '0' }]);
+    expect(summary.accounts.find((a) => a.account === '7800')?.balanceCents).toBe(0);
+  });
+
+  it('books the reversal of an untaxed write-off on 7809 with negative Betrag and no tax fields, and nets writeOffsByRate to 0', () => {
+    const original = writeOff('6900', { grossCents: 3_000, netCents: 3_000, taxes: [] });
+    const { bookings, findings, summary } = post([original, reversal(original)], mapping);
+    expect(findings).toEqual([]);
+    expect(bookings[1]).toMatchObject({ konto: '7809', gkonto: '2390', betragCents: -3_000 });
+    expect(bookings[1]?.tax).toBeUndefined();
+    expect(summary.writeOffsByRate).toEqual([{ ratePercent: 0, netCents: 0, vatCents: 0, grossCents: 0, apaleoVat: '0' }]);
+    expect(summary.accounts.find((a) => a.account === '7809')?.balanceCents).toBe(0);
+  });
+
   it('books a write-off 30.00 without tax entries on 7809 without tax fields, and sums write-offs per rate', () => {
     const { bookings, findings, summary } = post([writeOff('6900', { grossCents: 3_000, netCents: 3_000, taxes: [] }), writeOff('6900')], mapping);
     expect(findings).toEqual([]);

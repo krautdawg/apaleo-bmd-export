@@ -144,6 +144,14 @@ describe('EKR hotel template', () => {
     ]);
   });
 
+  it('matches patterns against the apaleo account number too, without letting a number containing "Room" override a 20 % drink', async () => {
+    const chart = [account('RoomBarDrinks', 'Getränke Hotelbar', 'Revenues', rate(20)), account('RevenueNoShow_VeryReduced:10.00', 'Revenues (10%)', 'Revenues', rate(10))];
+    const { rows } = suggestRows(chart, await loadTemplate(), settings());
+    expect(find(rows, 'RoomBarDrinks')).toMatchObject({ bmdAccount: '4020', steuercode: '1', bmdVatPercent: '20' });
+    expect(find(rows, 'RevenueNoShow_VeryReduced:10.00')?.bmdAccount).toBe('');
+    expect(find(rows, 'RevenueNoShow_VeryReduced:10.00')?.comment).toContain('No-Show kann steuerbar sein');
+  });
+
   it('proposes 4040 at 13 %, 4050 at 4.9 % and 4090 without Steuercode at 0 %, with the comment on the fixed Steuercode', async () => {
     const chart = [account('A', 'Therme', 'Revenues', rate(13)), account('B', 'Brot', 'Revenues', rate(4.9)), account('C', 'Gutschein ohne USt', 'Revenues', rate(0))];
     const { rows } = suggestRows(chart, await loadTemplate(), settings());
