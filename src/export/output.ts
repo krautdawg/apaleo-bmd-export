@@ -13,7 +13,9 @@ import { readIfExists, replaceKeepingBackup, withFolderLock, writeFileAtomic } f
  * `<output.dir>/<propertyId>/<YYYY-MM>/` holds the target's files, their protocols
  * and `manifest.json`. A re-run compares the file on disk through the target's
  * `sameContent`, so it works even when the manifest was deleted. Which names
- * belong to the target comes from its `filePattern`; nothing here knows a format.
+ * belong to the target comes from its `filePattern`, also for manifest entries; the
+ * advice in a refusal comes from its `advice`. Nothing here knows a format or the
+ * program a file is imported into.
  */
 
 export const MANIFEST_FILE = 'manifest.json';
@@ -100,7 +102,9 @@ async function targetFiles(ctx: CommandContext, folder: string, target: FolderTa
  */
 export async function exportedFile(ctx: CommandContext, folder: string, period: DateRange, target: FolderTarget): Promise<string | undefined> {
   const manifest = await readManifest(ctx, join(folder, MANIFEST_FILE)).catch((): Manifest => ({ files: [] }));
-  const recorded = manifest.files.find((entry) => entry.status === 'current' && entry.from === period.from && entry.to === period.to);
+  const recorded = manifest.files.find(
+    (entry) => entry.status === 'current' && entry.from === period.from && entry.to === period.to && target.filePattern.test(entry.file),
+  );
   if (recorded) return recorded.file;
   const [from, to] = [compactDate(period.from), compactDate(period.to)];
   return (await targetFiles(ctx, folder, target)).find((file) => file.from === from && file.to === to)?.name;
@@ -133,10 +137,7 @@ export async function planOutput(
       action: 'refuse',
       finding: {
         code: 'E-PERIOD-OVERLAP',
-        message:
-          `${join(dirname(path), overlap)} already covers some of the days ${period.from} to ${period.to}. ` +
-          'Importing both files would book those days twice in DATEV. Export the same period as that file, or move it away ' +
-          '(and have the Kanzlei delete its batch in DATEV if it was imported) and run again',
+        message: `${join(dirname(path), overlap)} already covers some of the days ${period.from} to ${period.to}. ${target.advice.overlap}`,
       },
     };
   }
@@ -146,8 +147,7 @@ export async function planOutput(
   if (overwrite) return { action: 'replace', previous, backup: replacedName(path, ctx.now()) };
   const sameBookings = sha256(bodyOf(previous)) === sha256(bodyOf(bytes));
   const what = sameBookings
-    ? `${path} already exists with the same bookings but a different header line: a config value such as datev.wjBeginn, ` +
-      'datev.festschreibung or datev.skr changed since it was written.'
+    ? `${path} already exists with the same bookings but a different header line: ${target.advice.headerChange}`
     : `${path} already exists with other bookings: the apaleo data or the mapping changed since it was written, ` +
       'for example by a late posting.';
   return {
@@ -155,11 +155,9 @@ export async function planOutput(
     finding: {
       code: 'E-FILE-EXISTS',
       message:
-        `${what} DATEV import is not idempotent, so importing both files would book those days twice. ` +
-        'If the Kanzlei has imported the old file, it must delete that batch in DATEV first. Then run again with --overwrite: ' +
-        `the old file is kept as <name>.replaced-<timestamp>${extname(path)}. ` +
-        'A batch imported with Festschreibung 1 is locked and cannot be deleted: then never import an --overwrite file, ' +
-        'the Kanzlei books the difference by hand from the --dry-run summary',
+        `${what} ${target.advice.reimport} Then run again with --overwrite: ` +
+        `the old file is kept as <name>.replaced-<timestamp>${extname(path)}.` +
+        (target.advice.afterOverwrite ? ` ${target.advice.afterOverwrite}` : ''),
     },
   };
 }

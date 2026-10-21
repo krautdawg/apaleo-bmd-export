@@ -23,6 +23,11 @@ const fakeTarget: TargetWriter<PostedBooking> = {
     findings: [],
   }),
   sameContent: (existing, next) => Buffer.from(existing).equals(Buffer.from(next)),
+  advice: {
+    overlap: 'FAKE overlap advice',
+    headerChange: 'FAKE header advice.',
+    reimport: 'FAKE reimport advice.',
+  },
 };
 
 const SEPTEMBER = { from: '2026-09-01', to: '2026-09-30' } as const;
@@ -58,6 +63,8 @@ describe('the export through a fake TargetWriter', () => {
     await run(setup);
     const folder = folderOf(setup);
     expect(await exportedFile(setup.ctx, folder, SEPTEMBER, fakeTarget)).toBe(FILE);
+    // The manifest records the FAKE file; another target must not take it for its own.
+    expect(await exportedFile(setup.ctx, folder, SEPTEMBER, DEFAULT_TARGET)).toBeUndefined();
     await setup.ctx.fs.rm(join(folder, 'manifest.json'));
     expect(await exportedFile(setup.ctx, folder, SEPTEMBER, fakeTarget)).toBe(FILE);
     expect(await exportedFile(setup.ctx, folder, SEPTEMBER, DEFAULT_TARGET)).toBeUndefined();
@@ -78,6 +85,8 @@ describe('the export through a fake TargetWriter', () => {
     expect(outcome.status).toBe('failed');
     expect(errorCodes(outcome)).toEqual(['E-PERIOD-OVERLAP']);
     expect(outcome.findings[0]?.message).toContain('FAKE_20260901-20260915_BSP.txt already covers some of the days');
+    expect(outcome.findings[0]?.message).toMatch(/ FAKE overlap advice$/);
+    expect(outcome.findings[0]?.message).not.toMatch(/DATEV|datev\./);
     expect(existsSync(join(folderOf(setup), FILE))).toBe(false);
   });
 
@@ -88,7 +97,9 @@ describe('the export through a fake TargetWriter', () => {
     const refused = await run(setup);
     expect(refused.status).toBe('failed');
     expect(errorCodes(refused)).toEqual(['E-FILE-EXISTS']);
-    expect(refused.findings[0]?.message).toContain('the old file is kept as <name>.replaced-<timestamp>.txt');
+    expect(refused.findings[0]?.message).toContain('FAKE reimport advice. Then run again with --overwrite');
+    expect(refused.findings[0]?.message).toMatch(/the old file is kept as <name>\.replaced-<timestamp>\.txt\.$/);
+    expect(refused.findings[0]?.message).not.toMatch(/DATEV|datev\.|Festschreibung/);
 
     const replaced = await run(setup, { overwrite: true });
     expect(replaced.status).toBe('replaced');
@@ -128,9 +139,10 @@ describe('the target boundary in src/export', () => {
     expect(targetImports.every((module) => module === 'target.js')).toBe(true);
   });
 
-  it('keeps target file names and formats out of the output folder logic', () => {
+  it('keeps target file names, formats and import advice out of the output folder logic', () => {
     const output = sources.find(([name]) => name === 'output.ts')?.[1] ?? '';
     expect(output).not.toMatch(/EXTF|Buchungsstapel|\.csv/);
+    expect(output).not.toMatch(/DATEV|datev\.[a-z]|\bBMD\b|bmd\.[a-z]|Festschreibung/);
     expect(output).not.toContain('../datev');
   });
 });

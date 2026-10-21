@@ -19,6 +19,18 @@ export const datevTarget: TargetWriter<PostedBooking> = {
     return { bytes: encodeCp1252(rendered.text).bytes, findings: rendered.warnings };
   },
   sameContent: (existing, next) => sameBytes(withoutCreationTime(existing), withoutCreationTime(next)),
+  advice: {
+    overlap:
+      'Importing both files would book those days twice in DATEV. Export the same period as that file, or move it away ' +
+      '(and have the Kanzlei delete its batch in DATEV if it was imported) and run again',
+    headerChange: 'a config value such as datev.wjBeginn, datev.festschreibung or datev.skr changed since it was written.',
+    reimport:
+      'DATEV import is not idempotent, so importing both files would book those days twice. ' +
+      'If the Kanzlei has imported the old file, it must delete that batch in DATEV first.',
+    afterOverwrite:
+      'A batch imported with Festschreibung 1 is locked and cannot be deleted: then never import an --overwrite file, ' +
+      'the Kanzlei books the difference by hand from the --dry-run summary',
+  },
 };
 
 function extfHeader({ config, propertyId, part, skr, demo, createdAt }: TargetFileMeta): ExtfHeader {

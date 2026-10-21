@@ -44,10 +44,28 @@ export interface TargetWriter<B> {
   render(bookings: readonly B[], meta: TargetFileMeta): RenderedFile;
   /** True when `existing` and `next` differ at most in what changes on every run (such as a creation time). */
   sameContent(existing: Uint8Array, next: Uint8Array): boolean;
+  /** The target's own words in the refusals of the output folder logic, which names no accounting program. */
+  readonly advice: TargetAdvice;
+}
+
+/**
+ * Sentences the output folder logic puts into `E-PERIOD-OVERLAP` and
+ * `E-FILE-EXISTS`. They name the program the Kanzlei imports into, its config
+ * keys and how an imported file is undone there.
+ */
+export interface TargetAdvice {
+  /** After "<file> already covers some of the days …": why not to import both, and what to do with the other file. */
+  overlap: string;
+  /** Why an existing file with the same bookings can have another header line, for example which config keys changed. */
+  headerChange: string;
+  /** Before the `--overwrite` hint: why not to import both files, and how to undo an imported old file first. */
+  reimport: string;
+  /** After the `--overwrite` hint, when the target has a case in which an imported file cannot be undone. */
+  afterOverwrite?: string;
 }
 
 /** The part of a target the output folder logic uses. */
-export type FolderTarget = Pick<TargetWriter<unknown>, 'filePattern' | 'sameContent'>;
+export type FolderTarget = Pick<TargetWriter<unknown>, 'filePattern' | 'sameContent' | 'advice'>;
 
 /** Appended to the property id in the name of a demo file, so a demo file never looks like a real export in a file list. */
 export const DEMO_FILE_MARKER = 'DEMO';
