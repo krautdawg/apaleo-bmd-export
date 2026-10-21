@@ -50,12 +50,10 @@ describe('encodeCp1252', () => {
     expect([...encodeCp1252('A').bytes]).toEqual([0x41]);
   });
 
-  it('replaces an emoji by ? and reports it', () => {
+  it('replaces an emoji by ? and lists it', () => {
     const { bytes, replaced } = encodeCp1252('Bett 🛏');
     expect(Buffer.from(bytes).toString('latin1')).toBe('Bett ?');
-    expect(replaced).toEqual([
-      expect.objectContaining({ code: 'W-EXTF-CHARSET', value: '🛏', message: expect.stringContaining('U+1F6CF') }),
-    ]);
+    expect(replaced).toEqual(['🛏']);
   });
 });
 

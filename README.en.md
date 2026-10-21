@@ -40,7 +40,7 @@ The documentation is written in German for hotels and Steuerberater in Germany a
 - [README.md](README.md): overview, quick start, Docker, comparison, FAQ
 - [docs/setup-apaleo.md](docs/setup-apaleo.md): the apaleo custom app and its permissions
 - [docs/mapping-guide.md](docs/mapping-guide.md): the account mapping, for the Steuerberater
-- [docs/datev-import.md](docs/datev-import.md): importing the file into DATEV
+- [docs/bmd-import.md](docs/bmd-import.md): importing the file into BMD NTCS
 - [docs/configuration.md](docs/configuration.md), [docs/docker.md](docs/docker.md), [docs/troubleshooting.md](docs/troubleshooting.md)
 - [docs/architecture.md](docs/architecture.md): modules and how to add a source or target
 

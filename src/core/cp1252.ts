@@ -1,5 +1,3 @@
-import type { Finding } from './findings.js';
-
 /**
  * Windows-1252 bytes 0x80–0x9F that hold printable characters. The other five
  * bytes in that range (0x81, 0x8D, 0x8F, 0x90, 0x9D) are undefined. Every other
@@ -102,24 +100,16 @@ export function toCp1252Text(text: string): Cp1252Text {
 /**
  * Encodes text as Windows-1252 (CP1252) without byte-order mark. Characters CP1252
  * cannot represent are transliterated (for example `‑` to `-` or `ć` to `c`) or
- * replaced by `?` (for example `ł` or an emoji); each one becomes a
- * `W-EXTF-CHARSET` finding.
+ * replaced by `?` (for example `ł` or an emoji); `replaced` lists them in order.
  */
-export function encodeCp1252(text: string): { bytes: Uint8Array; replaced: Finding[] } {
+export function encodeCp1252(text: string): { bytes: Uint8Array; replaced: string[] } {
   const { text: safe, replaced } = toCp1252Text(text);
   const bytes = new Uint8Array(safe.length);
   for (let i = 0; i < safe.length; i++) {
     // toCp1252Text only returns BMP characters that cp1252Byte maps.
     bytes[i] = cp1252Byte(safe.charCodeAt(i)) ?? REPLACEMENT.charCodeAt(0);
   }
-  return {
-    bytes,
-    replaced: replaced.map((char) => ({
-      code: 'W-EXTF-CHARSET',
-      message: `character ${describe(char)} is not in Windows-1252 and was replaced`,
-      value: char,
-    })),
-  };
+  return { bytes, replaced };
 }
 
 /** `"🛏" (U+1F6CF)`, for warnings. */

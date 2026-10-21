@@ -151,7 +151,7 @@ Selbst betreiben heißt: Du behältst die Daten und zahlst nichts, aber du spiel
 
 **Wohin gehen meine Daten?** Nur auf deine eigene Festplatte. Das Tool liest apaleo mit deiner Custom App und schreibt Dateien in einen lokalen Ordner. Es schickt nichts an uns oder an andere. Die DATEV-Datei enthält keine Gästenamen: Buchungstexte nutzen Kontobezeichnungen, nie die Namen von Gastfolios.
 
-**Kann es an DATEV online übertragen?** Nein. Dafür braucht es eine Freigabe von DATEV. Die Kanzlei importiert die Datei über die Stapelverarbeitung; siehe [docs/datev-import.md](docs/datev-import.md).
+**Kann es an DATEV online übertragen?** Nein. Dafür braucht es eine Freigabe von DATEV. Die Kanzlei importiert die Datei über die Stapelverarbeitung; siehe [docs/bmd-import.md](docs/bmd-import.md).
 
 **Festschreibung?** Der BMD-Buchungsimport kennt keine Festschreibung in der Datei. Die Buchungen kommen unter dem Buchungssymbol, das die Kanzlei in BMD anlegt (`bmd.buchsymbol`); eine falsch importierte Datei storniert sie dort. Importiere nie eine Datei aus `--overwrite`, ohne dass die Kanzlei die alte Datei vorher storniert hat; siehe [docs/bmd-import.md](docs/bmd-import.md).
 

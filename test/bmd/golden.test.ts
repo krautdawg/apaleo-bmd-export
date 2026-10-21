@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DIALECTS, renderBuchungsimport, type BmdBooking, type BmdDialect, type BmdTax } from '../../src/bmd/index.js';
+import { encodeCp1252 } from '../../src/core/cp1252.js';
 import { bmdBooking, bmdPayment, octoberOptions } from '../helpers/bmd.js';
 import { describeDifference, type FieldNamer } from '../helpers/golden.js';
 
@@ -121,5 +122,23 @@ describe('BMD golden files', () => {
     const golden = renderBuchungsimport(CASES.ntcs.payment?.bookings ?? [], octoberOptions()).bytes;
     const changed = renderBuchungsimport([bmdPayment({ betragCents: 12_001 }), ...(CASES.ntcs.payment?.bookings.slice(1) ?? [])], octoberOptions()).bytes;
     expect(describeDifference(golden, changed, fieldNamer('ntcs'))).toBe('line 2:\n  field 11 (betrag): expected 120,00, got 120,01');
+  });
+});
+
+describe('golden diff helper', () => {
+  const golden = renderBuchungsimport(CASES.ntcs.payment?.bookings ?? [], octoberOptions()).bytes;
+
+  it('reports nothing for identical bytes', () => {
+    expect(describeDifference(golden, golden.slice())).toBeUndefined();
+  });
+
+  it('shows a lost CR in a line end', () => {
+    const text = new TextDecoder('windows-1252').decode(golden).replaceAll('\r\n', '\n');
+    expect(describeDifference(golden, encodeCp1252(text).bytes)).toContain('\\r\\n');
+  });
+
+  it('reports a missing line', () => {
+    const shorter = renderBuchungsimport(CASES.ntcs.payment?.bookings.slice(0, 1) ?? [], octoberOptions()).bytes;
+    expect(describeDifference(golden, shorter)).toContain('line 3:\n  - expected:');
   });
 });

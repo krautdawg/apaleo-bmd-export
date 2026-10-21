@@ -28,7 +28,7 @@ export interface ScheduleOutcome {
   part: PeriodPart;
   status: ScheduleStatus;
   findings: Finding[];
-  /** The EXTF file that was written or already exists. */
+  /** The export file that was written or already exists. */
   path?: string;
 }
 

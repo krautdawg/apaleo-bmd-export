@@ -12,7 +12,7 @@ export interface DateRange {
 export interface PeriodPart extends DateRange {
   /** `YYYY-MM`, the output folder of the part. */
   month: string;
-  /** Start of the fiscal year the part lies in (DATEV header WJ-Beginn). */
+  /** Start of the fiscal year (Wirtschaftsjahr) the part lies in. */
   wjBeginn: LocalDate;
 }
 
@@ -56,7 +56,7 @@ export function fiscalYearStart(date: LocalDate, monthDay: string): LocalDate {
 
 /**
  * Splits a period at calendar-month boundaries and at the fiscal-year start, so
- * each part becomes one DATEV file that stays inside one month and one fiscal year.
+ * each part becomes one BMD file that stays inside one month and one fiscal year.
  */
 export function splitPeriod(range: DateRange, monthDay: string): PeriodPart[] {
   const parts: PeriodPart[] = [];

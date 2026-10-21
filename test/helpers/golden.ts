@@ -1,7 +1,3 @@
-import { BUCHUNGSSTAPEL_COLUMNS } from '../../src/datev/columns.js';
-import { EXTF_HEADER_FIELDS } from '../../src/datev/header.js';
-import { splitFields } from './extf.js';
-
 const decoder = new TextDecoder('windows-1252');
 const MAX_REPORTED = 10;
 
@@ -13,12 +9,26 @@ function visible(text: string): string {
 /** The name of field `index` (0-based) in line `lineNumber` (1-based), for the difference report. */
 export type FieldNamer = (lineNumber: number, index: number) => string;
 
-/** DATEV EXTF: header fields in line 1, column headings in line 2, the 125 columns after that. */
-const extfFieldName: FieldNamer = (lineNumber, index) => {
-  if (lineNumber === 1) return EXTF_HEADER_FIELDS[index]?.name ?? '?';
-  if (lineNumber === 2) return `heading ${index + 1}`;
-  return BUCHUNGSSTAPEL_COLUMNS[index]?.name ?? '?';
-};
+/** For files without named fields, such as a protocol. */
+const unnamed: FieldNamer = () => '?';
+
+/** Splits one line at `;` outside quotes, keeping the quotes so a quoting change shows. */
+function splitFields(line: string): string[] {
+  const fields: string[] = [];
+  let current = '';
+  let quoted = false;
+  for (const char of line) {
+    if (char === '"') quoted = !quoted;
+    if (char === ';' && !quoted) {
+      fields.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  fields.push(current);
+  return fields;
+}
 
 function describeLine(lineNumber: number, expected: string, actual: string, fieldName: FieldNamer): string[] {
   const head = `line ${lineNumber}:`;
@@ -40,7 +50,7 @@ function describeLine(lineNumber: number, expected: string, actual: string, fiel
  * A readable description of how two CP1252 files differ, line by line and field
  * by field, or undefined when the bytes are identical.
  */
-export function describeDifference(expected: Uint8Array, actual: Uint8Array, fieldName: FieldNamer = extfFieldName): string | undefined {
+export function describeDifference(expected: Uint8Array, actual: Uint8Array, fieldName: FieldNamer = unnamed): string | undefined {
   if (expected.length === actual.length && expected.every((byte, i) => byte === actual[i])) return undefined;
   const split = (bytes: Uint8Array) => decoder.decode(bytes).split(/(?<=\n)/);
   const expectedLines = split(expected);

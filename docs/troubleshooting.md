@@ -113,26 +113,6 @@ Der Writer für den BMD Buchungsimport prüft jedes Feld, bevor er eine Datei sc
 | `N-BMD-CHARSET` | Ein Zeichen außerhalb von Windows-1252 im Buchungstext wurde durch `?` ersetzt, oder aus der externen Belegnummer wurden Zeichen außerhalb von `A-Z a-z 0-9 - / . _` entfernt. | Nichts, außer der ersetzte Text ist wichtig. |
 | `N-BMD-TRUNCATED` | Der Buchungstext wurde auf 40 Zeichen gekürzt oder die externe Belegnummer auf 35. | Nichts, außer der gekürzte Text ist wichtig. Über die Protokolldatei findest du die Buchung im PMS. |
 
-## DATEV-Datei (EXTF)
-
-Diese Codes stammen aus dem DATEV-Writer des Projekts, aus dem dieses Tool entstanden ist. Der Export schreibt keine DATEV-Dateien mehr; der Writer und diese Codes fallen mit der nächsten Version weg. Einzelheiten: [datev-format.md](datev-format.md).
-
-| Code | Ursache | Lösung |
-|---|---|---|
-| `E-EXTF-HEADER` | Ein Wert im Kopfsatz liegt außerhalb des erlaubten Bereichs oder enthält einen Zeilenumbruch: Beraternummer (1001 bis 9999999), Mandantennummer (1 bis 99999), Sachkontenlänge (4 bis 8), Festschreibung, Datumsangaben, Bezeichnung. | Betrifft nur den DATEV-Writer. |
-| `E-EXTF-PERIOD` | Der Zeitraum des Stapels ist vertauscht oder reicht über den Wirtschaftsjahresbeginn. | Betrifft nur den DATEV-Writer. |
-| `E-EXTF-ACCOUNT` | Ein Konto oder Gegenkonto besteht nicht nur aus Ziffern, ist null oder hat nicht die Sachkontenlänge (bei einem Debitor eine Stelle mehr). | Korrigiere das Konto in der Kontenzuordnung. Konten werden nie aufgefüllt. |
-| `E-EXTF-SAME-ACCOUNT` | Konto und Gegenkonto sind gleich. | Eröffne ein Issue: Solche Zeilen werden normalerweise vor dem Schreiben übersprungen. |
-| `E-EXTF-AMOUNT` | Ein Betrag ist null, negativ oder zu groß für DATEV. | Eröffne ein Issue. |
-| `E-EXTF-SIDE` | Das Soll/Haben-Kennzeichen ist nicht `S` oder `H`. | Eröffne ein Issue. |
-| `E-EXTF-BU-KEY` | Ein BU-Schlüssel in einer Buchung hat nicht eine bis vier Ziffern. | Korrigiere `bu_key` in der Kontenzuordnung. |
-| `E-EXTF-BELEGDATUM` | Ein Belegdatum ist ungültig oder liegt außerhalb des Zeitraums des Stapels. | Eröffne ein Issue. |
-| `E-EXTF-FILE-NAME` | Die Property-ID lässt sich nicht im Dateinamen verwenden (erlaubt sind nur Buchstaben, Ziffern, `_` und `-`). | Eröffne ein Issue mit der Property-ID (sie kommt aus apaleo). |
-| `W-EXTF-BELEGFELD` | Belegfeld 1 oder 2 enthielt Zeichen, die DATEV nicht annimmt, und wurde bereinigt (Umlaute als `ae`, `oe`, `ue`, Leerzeichen als `-`). | Nichts. |
-| `W-EXTF-CHARSET` | Ein Zeichen außerhalb von Windows-1252 (dem Zeichensatz der DATEV-Datei) wurde ersetzt, zum Beispiel in einem Buchungstext. | Nichts, außer der ersetzte Text ist wichtig. |
-| `W-EXTF-CONTROL-CHARS` | Steuerzeichen (Tabulatoren, Zeilenumbrüche) wurden aus einem Textfeld entfernt. | Nichts. |
-| `W-EXTF-TRUNCATED` | Ein Text wurde auf die Höchstlänge von DATEV gekürzt (Buchungstext 60 Zeichen, Belegfeld 1 36, Belegfeld 2 12, KOST1 und KOST2 36). | Nichts, außer der gekürzte Text ist wichtig. |
-
 ## Häufige Fragen nach dem ersten Live-Test
 
 **„the amount 12.5210084 is not a whole number of cents“.** Ältere Stände des Tools brachten diese Meldung, weil apaleo Netto- und Steuerbeträge mit bis zu acht Nachkommastellen schickt. Der aktuelle Stand behält sie genau; nur der Bruttobetrag muss ganze Cent sein. Schau, welches Feld die Meldung vor dem Doppelpunkt nennt:

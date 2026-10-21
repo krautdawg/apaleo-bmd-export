@@ -15,8 +15,7 @@ src/
   demo/         export --demo: aufgezeichnete apaleo-Antworten aus examples/demo/, ohne Netz
   mapping/      die Kontenzuordnung als CSV: laden, auflösen, prüfen, die EKR-Vorlage
   posting/      Journalzeilen + Kontenzuordnung -> BMD-Buchungen, mit der USt-Prüfung
-  bmd/          der Writer für den BMD Buchungsimport: Dialekte NTCS und BMD 5.5, Belegnummern, Prüfung, Bereinigung (noch nicht im Export, ab b03)
-  datev/        der frühere Writer für den EXTF-Buchungsstapel, nicht mehr verwendet (entfällt mit b04)
+  bmd/          der Writer für den BMD Buchungsimport: Dialekte NTCS und BMD 5.5, Belegnummern, Prüfung, Bereinigung
   export/       der Ablauf: Regeln für Zeiträume, Abruf, Buchen, Plausibilitätsprüfungen, Ausgabeordner und Manifest
   schedule/     schedule --once: welche Zeiträume fällig sind, dann der Export für jeden
 ```
@@ -25,12 +24,12 @@ Die Abhängigkeiten zeigen in eine Richtung:
 
 ```text
 cli -> export / schedule -> sources/<name>     (Verdrahtung)
-                        -> mapping, posting, bmd, datev -> core
+                        -> mapping, posting, bmd -> core
 ```
 
 Zwei Lint-Regeln (in `eslint.config.js`, getestet in `test/lint/`) sorgen dafür, dass das so bleibt:
 
-- `core`, `bmd`, `datev`, `mapping` und `posting` dürfen nichts aus `src/sources/` importieren. Sie sehen nur die kanonischen Typen in `src/core/source.ts`.
+- `core`, `bmd`, `mapping` und `posting` dürfen nichts aus `src/sources/` importieren. Sie sehen nur die kanonischen Typen in `src/core/source.ts`.
 - Alles unter `src/` außer dem Einstieg der Kommandozeile erreicht die Uhr, das Netz und die Umgebung nur über den übergebenen `CommandContext` (`ctx.now()`, `ctx.fetchFn`, `ctx.env`, `ctx.fs`). Kein `new Date()`, kein `Date.now()`, kein nacktes `fetch` und kein `process.env`. Tests bauen mit `createTestContext()` in `test/helpers/context.ts` einen Kontext mit Attrappen.
 
 ## Der Vertrag SourceAdapter
@@ -81,7 +80,7 @@ Die Kontotypen nutzen die Namen von apaleo (`Revenues`, `Payments`, `Liabilities
 
 Die Buchungsregeln erzeugen Werte vom Typ `PostedBooking` (Konto, Gegenkonto, Betrag, Steuercode, Prozent, Steuer, Buchungssymbol, Belegdatum, extbelegnr, Buchungstext, Kostenstelle) und eine Übersicht. Nur `src/bmd/` kennt das Dateiformat. Ein neuer Writer:
 
-1. liegt in `src/<Ziel>/` (zum Beispiel `src/bmd/`), hängt nicht von `src/sources/` ab und meldet fehlerhafte Daten als Befunde mit Codes, wie `renderBuchungsstapel` (dessen `ExtfValidationError` als `FindingsError` alle Befunde auf einmal enthält);
+1. liegt in `src/<Ziel>/` (zum Beispiel `src/bmd/`), hängt nicht von `src/sources/` ab und meldet fehlerhafte Daten als Befunde mit Codes, wie `renderBuchungsimport` in `src/bmd/writer.ts` (dessen `BmdValidationError` aus `src/bmd/errors.ts` als `FindingsError` alle Befunde auf einmal enthält);
 2. hat Golden Files in `test/golden/<Ziel>/`, die Byte für Byte verglichen werden (siehe `test/bmd/golden.test.ts`);
 3. implementiert die Schnittstelle `TargetWriter` aus `src/export/target.ts`: Dateiname, Muster für vorhandene und überlappende Dateien, die gerenderten Bytes, den Vergleich „unverändert“, den Titel des Protokolls und die Hinweise (`advice`) für die Meldungen `E-PERIOD-OVERLAP` und `E-FILE-EXISTS`: welches Programm die Datei importiert, welche Konfigurationswerte den Kopfsatz ändern und wie die Kanzlei einen importierten Stapel rückgängig macht (Beispiel: `src/bmd/target.ts`). `src/export/` kennt ein Zielformat nur über diese Schnittstelle; `DEFAULT_TARGET` in `src/export/pipeline.ts` wählt das Ziel.
 
