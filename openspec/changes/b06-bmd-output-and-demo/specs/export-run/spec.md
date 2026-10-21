@@ -8,14 +8,18 @@ The export SHALL refuse with `E-CURRENCY`, per property-month and before writing
 - **THEN** `E-CURRENCY` names the currency, the ledger is not read and no file is written for that property
 
 ### Requirement: Dry run
-With `--dry-run` the export SHALL run every step except writing, SHALL print the posting summary (totals per BMD account, net, tax and gross per VAT rate, Ortstaxe and other levies, payments per clearing account, deposits received and released, write-offs, skipped lines, findings) and the import block of the protocol, and SHALL exit with code 1 if any error finding exists.
+With `--dry-run` the export SHALL run every step except writing, SHALL print the posting summary (totals per BMD account; net, tax and gross per VAT rate with apaleo's precise VAT and the difference to the tax per booking; deposit tax per rate the same way; Ortstaxe and other levies; payments per clearing account; deposits received, released and refunded; accounts receivable; write-offs; skipped lines with unsigned totals; findings) and the import block of the protocol, and SHALL exit with code 1 if any error finding exists.
 
 #### Scenario: Review before the first file
 - **WHEN** the user runs `apaleo-bmd export --month 2026-10 --property BSP --dry-run`
 - **THEN** the summary and the import block are printed and no file or folder is created
 
+#### Scenario: VAT comparison on the recorded VIE day
+- **WHEN** the recorded VIE day 2026-10-21 is exported with `--dry-run`
+- **THEN** the summary shows for revenue at 10 % the tax 7.74 of the bookings, apaleo's VAT 7.75 and the difference 0.01, with one sentence explaining that the tax is rounded per booking and apaleo's total per day
+
 ### Requirement: Output layout and manifest
-The export SHALL write each file to `<output.dir>/<propertyId>/<YYYY-MM>/` with the deterministic name `BMD_Buchungsimport_<from>-<to>_<propertyId>.csv`, SHALL write a protocol text file `<name>.protokoll.txt` beside it, and SHALL record in `manifest.json` the file name, SHA-256 of the file, booking count, Soll and Haben totals, tax per rate, mapping file SHA-256, tool version and creation time. The protocol SHALL contain an import block with the file name, line count, the dialect, every Buchungssymbol used, the range of Belegnummern, the `verbuchkz` and `gegenbuchkz` values, every Steuercode and rate used, and the configured Sachkonten and Personenkonten lengths.
+The export SHALL write each file to `<output.dir>/<propertyId>/<YYYY-MM>/` with the deterministic name `BMD_Buchungsimport_<from>-<to>_<propertyId>.csv`, SHALL write a protocol text file `<name>.protokoll.txt` beside it, and SHALL record in `manifest.json` the file name, SHA-256 of the file, booking count, Soll and Haben totals as the Kanzlei sees them in BMD after the import (not sums by the sign of the amount), tax per rate, mapping file SHA-256, tool version and creation time. The protocol SHALL contain an import block with the file name, line count, the dialect, every Buchungssymbol used, the range of Belegnummern, the `verbuchkz` and `gegenbuchkz` values, every Steuercode and rate used, and the configured Sachkonten and Personenkonten lengths.
 
 #### Scenario: Files after a run
 - **WHEN** a monthly export for BSP 2026-10 succeeds
