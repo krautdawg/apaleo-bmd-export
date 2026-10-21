@@ -50,7 +50,7 @@ describe('loading', () => {
       posting: { extbelegnr: 'receipt' },
       properties: [],
       checks: { aggregates: false },
-      schedule: { timezone: 'Europe/Berlin', cadence: 'monthly', daily: { offsetDays: 2 }, monthly: { dayOfMonth: 3 }, finalAfter: '06:00', catchUpDays: 40 },
+      schedule: { timezone: 'Europe/Vienna', cadence: 'monthly', daily: { offsetDays: 2 }, monthly: { dayOfMonth: 3 }, finalAfter: '06:00', catchUpDays: 40 },
     });
     expect(secrets.apaleoClientSecret).toBeUndefined();
   });
@@ -130,7 +130,7 @@ describe('loading', () => {
     expect(config.bmd).toEqual(BMD_DEFAULTS);
     expect(config.posting).toEqual({ extbelegnr: 'receipt' });
     expect(config.checks).toEqual({ aggregates: false });
-    expect(config.schedule).toEqual({ timezone: 'Europe/Berlin', cadence: 'monthly', daily: { offsetDays: 2 }, monthly: { dayOfMonth: 3 }, finalAfter: '06:00', catchUpDays: 40 });
+    expect(config.schedule).toEqual({ timezone: 'Europe/Vienna', cadence: 'monthly', daily: { offsetDays: 2 }, monthly: { dayOfMonth: 3 }, finalAfter: '06:00', catchUpDays: 40 });
   });
 
   it('treats a section whose keys are all commented out as missing, with or without env overrides', async () => {
@@ -334,10 +334,10 @@ describe('environment overrides', () => {
   });
 
   it('applies every allow-listed scalar override', async () => {
-    const { config } = await load(VALID, { APALEO_CLIENT_ID: 'client-1', APALEO_BMD_OUTPUT_DIR: '/data/out', APALEO_BMD_TIMEZONE: 'Europe/Vienna' });
+    const { config } = await load(VALID, { APALEO_CLIENT_ID: 'client-1', APALEO_BMD_OUTPUT_DIR: '/data/out', APALEO_BMD_TIMEZONE: 'Europe/Zurich' });
     expect(config.apaleo.clientId).toBe('client-1');
     expect(config.output.dir).toBe('/data/out');
-    expect(config.schedule.timezone).toBe('Europe/Vienna');
+    expect(config.schedule.timezone).toBe('Europe/Zurich');
   });
 
   it('no longer reads the DATEV overrides of the Berater- and Mandantennummer', async () => {
@@ -347,8 +347,8 @@ describe('environment overrides', () => {
   });
 
   it('APALEO_BMD_TIMEZONE sets schedule.timezone and is validated like the file value', async () => {
-    const { config } = await load(VALID, { APALEO_BMD_TIMEZONE: 'Europe/Vienna' });
-    expect(config.schedule.timezone).toBe('Europe/Vienna');
+    const { config } = await load(VALID, { APALEO_BMD_TIMEZONE: 'Europe/Zurich' });
+    expect(config.schedule.timezone).toBe('Europe/Zurich');
     const error = await loadError(VALID, { APALEO_BMD_TIMEZONE: 'Mars/Olympus' });
     expect(error.message).toContain('schedule.timezone: must be an IANA time zone name');
     expect(error.message).toContain('from APALEO_BMD_TIMEZONE');
