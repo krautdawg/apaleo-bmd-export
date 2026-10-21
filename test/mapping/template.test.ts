@@ -12,6 +12,7 @@ import {
   type Skr,
   type Template,
 } from '../../src/mapping/index.js';
+import { shippedTemplate, templateWildcardAccount } from '../../src/mapping/template.js';
 import { BSP, loadBeispielData } from '../helpers/apaleo.js';
 import { mappingOf, mappingRow } from '../helpers/mapping.js';
 
@@ -194,5 +195,26 @@ describe('template rules', () => {
       const lines = text.split('\r\n').filter((l) => l !== '' && !l.startsWith('#'));
       for (const line of lines) expect(line.split(';')).toHaveLength(7);
     }
+  });
+});
+
+describe('templateWildcardAccount (example account in E-UNMAPPED fixes)', () => {
+  it('reads the shipped template once and gives the account of its wildcard rule for a type and rate', async () => {
+    const template = shippedTemplate('03');
+    expect(shippedTemplate('03')).toBe(template);
+    expect(template).toEqual(await loadTemplate('03'));
+    expect(templateWildcardAccount(template, 'Liabilities', 7, 4)).toBe('1711');
+    expect(templateWildcardAccount(template, 'Liabilities', 0, 4)).toBe('1719');
+    expect(templateWildcardAccount(shippedTemplate('04'), 'Liabilities', 19, 4)).toBe('3272');
+    expect(templateWildcardAccount(template, 'Receivables', undefined, 4)).toBe('1410');
+  });
+
+  it('gives no account for a rate, a type or a rule without a wildcard, and scales with the Sachkontenlänge', () => {
+    const template = shippedTemplate('03');
+    expect(templateWildcardAccount(template, 'Liabilities', 13, 4)).toBeUndefined();
+    expect(templateWildcardAccount(template, 'Revenues', 7, 4)).toBeUndefined();
+    // The AccountsReceivable rule of the SKR templates is not a wildcard rule.
+    expect(templateWildcardAccount(template, 'AccountsReceivable', undefined, 4)).toBeUndefined();
+    expect(templateWildcardAccount(template, 'Liabilities', 7, 6)).toBe(scaleAccount('1711', 'Liabilities', 6));
   });
 });

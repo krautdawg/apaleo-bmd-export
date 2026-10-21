@@ -1,3 +1,4 @@
+export { apaleoVatOf, vatDirection, type ApaleoVat } from './apaleo-vat.js';
 export { buildBookings } from './build.js';
 export { accountLabel, belegfeld1, buchungstext, commandLabel, costCentres } from './fields.js';
 export { depositDirection, inferReleaseRates, isUntaxedDepositLine, isUntaxedRelease, releaseRateOf, resolutionRate, type ReleaseRate } from './release.js';
@@ -15,4 +16,5 @@ export {
   type SkipReason,
   type SkippedLine,
   type SkippedTotal,
+  type VatTotal,
 } from './types.js';

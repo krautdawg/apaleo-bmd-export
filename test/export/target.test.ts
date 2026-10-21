@@ -7,7 +7,7 @@ import { FindingsError } from '../../src/core/errors.js';
 import { DEFAULT_TARGET, exportedFile, fileTag, runExport, type ExportRequest, type TargetWriter } from '../../src/export/index.js';
 import { BMD_DEFAULT_SETTINGS, createBmdTarget, type BmdBooking, type BmdTargetSettings } from '../../src/bmd/index.js';
 import type { PostedBooking } from '../../src/posting/index.js';
-import { BSP } from '../helpers/apaleo.js';
+import { BSP, FIXTURE_FILES, createApaleoContext, createFixtureSource, fixturePath } from '../helpers/apaleo.js';
 import { exportSetup, latePosting, type ExportSetup } from '../helpers/export.js';
 
 /**
@@ -184,6 +184,36 @@ describe('the BMD target through the export', () => {
     expect(outcome.status).toBe('failed');
     expect(new Set(errorCodes(outcome))).toEqual(new Set(['E-BMD-ACCOUNT']));
     expect(existsSync(join(setup.ctx.cwd, 'exports'))).toBe(false);
+  });
+});
+
+describe('the checks and the summary do not depend on the target (recorded BER day 2026-10-21)', () => {
+  const MAPPING = readFileSync(fixturePath('live/BER/mapping-BER.live.csv'), 'utf8');
+  const CONFIG = `${FIXTURE_FILES['apaleo-bmd.config.yaml']}  skr: '03'\nproperties:\n  - id: BER\nchecks:\n  aggregates: true\n`;
+
+  async function exportBer(target: TargetWriter<PostedBooking> | undefined) {
+    const ctx = createApaleoContext(
+      { live: true },
+      { files: { 'apaleo-bmd.config.yaml': CONFIG, 'mapping-BER.csv': MAPPING }, now: new Date('2026-10-25T08:00:00Z') },
+    );
+    const { source } = createFixtureSource({ live: true }, {}, ctx);
+    const loaded = await loadConfig({ path: join(ctx.cwd, 'apaleo-bmd.config.yaml'), env: ctx.env, readFile: ctx.fs.readFile });
+    const request: ExportRequest = { period: { from: '2026-10-21', to: '2026-10-21' }, propertyIds: ['BER'], dryRun: false, overwrite: false };
+    const [outcome] = await runExport(request, { loaded, source, ctx, ...(target ? { target } : {}) });
+    if (!outcome) throw new Error('no outcome');
+    return outcome;
+  }
+
+  it('gives the fake target the same summary and findings as the default target, without W-AGGREGATE-DIFF', async () => {
+    const [standard, fake] = [await exportBer(undefined), await exportBer(fakeTarget)];
+    expect(standard.status).toBe('written');
+    expect(fake.status).toBe('written');
+    expect(fake.path).toMatch(/FAKE_20261021-20261021_BER\.txt$/);
+    expect(fake.bookings).toBe(29);
+    expect(fake.summary).toBe(standard.summary);
+    expect(fake.findings).toEqual(standard.findings);
+    expect(fake.findings.map((f) => f.code)).not.toContain('W-AGGREGATE-DIFF');
+    expect(fake.summary).toContain('Deposits: received 590.00, released 352.00, of it refunded 10.00');
   });
 });
 

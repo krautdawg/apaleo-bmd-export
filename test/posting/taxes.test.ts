@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { datevVat, normaliseTaxes } from '../../src/posting/index.js';
+import { ledgerLine, tax } from '../helpers/ledger.js';
+import { ACCOUNTS, post } from '../helpers/posting.js';
 
 describe('normaliseTaxes', () => {
   it('drops entries with percent 0 and amount 0 and keeps every other entry', () => {
-    const without = { vatType: 'Without', percent: 0, amountCents: 0 };
-    const reduced = { vatType: 'Reduced', percent: 7, amountCents: 654 };
-    const oddZero = { vatType: 'Without', percent: 0, amountCents: 12 };
+    const without = tax('Without', 0, 0);
+    const reduced = tax('Reduced', 7, 654);
+    const oddZero = tax('Without', 0, 12);
     expect(normaliseTaxes([without])).toEqual([]);
     expect(normaliseTaxes([without, reduced, oddZero])).toEqual([reduced, oddZero]);
-    expect(normaliseTaxes([{ vatType: 'Reduced', percent: 7, amountCents: 0 }])).toHaveLength(1);
+    expect(normaliseTaxes([tax('Reduced', 7, 0)])).toHaveLength(1);
   });
 });
 
@@ -42,5 +44,21 @@ describe('datevVat', () => {
     // Rates with decimals: 235 cents at 17.5 % = 35 exactly; 1 cent at 50 % = 0.33… → 0.
     expect(datevVat(1, 50)).toBe(0);
     expect(datevVat(235, 17.5)).toBe(35);
+  });
+});
+
+describe('VAT guard on apaleo precise tax', () => {
+  it.each([
+    // Precise tax from apaleo: 11400 × 7 / 107 = 745.79 → 7.46; apaleo 7.45794393 → 7.46.
+    ['accommodation 114.00 at 7 %', ACCOUNTS.accommodation7, 11_400, tax('Reduced', 7, 746, '7.45794393')],
+    // Recorded BER line 000000032: 1490 × 19 / 119 = 237.90 → 2.38; apaleo 2.3789916 → 2.38.
+    ['drinks 14.90 at 19 %', ACCOUNTS.beverages19, 1_490, tax('Normal', 19, 238, '2.3789916')],
+    // A release: −8400 × 7 / 107 = −549.53 → −5.50; apaleo −5.4953271 → −5.50.
+    ['a negative allowance of 84.00 at 7 %', ACCOUNTS.accommodation7, -8_400, tax('Reduced', 7, -550, '-5.4953271')],
+  ])('raises no finding for %s: sub-cent digits never count', (_name, credit, grossCents, entry) => {
+    const result = post([ledgerLine({ credit, grossCents, taxes: [entry] })]);
+    expect(result.findings).toEqual([]);
+    expect(result.bookings).toHaveLength(1);
+    expect(result.summary.roundingCents).toBe(0);
   });
 });

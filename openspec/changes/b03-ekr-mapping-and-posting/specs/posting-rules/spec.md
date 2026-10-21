@@ -16,7 +16,7 @@ The posting module SHALL turn every ledger line that is not skipped into exactly
 - **THEN** every booking of `BS2` carries `HO2`, every booking of `BSP` carries `HO`, and no `W-BUCHSYMBOL-SHARED` is reported
 
 ### Requirement: VAT consistency guard
-For every booked line the posting module SHALL first normalise `taxes[]` by dropping entries with percent 0 and amount 0, and SHALL then ensure that the VAT-side row's `bmd_vat_percent` equals apaleo's tax percent, that apaleo's net plus tax equals its gross, that BMD's check value `round(|net| × rate / 100)` differs from the absolute apaleo tax amount by at most one cent, and that the signs of tax and gross agree. A VAT-side row with a Steuercode at rate 0 SHALL be accepted for a line without tax and SHALL book tax 0. A one-cent difference SHALL be a warning `W-VAT-ROUNDING` (the booking still carries apaleo's tax amount); larger differences, rate mismatches, taxed lines without a VAT side, untaxed lines with a VAT side above 0 %, and lines with several tax rates SHALL be errors that name the source entry number and the mapping row to fix.
+For every booked line the posting module SHALL first normalise `taxes[]` by dropping entries with percent 0 and amount 0, and SHALL then ensure that the VAT-side row's `bmd_vat_percent` equals apaleo's tax percent, that apaleo's precise net plus taxes equals its gross within half a cent (checked on the precise values, never again on separately rounded cents), that BMD's check value `round(|amount| × rate / 100)` differs from the absolute tax amount of the booking by at most one cent, and that the signs of tax and gross agree. The tax amount of a booking SHALL be apaleo's precise tax rounded half away from zero to cents, and its amount SHALL be the gross minus that tax, so that `gkonto` receives exactly apaleo's gross. A VAT-side row with a Steuercode at rate 0 SHALL be accepted for a line without tax and SHALL book tax 0. A one-cent difference SHALL be a warning `W-VAT-ROUNDING` (the booking still carries apaleo's tax amount); larger differences, rate mismatches, taxed lines without a VAT side, untaxed lines with a VAT side above 0 %, and lines with several tax rates SHALL be errors that name the source entry number and the mapping row to fix. Sub-cent digits of apaleo's precise tax SHALL never cause a finding on a line.
 
 #### Scenario: Drinks at 20 %
 - **WHEN** a line credits the drinks account (`4020`, Steuercode 1, rate 20) with gross 24.00, net 20.00 and taxes 4.00 at 20 %
@@ -46,9 +46,17 @@ For every booked line the posting module SHALL first normalise `taxes[]` by drop
 - **WHEN** `round(|net| × rate / 100)` differs by one cent from apaleo's tax amount
 - **THEN** a warning `W-VAT-ROUNDING` is raised, the booking carries apaleo's tax amount, and the difference is added to the rounding total in the summary
 
+#### Scenario: Precise tax from apaleo
+- **WHEN** the recorded VIE line `000000029` credits the accommodation 13 % account (`4040`, Steuercode 1, rate 13) with gross 95.00, net 84.07079646 and tax 10.92920354 at 13 %
+- **THEN** the booking carries amount −84.07 and tax −10.93, and no finding is raised
+
+#### Scenario: One-cent difference on real data
+- **WHEN** the recorded VIE line `000000031` credits the food 10 % account with gross 46.80 and tax 4.25454545 at 10 %
+- **THEN** the booking carries amount −42.55 and tax −4.25, BMD's check value is 4.26, and exactly one `W-VAT-ROUNDING` is raised for the line
+
 #### Scenario: Net and tax do not add up
-- **WHEN** a line has gross 110.00, net 100.00 and taxes 9.00 at 10 %
-- **THEN** a finding `E-VAT-AMOUNT` names the source entry number and the three amounts, and no booking is produced for the line
+- **WHEN** apaleo returns a line with gross 110.00, net 100.00 and taxes 9.00 at 10 %
+- **THEN** reading fails with the adapter's half-cent check, naming the source entry number and the three amounts, and no file is written
 
 ### Requirement: City tax and guest levies
 Lines on CityTaxes, SecondCityTax and GuestLevies accounts SHALL be booked through their mapping rows like any other line, so that a guest-owed Ortstaxe or Nächtigungsabgabe mapped to a liability or durchlaufender Posten without Steuercode is booked without tax, and a levy that apaleo taxes is booked on a revenue account with the matching Steuercode and rate; the VAT guard SHALL apply to both.
@@ -58,7 +66,7 @@ Lines on CityTaxes, SecondCityTax and GuestLevies accounts SHALL be booked throu
 - **THEN** the booking has konto `2390`, gkonto `3580`, amount 5.20, no tax fields, and the summary shows 5.20 city tax
 
 ### Requirement: Deposits and accounts receivable
-Prepayment lines (`PostPrepayment`) SHALL be booked to the mapped deposit account, and accounts-receivable lines (`PostToAccountsReceivables`) to the mapped Sachkonto or Personenkonto, both under the VAT guard.
+Prepayment lines (`PostPrepayment`) SHALL be booked to the mapped deposit account, and accounts-receivable lines (`PostToAccountsReceivables`) to the mapped Sachkonto or Personenkonto, both under the VAT guard. A Liabilities side SHALL count as a deposit increase when it is credited with a positive amount or debited with a negative amount, and as a decrease otherwise; a decrease whose other side is a Payments account is a refund. This covers apaleo's real shapes: a release as `PostCharge` debit guest receivables, credit `<reservation>_Liabilities/<rate>` with negative gross and negative taxes, a refund as `PostPrepayment` with negative gross, and an overpayment parked on the 0 % deposit as `PostCharge` credit `<reservation>_Liabilities/Null:0.00` with positive gross.
 
 #### Scenario: Prepayment at 10 %
 - **WHEN** a line debits the card payment account (`2890`) and credits the guest liabilities 10 % account mapped to `3200` with Steuercode 1 and rate 10, with gross 220.00, net 200.00 and taxes 20.00 at 10 %, and `bmd.buchsymbolZahlung` is set
@@ -67,6 +75,14 @@ Prepayment lines (`PostPrepayment`) SHALL be booked to the mapped deposit accoun
 #### Scenario: Check-out on accounts receivable
 - **WHEN** a line debits the AccountsReceivable account (mapped to Personenkonto `200000`) and credits guest receivables (`2390`) with gross 300.00 and receipt type Invoice number `BSP-2026-0042`
 - **THEN** the booking has konto `200000`, gkonto `2390`, amount 300.00, extbelegnr `BSP-2026-0042`
+
+#### Scenario: Release as a negative charge
+- **WHEN** the recorded VIE line `000000025` (`PostCharge`) debits `WXPBFNSN-1_Receivables` and credits `WXPBFNSN-1_Liabilities/Reduced:13.00` (13 % wildcard, `3202`, Steuercode 1) with gross −105.00 and tax −12.07964602 at 13 %
+- **THEN** the booking has konto `3202`, gkonto `2390`, amount 92.92 and tax 12.08, and the summary counts 105.00 as released, not as received
+
+#### Scenario: Refund of a deposit
+- **WHEN** the recorded VIE line `000000028` (`PostPrepayment`) debits the Maestro payment account and credits `WXPBFNSN-1_Liabilities/Null:0.00` (0 % wildcard, `3209`) with gross −10.00 and no taxes
+- **THEN** the booking has no tax fields, and the summary counts 10.00 as released and, of the released, as refunded
 
 ### Requirement: Deposit release without taxes
 When a line debits a Liabilities account and credits a Receivables account and carries no tax entries after normalisation, the posting module SHALL infer the VAT rate from the skipped `PostPrepaymentVat` line(s) of the same business date and reference, else from the chart VAT of the Liabilities account or its parent, SHALL use that rate for mapping resolution and the VAT guard, SHALL take the tax amount from those `PostPrepaymentVat` lines or, with a chart rate only, compute it as `round(|gross| × rate / (100 + rate))`, and SHALL raise `E-VAT-RATE-UNKNOWN` when no rate can be inferred. Any other untaxed line with exactly one Liabilities side (a deposit refunded or received without tax entries) SHALL take its rate and tax amount from a `PostPrepaymentVat` line of the same business date and reference that moves VAT in its direction, with the same amount check, and SHALL keep rate 0 only when there is no such line. A release booked with a chart rate SHALL always raise `W-VAT-INFERRED`, also at 0 %.
@@ -100,7 +116,7 @@ When a line debits a Liabilities account and credits a Receivables account and c
 - **THEN** the prepayment resolves to the 10 % Liabilities row with amount −100.00 and tax −10.00 and no finding is raised; without such a line it stays on the 0 % deposit row
 
 ### Requirement: Skipped lines are reported
-The posting module SHALL skip, and list with reason, count and gross total: lines touching apaleo Vat or VatOnLiabilities accounts (always, because BMD books the tax from the `steuer` field of the taxed line), lines with zero gross amount, and lines whose two sides map to the same BMD account.
+The posting module SHALL skip, and list with reason, count and unsigned gross total (the sum of absolute gross amounts): lines touching apaleo Vat or VatOnLiabilities accounts (always, because BMD books the tax from the `steuer` field of the taxed line), lines with zero gross amount, and lines whose two sides map to the same BMD account.
 
 #### Scenario: Move between guest folios
 - **WHEN** a `MoveLineItem` line moves 50.00 between two guest receivables accounts that both map to `2390`
@@ -109,6 +125,10 @@ The posting module SHALL skip, and list with reason, count and gross total: line
 #### Scenario: VAT account lines are skipped
 - **WHEN** a line touches a Vat or VatOnLiabilities account
 - **THEN** no booking is produced, the summary lists it as `VAT_ACCOUNT_LINE` with its amount, and the Vat account does not need a mapping row
+
+#### Scenario: Offset lines of payments
+- **WHEN** the recorded VIE day 2026-10-21 is posted, whose five payments each have a second line `<folio>_Receivables → <folio>_Receivables/Offset` and whose AR transfer has a line `<res>_AccountsReceivable → <res>_AccountsReceivable/Offset`
+- **THEN** the summary lists 6 `SAME_ACCOUNT` lines with an unsigned gross total of 312.60
 
 ### Requirement: Field filling without personal data
 `extbelegnr` SHALL be the receipt number when `posting.extbelegnr` is `receipt` (the default) and a receipt number exists, otherwise the reference; `text` SHALL be built from a German command label (Erlös, Zahlung, Anzahlung, Umbuchung, Forderung, Forderungsverlust, …) and an account label, SHALL use the parent account name or a fixed label (`Gastforderung`, `Debitor`, `Anzahlung Gast`) instead of the leaf name for guest, booking and per-reservation accounts, and SHALL NOT contain guest names; `kost` SHALL be taken only from the mapping row of `konto` and only when that row is of type Revenues or LossOfAccountsReceivable, and SHALL stay empty on every other booking (payments, Personenkonto, deposit, city-tax and clearing lines), because BMD reads `kost` on a payment as the Belegnummer of the invoice it clears.
@@ -130,16 +150,20 @@ The posting module SHALL skip, and list with reason, count and gross total: line
 - **THEN** the text is `Zahlung Gastforderung` (or the global parent's name) and does not contain `Müller`
 
 ### Requirement: Posting summary
-The posting module SHALL return a summary with Soll, Haben and balance per BMD account (from the movement model: konto gets the amount, gkonto the amount plus tax), revenue per VAT rate with net, tax and gross as passed to BMD, city-tax total, payments per clearing account, deposits received and released, skipped lines per reason, the rounding total, and findings grouped by code.
+The posting module SHALL return a summary with Soll, Haben and balance per BMD account (from the movement model: konto gets the amount, gkonto the amount plus tax), revenue per VAT rate with net, tax and gross as passed to BMD and apaleo's precise VAT on the same lines (summed exactly) with the difference, deposit tax per rate the same way, city-tax total, payments per clearing account, deposits received, released and, of the released, refunded, classified by side and sign, the net movement on accounts receivable, skipped lines per reason with count and unsigned gross, the rounding total, and findings grouped by code.
 
 #### Scenario: Summary of the fixture month
 - **WHEN** the fixture period is posted with the EKR fixture mapping
 - **THEN** the summary values equal the hand-computed totals recorded in the test
 
+#### Scenario: Summary of the recorded VIE day
+- **WHEN** the recorded VIE responses of 2026-10-21 are posted with the committed EKR live mapping
+- **THEN** revenue gross is 85.20 at 10 %, 410.02 at 13 %, 47.38 at 20 % and 45.00 at 0 %; revenue tax is 7.74 against apaleo 7.75 (precise 7.74545454) at 10 %, 47.17 against 47.17 at 13 % and 7.89 against 7.90 at 20 %; deposit tax is 20.25 at 13 % and 3.33 at 20 %; payments are 111.70 cash and 576.90 non-cash; deposits received 491.00, released 295.00, of it refunded 10.00; accounts receivable 95.00
+
 ## ADDED Requirements
 
 ### Requirement: VAT side in Konto
-The posting module SHALL place the account whose mapping row has a Steuercode (the VAT side) in `konto` and the other account in `gkonto`, SHALL set the amount to apaleo's net amount signed from the point of view of `konto` (negative when the VAT side is credited, positive when it is debited, flipped for a negative gross), SHALL set the tax to apaleo's tax amount with the same sign, and SHALL take Steuercode and rate from the VAT-side row. A line without a VAT side SHALL be booked with the debited account in `konto`, the credited account in `gkonto` and the absolute gross amount as Soll amount (sides swapped for a negative gross).
+The posting module SHALL place the account whose mapping row has a Steuercode (the VAT side) in `konto` and the other account in `gkonto`, SHALL set the tax to apaleo's precise tax rounded half away from zero to cents and the amount to the gross minus that tax, both signed from the point of view of `konto` (negative when the VAT side is credited, positive when it is debited, flipped for a negative gross), and SHALL take Steuercode and rate from the VAT-side row. A line without a VAT side SHALL be booked with the debited account in `konto`, the credited account in `gkonto` and the absolute gross amount as Soll amount (sides swapped for a negative gross).
 
 #### Scenario: Accommodation charge at 10 %
 - **WHEN** a line debits a guest receivables account (`2390`) and credits the accommodation 10 % revenue account (`4000`, Steuercode 1, rate 10) with gross 110.00, net 100.00 and taxes 10.00 at 10 %
