@@ -31,11 +31,11 @@ function indexOf(mapping: Mapping): Map<string, MappingRow> {
  * type); (4) for VAT-relevant types the wildcard row for the type and the line's
  * rate; (5) for other types the wildcard row for the type.
  *
- * An exact row (steps 1 and 2) with an empty DATEV account is returned as is: it
+ * An exact row (steps 1 and 2) with an empty BMD account is returned as is: it
  * means "unmapped", because the user listed that account on purpose. A parent
- * row with an empty DATEV account does not end the search (template version 1
- * wrote `3000;Liabilities` empty, and one DATEV account cannot serve every
- * rate); when nothing else gives a DATEV account, the first such parent row is
+ * row with an empty BMD account does not end the search (template version 1
+ * wrote `3000;Liabilities` empty, and one BMD account cannot serve every
+ * rate); when nothing else gives a BMD account, the first such parent row is
  * returned so that findings can name it.
  */
 export function resolve(mapping: Mapping, account: AccountRef, options: ResolveOptions): MappingRow | undefined {
@@ -59,13 +59,13 @@ export function resolve(mapping: Mapping, account: AccountRef, options: ResolveO
   while (parent !== undefined && !seen.has(parent)) {
     seen.add(parent);
     const row = byNumber(parent);
-    if (row?.datevAccount) return row;
+    if (row?.bmdAccount) return row;
     emptyParent ??= row;
     parent = inChart(parent)?.parentNumber;
   }
 
   const wildcard = wildcardRow(index, account.type, options.rate);
-  return wildcard?.datevAccount ? wildcard : (emptyParent ?? wildcard);
+  return wildcard?.bmdAccount ? wildcard : (emptyParent ?? wildcard);
 }
 
 /** The wildcard row for a type: for VAT-relevant types the one at `rate` (none when the rate is unknown). */

@@ -6,28 +6,23 @@ export const MAPPING_COLUMNS = [
   'apaleo_type',
   'apaleo_name',
   'apaleo_vat_percent',
-  'datev_account',
-  'bu_key',
-  'datev_vat_percent',
-  'kost1',
-  'kost2',
+  'bmd_account',
+  'steuercode',
+  'bmd_vat_percent',
+  'kost',
   'comment',
 ] as const;
 
 export type MappingColumn = (typeof MAPPING_COLUMNS)[number];
 
-/** The header of the Grman "Datev Connector" mapping export, read as the columns next to it. */
-export const GRMAN_COLUMNS: Readonly<Record<string, MappingColumn>> = {
-  apaleoaccountnumber: 'apaleo_account',
-  datevaccountnumber: 'datev_account',
-  costcenter: 'kost1',
-  costcenter2: 'kost2',
-};
+/** Header columns of the DATEV mapping of apaleo-datev-export, and of the Grman "Datev Connector" export: such files are refused. */
+export const DATEV_COLUMNS: readonly string[] = ['datev_account', 'bu_key', 'datev_vat_percent'];
+export const GRMAN_COLUMNS: readonly string[] = ['apaleoaccountnumber', 'datevaccountnumber'];
 
 /** `apaleo_account` of a row that matches every account of its type. */
 export const WILDCARD = '*';
 
-/** `apaleo_type` of a row that matches its account number regardless of type (Grman layout). */
+/** `apaleo_type` of a row that matches its account number regardless of type (the Grman layout of the DATEV tool; b04 removes it). */
 export const ANY_TYPE = '*any*';
 
 /**
@@ -45,13 +40,17 @@ export const VAT_RELEVANT_TYPES: ReadonlySet<string> = new Set([
   'Revenues',
 ]);
 
-/** apaleo's own VAT accounts. Their lines are always skipped (DATEV computes VAT), so they need no row. */
+/** apaleo's own VAT accounts. Their lines are always skipped (BMD books the tax from `steuer`), so they need no row. */
 export const VAT_ACCOUNT_TYPES: ReadonlySet<string> = new Set(['Vat', 'VatOnLiabilities']);
 
-/** Personal (debtor) accounts: one digit longer than the Sachkontenlänge. */
+/** The type whose rows may name a Personenkonto (Debitor) instead of a Sachkonto. */
 export const PERSONAL_ACCOUNT_TYPE = 'AccountsReceivable';
 
-export type Skr = '03' | '04';
+/** Types whose bookings are sales, deposits, levies or bad debt: they owe output tax, never input tax. */
+export const OUTPUT_TAX_TYPES: ReadonlySet<string> = new Set(['Revenues', 'Liabilities', 'CityTaxes', 'SecondCityTax', 'GuestLevies', 'LossOfAccountsReceivable']);
+
+/** Types whose `kost` BMD reads as Kostenstelle (profit and loss); on any other booking `kost` would be a Belegnummer. */
+export const KOST_TYPES: ReadonlySet<string> = new Set(['Revenues', 'LossOfAccountsReceivable']);
 
 /** One row of a mapping file. Every value is kept as the text in the file. */
 export interface MappingRow {
@@ -61,12 +60,14 @@ export interface MappingRow {
   readonly apaleoType: string;
   readonly apaleoName: string;
   readonly apaleoVatPercent: string;
-  /** Empty means unmapped. */
-  readonly datevAccount: string;
-  readonly buKey: string;
-  readonly datevVatPercent: string;
-  readonly kost1: string;
-  readonly kost2: string;
+  /** Sachkonto or Personenkonto in BMD; empty means unmapped. */
+  readonly bmdAccount: string;
+  /** BMD Steuercode; empty means no tax on this row. */
+  readonly steuercode: string;
+  /** The VAT rate BMD books with the Steuercode (0 allowed); empty without one. */
+  readonly bmdVatPercent: string;
+  /** Kostenstelle, written only on revenue and bad-debt bookings. */
+  readonly kost: string;
   readonly comment: string;
 }
 
@@ -77,27 +78,22 @@ export const ROW_FIELDS: Readonly<Record<MappingColumn, keyof MappingRowValues>>
   apaleo_type: 'apaleoType',
   apaleo_name: 'apaleoName',
   apaleo_vat_percent: 'apaleoVatPercent',
-  datev_account: 'datevAccount',
-  bu_key: 'buKey',
-  datev_vat_percent: 'datevVatPercent',
-  kost1: 'kost1',
-  kost2: 'kost2',
+  bmd_account: 'bmdAccount',
+  steuercode: 'steuercode',
+  bmd_vat_percent: 'bmdVatPercent',
+  kost: 'kost',
   comment: 'comment',
 };
 
 export interface Mapping {
   readonly path: string;
-  /** `grman` for a file in the Grman connector's export layout. */
-  readonly layout: 'standard' | 'grman';
-  /** The SKR named by the template marker in the file's comment lines, if any. */
-  readonly skr?: Skr;
   readonly rows: readonly MappingRow[];
   /** Notes and warnings from reading the file, for example restored leading zeros (`W-PADDED`). */
   readonly findings: readonly Finding[];
 }
 
 /**
- * A VAT percent as written in the file: `7`, `7,0`, `7.00` or `7 %`. Undefined
+ * A VAT percent as written in the file: `10`, `4,9`, `4.90` or `10 %`. Undefined
  * for an empty cell, NaN for anything else.
  */
 export function parsePercent(text: string): number | undefined {
@@ -116,4 +112,22 @@ export function rowKey(row: Pick<MappingRow, 'apaleoAccount' | 'apaleoType' | 'a
 /** "line 7", for messages. */
 export function lineLabel(row: Pick<MappingRow, 'line'>): string {
   return `line ${row.line}`;
+}
+
+/** The Steuercode of a row: undefined when empty, NaN when it is not a whole number from 0 to 99. */
+export function parseSteuercode(text: string): number | undefined {
+  const value = text.trim();
+  if (value === '') return undefined;
+  return /^\d{1,2}$/.test(value) ? Number(value) : Number.NaN;
+}
+
+/**
+ * The VAT rate BMD books on a row: `bmd_vat_percent` with a Steuercode, 0 without
+ * one. Undefined when it cannot be known (a Steuercode without rate, or a rate that
+ * is not a number).
+ */
+export function rowRate(row: Pick<MappingRow, 'steuercode' | 'bmdVatPercent'>): number | undefined {
+  if (row.steuercode.trim() === '') return 0;
+  const rate = parsePercent(row.bmdVatPercent);
+  return rate === undefined || Number.isNaN(rate) ? undefined : rate;
 }

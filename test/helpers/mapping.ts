@@ -6,11 +6,10 @@ export function mappingRow(values: Partial<MappingRowValues> & Pick<MappingRowVa
   return {
     apaleoName: '',
     apaleoVatPercent: '',
-    datevAccount: '',
-    buKey: '',
-    datevVatPercent: '',
-    kost1: '',
-    kost2: '',
+    bmdAccount: '',
+    steuercode: '',
+    bmdVatPercent: '',
+    kost: '',
     comment: '',
     ...values,
   };
@@ -31,17 +30,18 @@ export function readMappingFixture(name: string): Uint8Array {
 }
 
 /**
- * The rows written by `renderMappingFile` that `test/fixtures/mapping/excel-de-saved.csv`
- * holds after an Excel (DE) save: umlauts, an en dash, a separator and quotes inside
- * comments, a cost centre, a rate wildcard and a class-0 account with a leading zero.
+ * The rows written by `renderMappingFile` that `test/fixtures/mapping/excel-at-saved.csv`
+ * holds after an Excel (AT) save: umlauts, an en dash, a separator and quotes inside
+ * comments, a Kostenstelle, the rate 4.9, a rate wildcard and a class-0 account with a leading zero.
  */
 export const EXCEL_ORIGINAL_ROWS: readonly MappingRowValues[] = [
-  mappingRow({ apaleoAccount: '5011', apaleoType: 'Revenues', apaleoName: 'Accommodation 7%', apaleoVatPercent: '7', datevAccount: '8300', datevVatPercent: '7', comment: 'Vorschlag: Erlöse 7 % USt (Logis)' }),
-  mappingRow({ apaleoAccount: '5111', apaleoType: 'Revenues', apaleoName: 'Frühstück Speisen 7%', apaleoVatPercent: '7', datevAccount: '8300', datevVatPercent: '7', comment: 'Speisen; eigenes Konto mit Kanzlei klären' }),
-  mappingRow({ apaleoAccount: '5121', apaleoType: 'Revenues', apaleoName: 'Getränke 19%', apaleoVatPercent: '19', datevAccount: '8400', datevVatPercent: '19', kost1: 'BAR', kost2: 'F&B' }),
-  mappingRow({ apaleoAccount: '1611', apaleoType: 'Payments', apaleoName: 'Visa', datevAccount: '1360', comment: 'Karte "Visa" über Geldtransit' }),
-  mappingRow({ apaleoAccount: '9000', apaleoType: 'House', apaleoName: 'House', datevAccount: '0650', comment: 'Testwert – Klasse-0-Konto mit führender Null' }),
-  mappingRow({ apaleoAccount: '*', apaleoType: 'Liabilities', apaleoVatPercent: '7', datevAccount: '1711', datevVatPercent: '7', comment: 'Anzahlungen 7 %' }),
-  mappingRow({ apaleoAccount: '1400', apaleoType: 'AccountsReceivable', apaleoName: 'Accounts Receivable', datevAccount: '10000', comment: 'Sammeldebitor' }),
-  mappingRow({ apaleoAccount: '3501', apaleoType: 'CityTaxes', apaleoName: 'City Tax 0%', apaleoVatPercent: '0', comment: 'Gast schuldet: 1590, 0 %. Betrieb schuldet: Erlös 7 % – mit Steuerberater entscheiden.' }),
+  mappingRow({ apaleoAccount: 'RevenueAccommodation_VeryReduced:10.00', apaleoType: 'Revenues', apaleoName: 'Revenues Accommodation (10%)', apaleoVatPercent: '10', bmdAccount: '4000', steuercode: '1', bmdVatPercent: '10', comment: 'Vorschlag (ungeprüft): Erlöse Beherbergung 10 %' }),
+  mappingRow({ apaleoAccount: 'RevenueFoodAndBeverages_VeryReduced:10.00', apaleoType: 'Revenues', apaleoName: 'Frühstück Speisen (10%)', apaleoVatPercent: '10', bmdAccount: '4010', steuercode: '1', bmdVatPercent: '10', comment: 'Speisen; eigenes Konto mit Kanzlei klären' }),
+  mappingRow({ apaleoAccount: 'RevenueFoodAndBeverages_Normal:20.00', apaleoType: 'Revenues', apaleoName: 'Getränke (20%)', apaleoVatPercent: '20', bmdAccount: '4020', steuercode: '1', bmdVatPercent: '20', kost: '20' }),
+  mappingRow({ apaleoAccount: 'RevenueOther_Special:4.90', apaleoType: 'Revenues', apaleoName: 'Revenues Other (4.9%)', apaleoVatPercent: '4.9', bmdAccount: '4050', steuercode: '1', bmdVatPercent: '4.9', comment: 'Grundnahrungsmittel 4,9 %' }),
+  mappingRow({ apaleoAccount: '1102', apaleoType: 'Payments', apaleoName: 'Visa Credit Card Payment', bmdAccount: '2890', comment: 'Karte "Visa" über Schwebende Geldbewegungen' }),
+  mappingRow({ apaleoAccount: '9000', apaleoType: 'House', apaleoName: 'House Account', bmdAccount: '0650', comment: 'Testwert – Klasse-0-Konto mit führender Null' }),
+  mappingRow({ apaleoAccount: '*', apaleoType: 'Liabilities', apaleoVatPercent: '10', bmdAccount: '3200', steuercode: '1', bmdVatPercent: '10', comment: 'Anzahlungen 10 %' }),
+  mappingRow({ apaleoAccount: '*', apaleoType: 'AccountsReceivable', bmdAccount: '200000', comment: 'Sammeldebitor' }),
+  mappingRow({ apaleoAccount: '3501', apaleoType: 'CityTaxes', apaleoName: 'City Tax (no VAT)', apaleoVatPercent: '0', comment: 'Gast schuldet: Gemeinde 3580 ohne Steuercode – mit Steuerberatung entscheiden.' }),
 ];

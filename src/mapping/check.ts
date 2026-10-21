@@ -1,216 +1,150 @@
+import { DIALECTS, DEFAULT_DIALECT } from '../bmd/format.js';
+import type { BmdDialect } from '../bmd/types.js';
 import type { ChartIndex } from '../core/chart.js';
 import { REPORT_PROBLEM_HINT } from '../core/errors.js';
 import type { Finding } from '../core/findings.js';
 import { formatCents } from '../core/money.js';
 import { ACCOUNT_TYPES, type AccountRef, type LedgerLine } from '../core/source.js';
-import { accountLengthFinding } from './account-length.js';
-import { automaticRate, isAllowedOnAutomatic, isAutomaticLifted, taxKeyRate } from './automatic-accounts.js';
+import { accountLengthFinding, type AccountLengths } from './account-length.js';
 import { resolve } from './resolve.js';
 import { shippedTemplate, templateWildcardAccount } from './template.js';
 import {
   ANY_TYPE,
+  KOST_TYPES,
+  OUTPUT_TAX_TYPES,
   PERSONAL_ACCOUNT_TYPE,
   VAT_ACCOUNT_TYPES,
   VAT_RELEVANT_TYPES,
   WILDCARD,
   parsePercent,
+  parseSteuercode,
+  rowRate,
   type Mapping,
   type MappingRow,
-  type Skr,
 } from './types.js';
 
-export interface CheckMappingOptions {
-  sachkontenlaenge: number;
-  /** The Mandant's chart. Without it the Automatikkonto checks are skipped (`N-SKR-UNKNOWN`). */
-  skr?: Skr | undefined;
+export interface CheckMappingOptions extends AccountLengths {
+  /** Which Steuercodes mean output and input tax. Default `ntcs`. */
+  dialect?: BmdDialect | undefined;
 }
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set([...ACCOUNT_TYPES, ANY_TYPE]);
 
-/** apaleo types whose lines are sales, deposits or bad debt: they owe output tax, never input tax. */
-const OUTPUT_TAX_TYPES: ReadonlySet<string> = new Set([...VAT_RELEVANT_TYPES].filter((type) => !VAT_ACCOUNT_TYPES.has(type)));
+/** The VAT rates Austrian law knows today (UStG 1994 § 10, since 2026-07-01). */
+export const AUSTRIAN_VAT_RATES: readonly number[] = [0, 4.9, 10, 13, 20];
+
+const KOST = /^\d{1,9}$/;
 
 /**
- * Offline validation of a loaded mapping: digits only, exact account length,
- * BU key format, no BU key on an Automatikkonto, `datev_vat_percent` against
- * the rate the account or BU key implies, and the VAT rate DATEV will apply
- * against the apaleo rate. Structural problems (duplicates, forbidden
- * wildcards) already fail `loadMapping`.
+ * Offline validation of a loaded mapping (design decision 6): digits only and
+ * the exact account length, Steuercode and rate together, no input-tax code on a
+ * sale, deposit, levy or bad debt, Austrian rates, `kost`, untaxed revenue and
+ * the row's rate against the apaleo rate. Structural problems (duplicates,
+ * forbidden wildcards) already fail `loadMapping`.
  */
 export function checkMapping(mapping: Mapping, options: CheckMappingOptions): Finding[] {
   const findings: Finding[] = [];
-  const skr = options.skr ?? mapping.skr;
-  if (mapping.layout === 'grman') {
-    findings.push({
-      code: 'W-GRMAN-LAYOUT',
-      message:
-        'this is a Grman connector export: it has no BU keys and no VAT rates, and its rows match account numbers ' +
-        'of any type. Run "apaleo-bmd init-mapping --update" to convert it and add the missing columns',
-    });
-  }
-  if (!skr) {
-    findings.push({
-      code: 'N-SKR-UNKNOWN',
-      message: 'the SKR is unknown, so Automatikkonten were not checked. Pass --skr 03 or --skr 04',
-    });
-  }
   const ignored = mapping.rows.filter((row) => VAT_ACCOUNT_TYPES.has(row.apaleoType));
   if (ignored.length > 0) {
     findings.push({
       code: 'N-VAT-ROW-IGNORED',
       message:
         `${ignored.length} row(s) for Vat or VatOnLiabilities accounts (${ignored.map((r) => `line ${r.line}`).join(', ')}) ` +
-        'are ignored: those lines are always skipped because DATEV computes the VAT from the Automatikkonten',
+        'are ignored: those lines are always skipped because BMD books the tax from the steuer field of the revenue or deposit line',
     });
   }
   for (const row of mapping.rows) {
-    if (!VAT_ACCOUNT_TYPES.has(row.apaleoType)) findings.push(...checkRow(row, options.sachkontenlaenge, skr));
+    if (!VAT_ACCOUNT_TYPES.has(row.apaleoType)) findings.push(...checkRow(row, options));
   }
   return findings;
 }
 
-function checkRow(row: MappingRow, sachkontenlaenge: number, skr: Skr | undefined): Finding[] {
+function checkRow(row: MappingRow, options: CheckMappingOptions): Finding[] {
   const where = `line ${row.line}`;
+  const dialectName = options.dialect ?? DEFAULT_DIALECT;
+  const dialect = DIALECTS[dialectName];
   const findings: Finding[] = [];
+  const add = (code: string, field: string, value: string, message: string) => findings.push({ code, message: `${where}: ${message}`, field, value });
   if (!KNOWN_TYPES.has(row.apaleoType)) {
-    findings.push({
-      code: 'W-UNKNOWN-TYPE',
-      message: `${where}: apaleo_type "${row.apaleoType}" is not an apaleo account type (${ACCOUNT_TYPES.join(', ')})`,
-      field: 'apaleo_type',
-      value: row.apaleoType,
-    });
+    add('W-UNKNOWN-TYPE', 'apaleo_type', row.apaleoType, `apaleo_type "${row.apaleoType}" is not an apaleo account type (${ACCOUNT_TYPES.join(', ')})`);
   }
-  for (const [field, text] of [['apaleo_vat_percent', row.apaleoVatPercent], ['datev_vat_percent', row.datevVatPercent]] as const) {
-    if (Number.isNaN(parsePercent(text) ?? 0)) {
-      findings.push({ code: 'E-VAT-PERCENT', message: `${where}: ${field} "${text}" is not a percentage`, field, value: text });
+  for (const [field, text] of [['apaleo_vat_percent', row.apaleoVatPercent], ['bmd_vat_percent', row.bmdVatPercent]] as const) {
+    if (Number.isNaN(parsePercent(text) ?? 0)) add('E-VAT-PERCENT', field, text, `${field} "${text}" is not a percentage`);
+  }
+  if (row.kost !== '' && !KOST.test(row.kost)) {
+    add('E-KOST-FORMAT', 'kost', row.kost, `kost "${row.kost}" must be a Kostenstelle of 1 to 9 digits`);
+  } else if (row.kost !== '' && !KOST_TYPES.has(row.apaleoType)) {
+    add(
+      'W-KOST-IGNORED',
+      'kost',
+      row.kost,
+      `kost ${row.kost} is never written for apaleo type ${row.apaleoType}: BMD reads kost as Kostenstelle only on revenue and ` +
+        'bad-debt bookings, and on a payment as the Belegnummer of the invoice it clears. Leave kost empty on this row',
+    );
+  }
+  const code = parseSteuercode(row.steuercode);
+  const rate = parsePercent(row.bmdVatPercent);
+  if (Number.isNaN(code ?? 0)) {
+    add('E-STEUERCODE-FORMAT', 'steuercode', row.steuercode, `Steuercode "${row.steuercode}" must be a whole number from 0 to 99`);
+  } else if (code !== undefined) {
+    if (rate === undefined) {
+      add('E-VAT-RATE-MISSING', 'bmd_vat_percent', '', `Steuercode ${code} needs the VAT rate BMD books with it in bmd_vat_percent (0 for untaxed revenue)`);
     }
+    const inputTax = dialect.inputTaxCodes.get(code);
+    if (inputTax !== undefined && OUTPUT_TAX_TYPES.has(row.apaleoType)) {
+      add(
+        'E-STEUERCODE-INPUT-TAX',
+        'steuercode',
+        row.steuercode,
+        `Steuercode ${code} means ${inputTax} in ${dialectName === 'ntcs' ? 'BMD NTCS' : 'BMD 5.5'}, but apaleo type ${row.apaleoType} is a sale, ` +
+          `deposit, levy or bad debt and owes Umsatzsteuer. Use the Umsatzsteuer code ${dialect.normalOutputTaxCode} and have your Steuerberatung confirm it`,
+      );
+    } else if (!dialect.outputTaxCodes.includes(code)) {
+      add(
+        'W-STEUERCODE-UNCHECKED',
+        'steuercode',
+        row.steuercode,
+        `the tool does not know Steuercode ${code} (it checks only the Umsatzsteuer code${dialect.outputTaxCodes.length > 1 ? 's' : ''} ` +
+          `${dialect.outputTaxCodes.join(' and ')} of bmd.dialect ${dialectName}); have your Steuerberatung confirm what BMD books with it`,
+      );
+    }
+  } else if (rate !== undefined && !Number.isNaN(rate) && rate > 0) {
+    add('E-STEUERCODE-MISSING', 'steuercode', '', `bmd_vat_percent is ${rate} %, but the Steuercode is empty: BMD books no tax without one. Fill in the Steuercode`);
   }
-  if (row.buKey !== '' && !/^\d{1,4}$/.test(row.buKey)) {
-    findings.push({ code: 'E-BU-KEY', message: `${where}: BU key "${row.buKey}" must have 1 to 4 digits`, field: 'bu_key', value: row.buKey });
+  if (rate !== undefined && !Number.isNaN(rate) && !AUSTRIAN_VAT_RATES.includes(rate)) {
+    add(
+      'W-VAT-RATE-UNUSUAL',
+      'bmd_vat_percent',
+      row.bmdVatPercent,
+      `bmd_vat_percent ${rate} % is not an Austrian VAT rate (${AUSTRIAN_VAT_RATES.map((r) => `${r} %`).join(', ')}). ` +
+        'Was this row copied from a German mapping?',
+    );
   }
-  if (row.datevAccount === '') return findings;
+  if (row.bmdAccount === '') return findings;
 
-  if (!/^\d+$/.test(row.datevAccount)) {
-    findings.push({
-      code: 'E-ACCOUNT-DIGITS',
-      message: `${where}: DATEV account "${row.datevAccount}" must contain digits only`,
-      field: 'datev_account',
-      value: row.datevAccount,
-    });
-    return findings;
-  }
-  const length = accountLengthFinding(row, sachkontenlaenge);
+  const length = accountLengthFinding(row, options);
   if (length) findings.push(length);
-
-  const automatic = skr === undefined ? undefined : automaticRate(skr, row.datevAccount, sachkontenlaenge);
-  if (automatic !== undefined && row.buKey !== '' && !isAllowedOnAutomatic(row.buKey)) {
-    findings.push({
-      code: 'E-BU-ON-AUTOMATIC',
-      message:
-        `${where}: DATEV account ${row.datevAccount} is an Automatikkonto (SKR ${skr}, ${automatic} %); DATEV computes the VAT ` +
-        `itself and rejects the BU key ${row.buKey} on it. Leave bu_key empty`,
-      field: 'bu_key',
-      value: row.buKey,
-    });
+  if (row.apaleoType === 'Revenues' && code === undefined) {
+    add(
+      'W-UNTAXED-REVENUE',
+      'steuercode',
+      '',
+      `revenue on BMD account ${row.bmdAccount} is booked without a Steuercode. The BMD account must not carry a fixed Steuercode, ` +
+        "or BMD fills it in on import; check the account in BMD, or enter the Kanzlei's Steuercode for non-taxable revenue",
+    );
   }
-  const implied = impliedVatRate(row, sachkontenlaenge, skr);
-  const explicit = parsePercent(row.datevVatPercent);
-  if (!implied && /^\d{1,4}$/.test(row.buKey)) {
-    const known = explicit !== undefined && !Number.isNaN(explicit);
-    findings.push({
-      code: 'W-BU-KEY-UNCHECKED',
-      message:
-        `${where}: the tool does not know BU key ${row.buKey}${automatic === undefined ? '' : ` on Automatikkonto ${row.datevAccount}`}` +
-        `${skr === undefined ? ' (or the SKR is unknown, so it cannot tell an Automatikkonto)' : ''}, ` +
-        (known
-          ? `so it trusts datev_vat_percent (${explicit} %) for the VAT rate DATEV applies. `
-          : 'and datev_vat_percent is empty, so it cannot check the VAT rate DATEV applies. ') +
-        'Have your Steuerberater confirm the key',
-      field: 'bu_key',
-      value: row.buKey,
-    });
-  }
-  const taxKey = taxKeyRate(automatic === undefined ? row.buKey : isAutomaticLifted(row.buKey) ? row.buKey.slice(1) : '');
-  if (taxKey?.side === 'input' && OUTPUT_TAX_TYPES.has(row.apaleoType)) {
-    findings.push({
-      code: 'E-BU-INPUT-TAX',
-      message:
-        `${where}: BU key ${row.buKey} books ${taxKey.rate} % input tax (Vorsteuer), but apaleo type ${row.apaleoType} is a sale, ` +
-        'deposit or bad debt and owes output tax (Umsatzsteuer). Use an Automatikkonto with an empty bu_key, or the output-tax ' +
-        'key 2 (7 %) or 3 (19 %), and have your Steuerberater confirm it',
-      field: 'bu_key',
-      value: row.buKey,
-    });
-  }
-  if (implied && explicit !== undefined && !Number.isNaN(explicit) && explicit !== implied.rate) {
-    findings.push({
-      code: 'E-VAT-CONFLICT',
-      message:
-        `${where}: datev_vat_percent says ${explicit} %, but DATEV will apply ${implied.rate} % because of ${implied.reason}. ` +
-        `Correct datev_vat_percent to ${implied.rate} or change the DATEV account or BU key`,
-      field: 'datev_vat_percent',
-      value: row.datevVatPercent,
-    });
-  }
-  const datevRate = datevVatRate(row, sachkontenlaenge, skr);
+  const bmdRate = rowRate(row);
   const apaleoRate = parsePercent(row.apaleoVatPercent);
-  if (datevRate !== undefined && apaleoRate !== undefined && !Number.isNaN(apaleoRate) && datevRate !== apaleoRate) {
-    findings.push({
-      code: 'E-VAT-MISMATCH',
-      message:
-        `${where}: apaleo account ${row.apaleoAccount} (${row.apaleoType}) has VAT ${apaleoRate} %, but DATEV will apply ` +
-        `${datevRate} % on account ${row.datevAccount}${implied ? ` (${implied.reason})` : ''}. ` +
-        `Map it to an account for ${apaleoRate} % or fix the BU key or datev_vat_percent`,
-      field: 'datev_vat_percent',
-      value: String(datevRate),
-    });
+  if (bmdRate !== undefined && apaleoRate !== undefined && !Number.isNaN(apaleoRate) && bmdRate !== apaleoRate) {
+    add(
+      'E-VAT-MISMATCH',
+      'bmd_vat_percent',
+      String(bmdRate),
+      `apaleo account ${row.apaleoAccount} (${row.apaleoType}) has VAT ${apaleoRate} %, but the row books ${bmdRate} % on BMD account ` +
+        `${row.bmdAccount}. Map it to an account for ${apaleoRate} % with the matching Steuercode and bmd_vat_percent`,
+    );
   }
   return findings;
-}
-
-/**
- * The VAT rate DATEV derives from the account and BU key alone, ignoring
- * `datev_vat_percent`: on a known Automatikkonto the account's rate, or 0 with
- * an Aufhebung key `40` (`4x` applies the tax key `x` instead); else the rate
- * of a known tax key (`2`, `3`, `8`, `9`, also after a Generalumkehr `2x`).
- * Undefined when neither gives a rate, for example for a key the tool does not
- * know (`checkMapping` warns `W-BU-KEY-UNCHECKED`).
- */
-export function impliedVatRate(
-  row: Pick<MappingRow, 'datevAccount' | 'buKey'>,
-  sachkontenlaenge: number,
-  skr: Skr | undefined,
-): { rate: number; reason: string } | undefined {
-  const automatic = skr === undefined ? undefined : automaticRate(skr, row.datevAccount, sachkontenlaenge);
-  if (automatic !== undefined) {
-    if (isAutomaticLifted(row.buKey)) {
-      const inner = row.buKey.slice(1);
-      const rate = inner === '0' ? 0 : taxKeyRate(inner)?.rate;
-      if (rate === undefined) return undefined;
-      return { rate, reason: `BU key ${row.buKey}, which lifts the automatic ${automatic} % of Automatikkonto ${row.datevAccount}` };
-    }
-    return { rate: automatic, reason: `Automatikkonto ${row.datevAccount} (SKR ${skr}, ${automatic} %)` };
-  }
-  const key = taxKeyRate(row.buKey);
-  if (key) return { rate: key.rate, reason: `BU key ${row.buKey} (${key.rate} % ${key.side} tax)` };
-  return undefined;
-}
-
-/**
- * The VAT rate DATEV will apply for a row: the rate the account and BU key imply
- * (see `impliedVatRate`), which always wins because DATEV books it whatever the
- * file says; else `datev_vat_percent` if set; else 0 ("no VAT") when there is no
- * BU key. Undefined when it cannot be known: a BU key the tool does not know and
- * no `datev_vat_percent`, the SKR is unknown and neither a rate nor a BU key is
- * given, or the rate is not a number. A `datev_vat_percent` that contradicts
- * the implied rate is reported by `checkMapping` as `E-VAT-CONFLICT`.
- */
-export function datevVatRate(row: MappingRow, sachkontenlaenge: number, skr: Skr | undefined): number | undefined {
-  const implied = impliedVatRate(row, sachkontenlaenge, skr);
-  if (implied) return implied.rate;
-  const explicit = parsePercent(row.datevVatPercent);
-  if (explicit !== undefined) return Number.isNaN(explicit) ? undefined : explicit;
-  return skr === undefined || row.buKey !== '' ? undefined : 0;
 }
 
 export interface CoverageOptions {
@@ -220,10 +154,10 @@ export interface CoverageOptions {
    * be inferred) and the line's own rate (`lineRate`) otherwise.
    */
   rateOf: (line: LedgerLine) => number | undefined;
-  /** Needed to tell which VAT rate DATEV applies on the resolved row (`E-VAT-MISMATCH`). */
+  /** Scales the template's example accounts in the fix hints. */
   sachkontenlaenge: number;
-  /** The Mandant's chart; default the SKR named in the mapping file. Without it Automatikkonten are not recognised. */
-  skr?: Skr | undefined;
+  /** The Steuercode in the fix hints. Default `ntcs`. */
+  dialect?: BmdDialect | undefined;
 }
 
 /** A line without a tax entry left after normalising. */
@@ -250,7 +184,7 @@ interface Unmapped extends Booked {
 interface Mismatch extends Booked {
   rate: number;
   row: MappingRow;
-  datevRate: number;
+  bmdRate: number;
 }
 
 /** Untaxed deposit releases whose VAT rate cannot be inferred. */
@@ -273,11 +207,11 @@ const MAX_EXAMPLES = 3;
 
 /**
  * Checks every account booked in `lines` against the mapping:
- * - `E-UNMAPPED` for an account that does not resolve to a row with a DATEV
+ * - `E-UNMAPPED` for an account that does not resolve to a row with a BMD
  *   account, with its type, name, line count and gross total;
- * - `E-VAT-MISMATCH` for a VAT-relevant account whose row makes DATEV apply
- *   another rate than the line carries, for example a revenue account at 7 %
- *   that resolves through a parent row to an Automatikkonto for 19 %;
+ * - `E-VAT-MISMATCH` for a VAT-relevant account whose row books another rate
+ *   than the line carries, for example a revenue account at 10 % that resolves
+ *   through a parent row to a 20 % account;
  * - `E-VAT-RATE-UNKNOWN` once for all untaxed deposit releases whose rate
  *   `rateOf` cannot infer (the export stops on them).
  * Lines with a Vat or VatOnLiabilities side are skipped by the posting rules,
@@ -290,7 +224,6 @@ export function checkCoverage(
   options: CoverageOptions,
 ): Finding[] {
   const { rateOf } = options;
-  const skr = options.skr ?? mapping.skr;
   const resolveAt = (account: AccountRef, rate: number | undefined) => resolve(mapping, account, { rate, ...(chart ? { chart } : {}) });
   const unmapped = new Map<string, Unmapped>();
   const mismatches = new Map<string, Mismatch>();
@@ -306,13 +239,13 @@ export function checkCoverage(
         continue;
       }
       const row = resolveAt(account, rate);
-      if (row && row.datevAccount !== '') {
+      if (row && row.bmdAccount !== '') {
         // A row whose own apaleo_vat_percent equals the line's rate is checked by checkMapping.
         if (rate === undefined || !OUTPUT_TAX_TYPES.has(account.type) || parsePercent(row.apaleoVatPercent) === rate) continue;
-        const datevRate = datevVatRate(row, options.sachkontenlaenge, skr);
-        if (datevRate === undefined || datevRate === rate) continue;
+        const bmdRate = rowRate(row);
+        if (bmdRate === undefined || bmdRate === rate) continue;
         add(mismatches, `${row.line}\u0000${account.number}\u0000${account.type}\u0000${rate}`, line, () => ({
-          account, rate, row, datevRate, lines: 0, grossCents: 0,
+          account, rate, row, bmdRate, lines: 0, grossCents: 0,
         }));
         continue;
       }
@@ -332,14 +265,14 @@ export function checkCoverage(
   }
   const hint: Hint = {
     sachkontenlaenge: options.sachkontenlaenge,
-    skr,
+    outputTaxCode: DIALECTS[options.dialect ?? DEFAULT_DIALECT].normalOutputTaxCode,
     wildcardRow: (type, rate) =>
       mapping.rows.find((row) => row.apaleoAccount === WILDCARD && row.apaleoType === type && parsePercent(row.apaleoVatPercent) === rate),
   };
   return [
     ...[...unmapped.values()].sort(byAccount).map((entry) => unmappedFinding(entry, hint)),
     ...(unknownRate.lines > 0 ? [unknownRateFinding(unknownRate)] : []),
-    ...[...mismatches.values()].sort(byAccount).map((entry) => mismatchFinding(entry, options.sachkontenlaenge, skr)),
+    ...[...mismatches.values()].sort(byAccount).map(mismatchFinding),
   ];
 }
 
@@ -349,8 +282,8 @@ function bookedText({ lines, grossCents }: Pick<Booked, 'lines' | 'grossCents'>)
 
 interface Hint {
   sachkontenlaenge: number;
-  /** The template's accounts are shown as examples when the SKR is known. */
-  skr: Skr | undefined;
+  /** The Steuercode a wildcard row for a taxed rate needs. */
+  outputTaxCode: number;
   /** The mapping's wildcard row for a VAT-relevant type at a rate, if it has one. */
   wildcardRow: (type: string, rate: number) => MappingRow | undefined;
 }
@@ -360,24 +293,25 @@ interface Hint {
  * exists (resolve prefers the parent): name that row instead of asking to add it.
  */
 function emptyWildcardFix(wildcard: MappingRow, type: string, rate: number): string {
-  return `fill in datev_account on the wildcard row for ${type} at ${rate} % on line ${wildcard.line}`;
+  return `fill in bmd_account on the wildcard row for ${type} at ${rate} % on line ${wildcard.line}`;
 }
 
 /** The wildcard row to add for a type, as it is written in the file, with the template's account as example. */
-function wildcardHint(type: string, rate: number | undefined, { sachkontenlaenge, skr }: Hint): string {
+function wildcardHint(type: string, rate: number | undefined, { sachkontenlaenge, outputTaxCode }: Hint): string {
   const rated = VAT_RELEVANT_TYPES.has(type);
-  const template = skr === undefined ? undefined : templateWildcardAccount(shippedTemplate(skr), type, rated ? rate : undefined, sachkontenlaenge);
+  const template = templateWildcardAccount(shippedTemplate(), type, rated ? rate : undefined, sachkontenlaenge);
   if (!rated) {
-    const debtor = type === PERSONAL_ACCOUNT_TYPE ? ' (collective debtor)' : '';
-    return `the wildcard row \`*;${type};;;${template ?? '<DATEV account>'}\`${debtor}`;
+    const debtor = type === PERSONAL_ACCOUNT_TYPE ? ' (Sammeldebitor)' : '';
+    return `the wildcard row \`*;${type};;;${template ?? '<BMD account>'}\`${debtor}`;
   }
-  return `a wildcard row \`*;${type};;${rate};<DATEV account>;;${rate}\`${template === undefined ? '' : ` (template: ${template})`}`;
+  const tax = rate === 0 ? `;;${rate}` : `;${outputTaxCode};${rate}`;
+  return `a wildcard row \`*;${type};;${rate};<BMD account>${tax}\`${template === undefined ? '' : ` (template: ${template})`}`;
 }
 
 /**
  * `E-UNMAPPED` with the row to change: an exact empty row by its line; an empty
  * parent row with the wildcard row to add instead (for VAT-relevant types never
- * "fill in the parent row": one DATEV account cannot serve every rate); no row
+ * "fill in the parent row": one BMD account cannot serve every rate); no row
  * at all with the row or wildcard row to add.
  */
 function unmappedFinding(entry: Unmapped, hint: Hint): Finding {
@@ -395,19 +329,19 @@ function unmappedFinding(entry: Unmapped, hint: Hint): Finding {
   const wildcard = wildcardHint(account.type, rate, hint);
   let fix: string;
   if (row && !emptyParent) {
-    fix = `fill in datev_account on line ${row.line} of the mapping file`;
+    fix = `fill in bmd_account on line ${row.line} of the mapping file`;
   } else if (vatRelevant && rate === undefined) {
     fix = `the lines carry more than one VAT rate, so no wildcard applies; add a row for ${account.number} ${account.type}`;
   } else if (account.type === 'Revenues' && row) {
-    fix = `the parent row for ${row.apaleoAccount} on line ${row.line} has no DATEV account; add a row for ${account.number} Revenues with a DATEV account for${at}`;
+    fix = `the parent row for ${row.apaleoAccount} on line ${row.line} has no BMD account; add a row for ${account.number} Revenues with a BMD account for${at}`;
   } else if (account.type === 'Revenues') {
-    fix = `add a row with apaleo_account ${account.number}, apaleo_type Revenues and a DATEV account`;
+    fix = `add a row with apaleo_account ${account.number}, apaleo_type Revenues and a BMD account`;
   } else if (row && vatRelevant) {
     const existing = rate === undefined ? undefined : hint.wildcardRow(account.type, rate);
     const add = existing && rate !== undefined ? emptyWildcardFix(existing, account.type, rate) : `add ${wildcard}`;
-    fix = `the parent row for ${row.apaleoAccount} on line ${row.line} has no DATEV account and does not apply to ${account.type} at different VAT rates; ${add}`;
+    fix = `the parent row for ${row.apaleoAccount} on line ${row.line} has no BMD account and does not apply to ${account.type} at different VAT rates; ${add}`;
   } else if (row) {
-    fix = `fill in datev_account for the parent row ${row.apaleoAccount} on line ${row.line}, or add ${wildcard}`;
+    fix = `fill in bmd_account for the parent row ${row.apaleoAccount} on line ${row.line}, or add ${wildcard}`;
   } else if (group && vatRelevant) {
     fix = `add ${wildcard}`;
   } else if (group) {
@@ -415,7 +349,7 @@ function unmappedFinding(entry: Unmapped, hint: Hint): Finding {
   } else if (vatRelevant) {
     fix = `add a row for ${account.number} ${account.type}, or a wildcard row (*) for ${account.type}${at}: ${wildcard.replace(/^a wildcard row /, '')}`;
   } else {
-    fix = `add a row with apaleo_account ${account.number}, apaleo_type ${account.type} and a DATEV account`;
+    fix = `add a row with apaleo_account ${account.number}, apaleo_type ${account.type} and a BMD account`;
   }
   return {
     code: 'E-UNMAPPED',
@@ -425,16 +359,15 @@ function unmappedFinding(entry: Unmapped, hint: Hint): Finding {
   };
 }
 
-function mismatchFinding(entry: Mismatch, sachkontenlaenge: number, skr: Skr | undefined): Finding {
-  const { account, rate, row, datevRate } = entry;
-  const implied = impliedVatRate(row, sachkontenlaenge, skr);
+function mismatchFinding(entry: Mismatch): Finding {
+  const { account, rate, row, bmdRate } = entry;
   const via = row.apaleoAccount === account.number ? `its row on line ${row.line}` : `line ${row.line} (apaleo account ${row.apaleoAccount})`;
   return {
     code: 'E-VAT-MISMATCH',
     message:
       `apaleo account ${account.number} (${account.type}, "${account.name}") is booked at ${rate} % (${bookedText(entry)}), ` +
-      `but it uses ${via} of the mapping, and DATEV will apply ${datevRate} % on account ${row.datevAccount}` +
-      `${implied ? ` (${implied.reason})` : ''}. Add a row for ${account.number} ${account.type} with a DATEV account for ${rate} %`,
+      `but it uses ${via} of the mapping, which books ${bmdRate} % on BMD account ${row.bmdAccount}. ` +
+      `Add a row for ${account.number} ${account.type} with a BMD account for ${rate} %`,
     field: 'apaleo_account',
     value: account.number,
   };

@@ -1,0 +1,11 @@
+# Hand-built to the rules of Excel (AT) 'CSV (Trennzeichen-getrennt)': the written original (test/helpers/mapping.ts EXCEL_ORIGINAL_ROWS) opened with default column formats and saved again: Windows-1252 without BOM, semicolons, CRLF, leading zeros dropped from digit-only cells, the rate 4.9 written with a decimal comma, quotes only around cells with a separator or a quote. Not produced in a real Excel installation.
+apaleo_account;apaleo_type;apaleo_name;apaleo_vat_percent;bmd_account;steuercode;bmd_vat_percent;kost;comment
+RevenueAccommodation_VeryReduced:10.00;Revenues;Revenues Accommodation (10%);10;4000;1;10;;Vorschlag (ungeprüft): Erlöse Beherbergung 10 %
+RevenueFoodAndBeverages_VeryReduced:10.00;Revenues;Frühstück Speisen (10%);10;4010;1;10;;"Speisen; eigenes Konto mit Kanzlei klären"
+RevenueFoodAndBeverages_Normal:20.00;Revenues;Getränke (20%);20;4020;1;20;20;
+RevenueOther_Special:4.90;Revenues;Revenues Other (4.9%);4,9;4050;1;4,9;;Grundnahrungsmittel 4,9 %
+1102;Payments;Visa Credit Card Payment;;2890;;;;"Karte ""Visa"" über Schwebende Geldbewegungen"
+9000;House;House Account;;650;;;;Testwert – Klasse-0-Konto mit führender Null
+*;Liabilities;;10;3200;1;10;;Anzahlungen 10 %
+*;AccountsReceivable;;;200000;;;;Sammeldebitor
+3501;CityTaxes;City Tax (no VAT);0;;;;;Gast schuldet: Gemeinde 3580 ohne Steuercode – mit Steuerberatung entscheiden.
