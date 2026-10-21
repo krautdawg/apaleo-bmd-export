@@ -36,14 +36,14 @@ export interface ManifestEntry {
   status: 'current' | 'replaced';
   from: LocalDate;
   to: LocalDate;
-  /** SHA-256 of the whole file. */
+  /** SHA-256 of the whole file: the file is deterministic, so this alone identifies its content. */
   sha256: string;
-  /** SHA-256 of the file without its header line, which carries the creation time. */
-  bodySha256: string;
   bookings?: number;
-  /** Sum of the amounts booked with Soll and with Haben on Konto. */
+  /** The Soll and Haben totals the Kanzlei's journal shows after the import, as decimal text. */
   sollTotal?: string;
   habenTotal?: string;
+  /** The tax of the bookings per VAT rate in cents, signed as owed (a correction that reduces it is negative). */
+  taxByRate?: TaxAtRate[];
   mappingSha256?: string;
   toolVersion?: string;
   createdAt?: string;
@@ -51,18 +51,23 @@ export interface ManifestEntry {
   replacedBy?: string;
 }
 
+/** The tax of the bookings at one VAT rate. */
+export interface TaxAtRate {
+  ratePercent: number;
+  taxCents: number;
+}
+
+/**
+ * `manifest.json`. Reading keeps whatever an entry holds and uses only the fields
+ * above, so a field an older or newer version wrote (such as the `bodySha256` of
+ * earlier versions) is ignored and kept as it is.
+ */
 export interface Manifest {
   files: ManifestEntry[];
 }
 
 export function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
-}
-
-/** The bytes after the first line (the header line of the file). */
-export function bodyOf(bytes: Uint8Array): Uint8Array {
-  const end = bytes.indexOf(0x0a);
-  return end < 0 ? new Uint8Array() : bytes.subarray(end + 1);
 }
 
 /** What writing a file would do, decided before anything is written. */
@@ -155,17 +160,13 @@ export async function planOutput(
   if (!previous) return { action: 'write' };
   if (target.sameContent(previous, bytes)) return { action: 'unchanged', previous };
   if (overwrite) return { action: 'replace', previous, backup: replacedName(path, ctx.now()) };
-  const sameBookings = sha256(bodyOf(previous)) === sha256(bodyOf(bytes));
-  const what = sameBookings
-    ? `${path} already exists with the same bookings but a different header line: ${target.advice.headerChange}`
-    : `${path} already exists with other bookings: the apaleo data or the mapping changed since it was written, ` +
-      'for example by a late posting.';
   return {
     action: 'refuse',
     finding: {
       code: 'E-FILE-EXISTS',
       message:
-        `${what} ${target.advice.reimport} Then run again with --overwrite: ` +
+        `${path} already exists with other content: the apaleo data, the mapping or the config changed since it was written, ` +
+        `for example by a late posting. ${target.advice.reimport} Then run again with --overwrite: ` +
         `the old file is kept as <name>.replaced-<timestamp>${extname(path)}.` +
         (target.advice.afterOverwrite ? ` ${target.advice.afterOverwrite}` : ''),
     },
@@ -177,7 +178,7 @@ export interface WrittenFile {
   bytes: Uint8Array;
   protocol: string;
   /** The manifest entry for the new file, without the hashes (they are computed here). */
-  entry: Omit<ManifestEntry, 'file' | 'status' | 'sha256' | 'bodySha256'>;
+  entry: Omit<ManifestEntry, 'file' | 'status' | 'sha256'>;
 }
 
 /** Protocol file beside an export file: `<base>.protokoll.txt`. */
@@ -218,7 +219,6 @@ export async function writeOutput(ctx: CommandContext, plan: OutputPlan, file: W
         file: basename(plan.backup),
         status: 'replaced',
         sha256: sha256(plan.previous),
-        bodySha256: sha256(bodyOf(plan.previous)),
         replacedAt: ctx.now().toISOString(),
         replacedBy: name,
       });
@@ -267,7 +267,7 @@ export async function repairCompanions(ctx: CommandContext, file: WrittenFile): 
 }
 
 function currentEntry(file: WrittenFile): ManifestEntry {
-  return { file: basename(file.path), status: 'current', sha256: sha256(file.bytes), bodySha256: sha256(bodyOf(file.bytes)), ...file.entry };
+  return { file: basename(file.path), status: 'current', sha256: sha256(file.bytes), ...file.entry };
 }
 
 async function writeManifest(ctx: CommandContext, path: string, files: ManifestEntry[]): Promise<void> {

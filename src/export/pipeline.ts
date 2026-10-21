@@ -10,7 +10,7 @@ import { formatCents } from '../core/money.js';
 import type { LedgerLine, SourceAdapter, SourceProperty } from '../core/source.js';
 import { bmdTarget } from '../bmd/target.js';
 import { checkCoverage, loadMapping, type Mapping } from '../mapping/index.js';
-import { buildBookings, releaseRateOf, type PostedBooking, type PostingOptions, type PostingResult } from '../posting/index.js';
+import { buildBookings, journalTotals, releaseRateOf, taxByRate, type PostedBooking, type PostingOptions, type PostingResult } from '../posting/index.js';
 import { checkAggregates, plausibilityFindings } from './checks.js';
 import { monthFolder, planOutput, repairCompanions, sha256, writeOutput, type OutputPlan, type WrittenFile } from './output.js';
 import { dayRuleFindings, finalFrom, lastFinalDay, splitPeriod, type DateRange, type PeriodPart } from './period.js';
@@ -159,6 +159,8 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
   const findings: Finding[] = [...notes];
   let lines: readonly LedgerLine[] = [];
   let result: PostingResult | undefined;
+  /** The target's import block, once the file is rendered. */
+  let importBlock: string[] | undefined;
   const outcome = (status: PartStatus, extra: Partial<PartOutcome> = {}): PartOutcome => ({
     propertyId: inputs.id,
     part,
@@ -171,6 +173,7 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
       ledgerLines: lines.length,
       bookings: result?.bookings.length ?? 0,
       ...(result ? { summary: result.summary } : {}),
+      ...(importBlock ? { importBlock } : {}),
       findings,
     }),
     ...extra,
@@ -223,12 +226,13 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
     const meta: TargetFileMeta = { config: deps.loaded.config, propertyId: inputs.id, part, demo: request.demo === true, createdAt: deps.ctx.now() };
     const { bytes, findings: renderFindings } = target.render(result.bookings, meta);
     findings.push(...renderFindings);
+    importBlock = target.importBlock(result.bookings, meta);
     const path = join(monthFolder(deps.ctx.cwd, deps.loaded.config.output.dir, inputs.id, part.month), target.fileName(meta));
     const plan = await planOutput(deps.ctx, target, path, bytes, part, request.overwrite);
     if (plan.action === 'refuse') findings.push(plan.finding);
     if (hasError(findings)) return outcome('failed', { path });
     if (request.dryRun) return outcome('checked', { path, plan: plan.action });
-    const totals = sideTotals(result.bookings);
+    const totals = journalTotals(result.bookings);
     const companions = (status: PartStatus, fileBytes: Uint8Array): WrittenFile => ({
       path,
       bytes: fileBytes,
@@ -237,8 +241,9 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
         from: part.from,
         to: part.to,
         bookings: result?.bookings.length ?? 0,
-        sollTotal: formatCents(totals.soll),
-        habenTotal: formatCents(totals.haben),
+        sollTotal: formatCents(totals.sollCents),
+        habenTotal: formatCents(totals.habenCents),
+        taxByRate: taxByRate(result?.bookings ?? []),
         mappingSha256,
         toolVersion: VERSION,
         createdAt: deps.ctx.now().toISOString(),
@@ -270,9 +275,13 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
 /** The only currency the BMD writer supports: the bookings carry no currency of their own, and BMD reads them as euros. */
 export const EXPORT_CURRENCY = 'EUR';
 
+/** Why another currency cannot be exported, in every `E-CURRENCY`. The tool does not convert. */
+const NO_CURRENCY_FIELD =
+  "A BMD Buchungsimport line has no currency field: BMD books every amount in the Mandant's Grundwährung (EUR), and this tool does not convert.";
+
 /**
- * `E-CURRENCY` when the property or a ledger line is not in EUR. The file would
- * label the amounts as euros without converting them, so the part stops.
+ * `E-CURRENCY` when the property or a ledger line is not in EUR. BMD would
+ * book the amounts as euros without converting them, so the part stops.
  */
 function currencyFindings(property: SourceProperty, lines: readonly LedgerLine[] = []): Finding[] {
   if (property.currency !== EXPORT_CURRENCY) {
@@ -281,7 +290,7 @@ function currencyFindings(property: SourceProperty, lines: readonly LedgerLine[]
         code: 'E-CURRENCY',
         message:
           `the property ${property.id} keeps its books in ${property.currency || 'an unknown currency'}, but this tool writes BMD files in ${EXPORT_CURRENCY} only. ` +
-          'No file was written, because BMD would read the amounts as euros',
+          `${NO_CURRENCY_FIELD} No apaleo lines were read and no file was written`,
         value: property.currency,
       },
     ];
@@ -294,7 +303,7 @@ function currencyFindings(property: SourceProperty, lines: readonly LedgerLine[]
       code: 'E-CURRENCY',
       message:
         `${count} apaleo line(s) of ${property.id} are in ${others.map((c) => c || 'an unknown currency').join(', ')}, but this tool writes BMD files in ${EXPORT_CURRENCY} only. ` +
-        'No file was written, because BMD would read the amounts as euros',
+        `${NO_CURRENCY_FIELD} No file was written`,
       value: others.join(','),
     },
   ];
@@ -356,20 +365,17 @@ export function fileSystemFinding(error: NodeJS.ErrnoException, dir: string, dem
   };
 }
 
-/** The gross (Betrag plus Steuer) of the bookings with `konto` in Soll and in Haben. */
-function sideTotals(bookings: readonly PostedBooking[]): { soll: number; haben: number } {
-  const gross = (b: PostedBooking) => Math.abs(b.betragCents + (b.tax?.steuerCents ?? 0));
-  const sum = (soll: boolean) => bookings.filter((b) => b.betragCents > 0 === soll).reduce((total, b) => total + gross(b), 0);
-  return { soll: sum(true), haben: sum(false) };
-}
+/** The first line of a demo protocol, so it never looks like a real export. */
+export const DEMO_MARKER = 'DEMO';
 
-/** The first line of a demo protocol and of the demo's output (`export --demo`). */
+/** The line after `DEMO_MARKER` in a demo protocol, and the first line of the demo's output (`export --demo`). */
 export const DEMO_NOTICE =
-  'DEMO: bundled sample data of the fabricated "Hotel Beispiel", not read from apaleo. Never import a demo file into a real BMD Mandant.';
+  'DEMO: bundled sample data of the fabricated "Hotel Beispiel" in Wien, not read from apaleo. Every Buchungstext starts with "DEMO ". ' +
+  'Never import a demo file into a real BMD Mandant.';
 
 function protocolText(title: string, summary: string, path: string, bytes: Uint8Array, mappingSha256: string, now: Date, demo: boolean): string {
   return [
-    ...(demo ? [DEMO_NOTICE] : []),
+    ...(demo ? [DEMO_MARKER, DEMO_NOTICE] : []),
     `${title}. No warranty, not tax advice: have your Steuerberater check the bookings.`,
     '',
     summary,

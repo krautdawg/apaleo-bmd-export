@@ -160,6 +160,7 @@ describe('the period-part runner', () => {
     expect(outcome?.status).toBe('failed');
     expect(outcome?.findings.map((f) => [f.code, f.value])).toEqual([['E-CURRENCY', 'CHF']]);
     expect(outcome?.findings[0]?.message).toContain('writes BMD files in EUR only');
+    expect(outcome?.findings[0]?.message).toContain("A BMD Buchungsimport line has no currency field: BMD books every amount in the Mandant's Grundwährung (EUR)");
     expect(setup.fake.calls.some((call) => call.startsWith('getLedger'))).toBe(false);
     expect(existsSync(exportsOf(setup))).toBe(false);
   });
@@ -175,6 +176,7 @@ describe('the period-part runner', () => {
     expect(outcome?.status).toBe('failed');
     expect(outcome?.findings.map((f) => [f.code, f.value])).toEqual([['E-CURRENCY', 'USD']]);
     expect(outcome?.findings[0]?.message).toContain('1 apaleo line(s) of BSP are in USD');
+    expect(outcome?.findings[0]?.message).toContain('has no currency field');
     expect(existsSync(exportsOf(setup))).toBe(false);
   });
 

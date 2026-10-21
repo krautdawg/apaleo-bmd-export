@@ -17,8 +17,8 @@ export interface RenderedBuchungsimport {
 
 /** Satzart 0 is a FIBU booking; `E` and `A` let BMD create the Gegenbuchung and the tax posting (design decision 3). */
 const SATZART = '0';
-const GEGENBUCHKZ = 'E';
-const VERBUCHKZ = 'A';
+export const GEGENBUCHKZ = 'E';
+export const VERBUCHKZ = 'A';
 
 /**
  * Renders a BMD Buchungsimport: the header line of the dialect and one line per

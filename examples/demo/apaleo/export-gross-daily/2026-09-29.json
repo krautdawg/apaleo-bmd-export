@@ -1,0 +1,38 @@
+{
+  "transactions": [
+    {
+      "timestamp": "2026-09-29T12:00:00Z",
+      "date": "2026-09-29",
+      "debitedAccount": {
+        "name": "LossOfAccountsReceivable for Reservation BSP-QRSTUV-1",
+        "number": "BSP-QRSTUV-1_LossOfAccountsReceivable",
+        "parentNumber": "6900",
+        "type": "LossOfAccountsReceivable"
+      },
+      "creditedAccount": {
+        "name": "Receivables for Reservation BSP-QRSTUV-1",
+        "number": "BSP-QRSTUV-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "command": "PostToLossOfAccountsReceivables",
+      "currency": "EUR",
+      "grossAmount": 55,
+      "netAmount": 50,
+      "taxes": [
+        {
+          "type": "VeryReduced",
+          "percent": 10,
+          "amount": 5
+        }
+      ],
+      "receipt": {
+        "type": "Reservation",
+        "number": "BSP-QRSTUV-1-V1"
+      },
+      "sourceEntryNumber": "BSPE0025",
+      "reference": "BSP-QRSTUV-1",
+      "referenceType": "Guest"
+    }
+  ]
+}

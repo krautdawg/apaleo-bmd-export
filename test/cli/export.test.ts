@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { runCli } from '../../src/cli/run.js';
 import { DIALECTS } from '../../src/bmd/index.js';
-import { bodyOf, sha256, type Manifest } from '../../src/export/index.js';
+import { sha256, type Manifest } from '../../src/export/index.js';
 import { ApaleoError, ApaleoPermissionError } from '../../src/sources/apaleo/index.js';
 import { BSP } from '../helpers/apaleo.js';
 import { addSecondProperty, exportConfig, exportSetup, latePosting, type ExportSetup } from '../helpers/export.js';
@@ -58,7 +58,15 @@ describe('apaleo-bmd export', () => {
     const manifest = read(setup, 'manifest.json');
     expectGolden('manifest.json', manifest);
     const [entry] = manifestOf(setup).files;
-    expect(entry).toMatchObject({ file: FILE, status: 'current', sha256: sha256(file), bodySha256: sha256(bodyOf(file)), bookings: 24 });
+    expect(entry).toMatchObject({ file: FILE, status: 'current', sha256: sha256(file), bookings: 24 });
+    expect(entry).not.toHaveProperty('bodySha256');
+    // What BMD's journal shows after the import: Konto, Gegenkonto and the tax posting, so Soll equals Haben,
+    // the sum of the gross amounts of the 24 bookings (test/posting/fixture-month.test.ts).
+    expect([entry?.sollTotal, entry?.habenTotal]).toEqual(['1828.40', '1828.40']);
+    expect(entry?.taxByRate).toEqual([
+      { ratePercent: 10, taxCents: 5_848 },
+      { ratePercent: 20, taxCents: 767 },
+    ]);
     expect(entry?.mappingSha256).toBe(sha256(readFileSync(join(setup.ctx.cwd, 'mapping-BSP.csv'))));
 
     const protocol = read(setup, PROTOCOL).toString('utf8');
@@ -139,7 +147,7 @@ describe('apaleo-bmd export', () => {
       'Totals per BMD account (Konto with Betrag, Gegenkonto with Betrag plus Steuer):',
       'Revenue and VAT per rate',
       'Deposits and their VAT per rate',
-      'City tax: 6.40',
+      'Ortstaxe and other guest levies (apaleo city tax): 6.40',
       'Payments per clearing account:',
       'Deposits: received 395.00, released 395.00, of it refunded 10.00',
       'Accounts receivable (Sammeldebitor, Soll positive): 115.00',
@@ -151,6 +159,22 @@ describe('apaleo-bmd export', () => {
     }
     expect(out).toContain('  10 %: net 584.82, tax 58.48, gross 643.30, apaleo VAT 58.48, difference 0.00 (apaleo precise 58.48181818)');
     expect(out).toContain("Each booking carries apaleo's tax of its line, rounded to the cent");
+    // The import block, before the totals.
+    const block = out.indexOf('Import into BMD');
+    expect(block).toBeGreaterThan(0);
+    expect(block).toBeLessThan(out.indexOf('Totals per BMD account'));
+    for (const line of [
+      `  File: ${FILE}`,
+      '  Lines: 24 bookings (Satzart 0) after the header line',
+      '  Dialect: ntcs (BMD NTCS)',
+      '  Buchungssymbole: HO',
+      '  Belegnummern: 090100001 to 090100024',
+      '  verbuchkz A, gegenbuchkz E: BMD creates the Gegenbuchung and the tax posting itself',
+      '  Steuercodes: 1 (10 %, 20 %)',
+      '  Account lengths: Sachkonten 4, Personenkonten 6',
+    ]) {
+      expect(out).toContain(`\n${line}\n`);
+    }
     expect(out).toContain(`File: a real run writes exports/BSP/2026-09/${FILE}`);
     expect(out).toContain('Result: dry run, nothing written');
     expect(readdirSync(setup.ctx.cwd).sort()).toEqual(['apaleo-bmd.config.yaml', 'mapping-BSP.csv']);
@@ -187,7 +211,7 @@ describe('re-running an export', () => {
     const out = setup.ctx.out();
     expect(out).toContain('E-FILE-EXISTS');
     expect(out).toContain('A BMD Buchungsimport is not idempotent');
-    expect(out).toContain('If the Kanzlei has imported the old file, it must first delete or reverse those bookings in BMD NTCS');
+    expect(out).toContain('If the Kanzlei has already imported the old file, it must first delete the imported bookings of that file in BMD NTCS');
     expect(out).toContain('--overwrite');
     expect(read(setup, FILE)).toEqual(before);
   });
@@ -279,6 +303,7 @@ describe('re-running an export', () => {
     const setup = await exportedOnce();
     expect(await runCli(['export', '--from', '2026-09-20', '--to', '2026-09-30', '--property', BSP], setup.ctx)).toBe(1);
     expect(setup.ctx.out()).toContain('E-PERIOD-OVERLAP');
+    expect(setup.ctx.out()).toContain(`${join(folder(setup), FILE)} already covers some of the days 2026-09-20 to 2026-09-30`);
     expect(setup.ctx.out()).toContain('Importing both files would book those days twice in BMD NTCS');
     expect(readdirSync(folder(setup))).toHaveLength(3);
   });
@@ -294,7 +319,7 @@ describe('re-running an export', () => {
     expect(await runCli(['export', '--month', '2026-09', '--property', BSP], setup.ctx)).toBe(1);
     const refused = setup.ctx.out().slice(start);
     expect(refused).toContain('E-FILE-EXISTS');
-    expect(refused).toContain('A change of bmd.dialect also gives every line another date format');
+    expect(refused).toContain('A change of bmd.dialect or bmd.buchsymbol also changes every line');
     expect(refused).not.toContain('unchanged exports');
     expect(read(setup, FILE)).toEqual(old);
 
@@ -302,6 +327,45 @@ describe('re-running an export', () => {
     expect(setup.ctx.out()).toContain('the previous file was kept as .replaced-*.csv');
     expect(lines(read(setup, FILE))[0]).toMatch(/^satzart;konto;gkto;/);
     expect(manifestOf(setup).files.map((e) => e.status)).toEqual(['replaced', 'current']);
+  });
+
+  it('refuses a re-run after a change of bmd.buchsymbol, and with --overwrite the new lines carry the new symbol', async () => {
+    const setup = await exportedOnce();
+    const configPath = join(setup.ctx.cwd, 'apaleo-bmd.config.yaml');
+    writeFileSync(configPath, readFileSync(configPath, 'utf8').replace('  buchsymbol: HO\n', '  buchsymbol: HX\n'));
+    const old = read(setup, FILE);
+
+    const start = setup.ctx.out().length;
+    expect(await runCli(['export', '--month', '2026-09', '--property', BSP], setup.ctx)).toBe(1);
+    const refused = setup.ctx.out().slice(start);
+    expect(refused).toContain('E-FILE-EXISTS');
+    expect(refused).toContain('bmd.buchsymbol');
+    expect(read(setup, FILE)).toEqual(old);
+
+    expect(await runCli(['export', '--month', '2026-09', '--property', BSP, '--overwrite'], setup.ctx)).toBe(0);
+    const rows = lines(read(setup, FILE)).slice(1, -1);
+    expect(rows).toHaveLength(24);
+    expect(rows.every((row) => row.split(';')[6] === 'HX')).toBe(true);
+    expect(lines(old).slice(1, -1).every((row) => row.split(';')[6] === 'HO')).toBe(true);
+    expect(read(setup, PROTOCOL).toString('utf8')).toContain('  Buchungssymbole: HX\n');
+  });
+
+  it('reads a manifest of an earlier version with fields it does not know, and keeps them', async () => {
+    const setup = await exportedOnce();
+    const manifestPath = join(folder(setup), 'manifest.json');
+    const [entry] = manifestOf(setup).files;
+    writeFileSync(manifestPath, JSON.stringify({ files: [{ ...entry, taxByRate: undefined, bodySha256: 'from an earlier version', futureField: 1 }] }));
+    expect(await runCli(['export', '--month', '2026-09', '--property', BSP], setup.ctx)).toBe(0);
+    expect(setup.ctx.out()).toContain(`unchanged exports/BSP/2026-09/${FILE}`);
+    expect(setup.ctx.out()).not.toContain('N-COMPANIONS-REPAIRED');
+
+    latePosting(setup.data);
+    expect(await runCli(['export', '--month', '2026-09', '--property', BSP, '--overwrite'], setup.ctx)).toBe(0);
+    const [replaced, current] = manifestOf(setup).files;
+    expect(replaced).toMatchObject({ status: 'replaced', bodySha256: 'from an earlier version', futureField: 1 });
+    expect(current).toMatchObject({ file: FILE, status: 'current', bookings: 25 });
+    expect(current).not.toHaveProperty('bodySha256');
+    expect(current?.taxByRate?.[0]).toEqual({ ratePercent: 10, taxCents: 5_848 + 891 });
   });
 
   it('compares the whole file: the BMD file has no creation time', async () => {

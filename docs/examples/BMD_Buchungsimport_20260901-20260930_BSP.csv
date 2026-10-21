@@ -23,3 +23,5 @@ satzart;konto;gkonto;belegnr;belegdatum;buchdatum;buchsymbol;buchcode;prozent;st
 0;3200;2390;090100022;22.09.2026;22.09.2026;HO;1;10;1;150,00;15,00;Auflösung Anzahlung 10 %;;BSP-MNOPQR-1-V1;E;A
 0;2390;3209;090100023;22.09.2026;22.09.2026;HO;1;;;10,00;;Umbuchung Anzahlung 0 %;;BSP-MNOPQR-1-V1;E;A
 0;3209;2890;090100024;22.09.2026;22.09.2026;HO;1;;;10,00;;Erstattung Anzahlung 0 %;;REF-BSP-1;E;A
+0;4000;2390;090100025;25.09.2026;25.09.2026;HO;2;10;1;-50,00;-5,00;Erlös Logis 10 %;;BSP-QRSTUV-1-V1;E;A
+0;7800;2390;090100026;29.09.2026;29.09.2026;HO;1;10;1;50,00;5,00;Forderungsverlust 10 %;;BSP-QRSTUV-1-V1;E;A

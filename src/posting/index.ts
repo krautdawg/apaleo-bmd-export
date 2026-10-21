@@ -11,7 +11,7 @@ export {
   resolutionRate,
   type ReleaseRate,
 } from './release.js';
-export { bookingMovements } from './summary.js';
+export { bookingMovements, journalTotals, taxByRate } from './summary.js';
 export { bmdCheckTax, normaliseTaxes, taxFromGross } from './taxes.js';
 export {
   SKIP_REASONS,
