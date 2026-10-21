@@ -1,77 +1,81 @@
 import { describe, expect, it } from 'vitest';
-import { renderBuchungsstapel } from '../../src/datev/index.js';
-import { FIXED_CLOCK } from '../helpers/extf.js';
+import { renderBuchungsimport } from '../../src/bmd/index.js';
 import { LEDGER, post } from '../helpers/posting.js';
 
 /**
- * The Hotel Beispiel fixture period 2026-09-14 to 2026-09-22 (25 ledger lines,
- * see test/fixtures/apaleo/README.md), posted with the SKR03 fixture mapping.
- * Totals computed by hand:
+ * The Hotel Beispiel fixture period 2026-09-14 to 2026-09-22 (29 ledger lines,
+ * see test/fixtures/apaleo/README.md), posted with the EKR fixture mapping.
+ * Totals computed by hand (BMD gets net Betrag and apaleo's tax as Steuer):
  *
- * Revenue 7 % (8300): logis 100 + 100 + 100 (Müller) + 200 + 150, food 12 + 12,
- *   allowance −10 = 664.00. VAT per booking: 6.54 × 3 + 13.08 + 9.81 + 0.79 × 2
- *   − 0.65 = 43.44.
- * Revenue 19 % (8400): coffee 3 + 3, drinks 23.80 = 29.80; VAT 0.48 × 2 + 3.80 = 4.76.
- * City tax (1590): 5 × 3 = 15.00.
- * Payments: 1360 = prepayments 200 + 150, card 120 + 100 = 570.00; Kasse 1000 = 23.80.
- * Deposits (1711): received 200 + 150 = 350.00, released 200 (with taxes) +
- *   150 (from the PostPrepaymentVat pair, 9.81 = 150 × 7 / 107) = 350.00,
- *   none refunded. Deposit VAT at 7 %: 13.08 + 9.81 − 13.08 − 9.81 = 0, in
- *   DATEV and in apaleo (the fixture's taxes are whole cents, so apaleo's
- *   precise VAT is 43.44 and 4.76 on revenue too).
- * Debtor 10000: 115.00 (the accounts-receivable movement).
- * 1410 Soll: charges 143.80 (09-14) + 120 + 100 + 5 (09-15) + 200 + 150 = 718.80;
- *   Haben: allowance 10 + card 120 + cash 23.80 + AR 115 + card 100 + releases
- *   200 + 150 = 718.80: the guest folios balance to zero.
- * Skipped (unsigned): two PostPrepaymentVat lines (9.81 + 9.81 = 19.62,
- *   VAT_ACCOUNT_LINE), the 5.00 folio move (SAME_ACCOUNT). 25 − 3 = 22 bookings.
+ * Revenue 10 %: logis 98 + 98 + 220 + 165, allowance −11, food 13.20 + 13.20 +
+ *   46.90 (Müller) = 643.30; tax 8.91 + 8.91 + 20 + 15 − 1 + 1.20 + 1.20 + 4.26 =
+ *   58.48 (apaleo precise 58.48181818), net 584.82: 4000 528.18 Haben − 10 Soll,
+ *   4010 66.64.
+ * Revenue 20 % (4020, Kostenstelle 20): coffee 3.60 + 3.60, drinks 24 + 14.80 =
+ *   46.00; tax 0.60 + 0.60 + 4 + 2.47 = 7.67 (precise 7.66666667), net 38.33.
+ * Ortstaxe (3580): 3.20 × 2 = 6.40.
+ * Payments: 2890 = prepayments 220 + 165, cards 120 + 61.70, refund −10 = 556.70;
+ *   Kassa 2700 = 24.00.
+ * Deposits: 3200 received 220 + 165 = 385 and released 220 + 165 (negative
+ *   charges); 3209 parked 10 and refunded 10 to the Maestro card: received
+ *   395.00, released 395.00, of it refunded 10.00; deposit tax 20 + 15 − 20 − 15 = 0.
+ * Sammeldebitor 200000: 115.00.
+ * 2390 Soll (Betrag plus Steuer as Gegenkonto, or Betrag as Konto): charges 142.00
+ *   (09-14) + 179.70 (09-15) + 220 + 165 + the parked 10 = 716.70; Haben:
+ *   allowance 11 + payments 120 + 24 + 61.70 + AR 115 + releases 220 + 165 = 716.70.
+ * Skipped SAME_ACCOUNT (unsigned): the folio move 5.00 and the /Offset second
+ *   lines of three payments and the AR transfer (120 + 24 + 61.70 + 115) = 325.70.
+ *   29 − 5 = 24 bookings. No tax leg is in the movement model, so the balances
+ *   add up to the tax BMD books: 58.48 + 7.67 = 66.15.
  */
 describe('posting the fixture month', () => {
   const result = post(LEDGER);
 
-  it('books 22 lines, skips 3 and raises no finding', () => {
-    expect(LEDGER).toHaveLength(25);
-    expect(result.bookings).toHaveLength(22);
-    expect(result.skipped).toHaveLength(3);
+  it('books 24 lines, skips 5 and raises no finding', () => {
+    expect(LEDGER).toHaveLength(29);
+    expect(result.bookings).toHaveLength(24);
+    expect(result.skipped).toHaveLength(5);
     expect(result.findings).toEqual([]);
   });
 
   it('matches the hand-computed summary', () => {
     expect(result.summary).toEqual({
       accounts: [
-        { account: '1000', sollCents: 2_380, habenCents: 0, balanceCents: 2_380 },
-        { account: '1360', sollCents: 57_000, habenCents: 0, balanceCents: 57_000 },
-        { account: '1410', sollCents: 71_880, habenCents: 71_880, balanceCents: 0 },
-        { account: '1590', sollCents: 0, habenCents: 1_500, balanceCents: -1_500 },
-        { account: '1711', sollCents: 35_000, habenCents: 35_000, balanceCents: 0 },
-        { account: '8300', sollCents: 1_000, habenCents: 67_400, balanceCents: -66_400 },
-        { account: '8400', sollCents: 0, habenCents: 2_980, balanceCents: -2_980 },
-        { account: '10000', sollCents: 11_500, habenCents: 0, balanceCents: 11_500 },
+        { account: '2390', sollCents: 71_670, habenCents: 71_670, balanceCents: 0 },
+        { account: '2700', sollCents: 2_400, habenCents: 0, balanceCents: 2_400 },
+        { account: '2890', sollCents: 56_670, habenCents: 1_000, balanceCents: 55_670 },
+        { account: '3200', sollCents: 35_000, habenCents: 35_000, balanceCents: 0 },
+        { account: '3209', sollCents: 1_000, habenCents: 1_000, balanceCents: 0 },
+        { account: '3580', sollCents: 0, habenCents: 640, balanceCents: -640 },
+        { account: '4000', sollCents: 1_000, habenCents: 52_818, balanceCents: -51_818 },
+        { account: '4010', sollCents: 0, habenCents: 6_664, balanceCents: -6_664 },
+        { account: '4020', sollCents: 0, habenCents: 3_833, balanceCents: -3_833 },
+        { account: '200000', sollCents: 11_500, habenCents: 0, balanceCents: 11_500 },
       ],
       revenueByRate: [
-        { ratePercent: 7, grossCents: 66_400, vatCents: 4_344, apaleoVat: '43.44' },
-        { ratePercent: 19, grossCents: 2_980, vatCents: 476, apaleoVat: '4.76' },
+        { ratePercent: 10, netCents: 58_482, vatCents: 5_848, grossCents: 64_330, apaleoVat: '58.48181818' },
+        { ratePercent: 20, netCents: 3_833, vatCents: 767, grossCents: 4_600, apaleoVat: '7.66666667' },
       ],
-      depositVatByRate: [{ ratePercent: 7, grossCents: 0, vatCents: 0, apaleoVat: '0' }],
-      cityTaxCents: 1_500,
+      depositVatByRate: [
+        { ratePercent: 0, netCents: 0, vatCents: 0, grossCents: 0, apaleoVat: '0' },
+        { ratePercent: 10, netCents: 0, vatCents: 0, grossCents: 0, apaleoVat: '0' },
+      ],
+      cityTaxCents: 640,
       payments: [
-        { account: '1000', cents: 2_380 },
-        { account: '1360', cents: 57_000 },
+        { account: '2700', cents: 2_400 },
+        { account: '2890', cents: 55_670 },
       ],
-      deposits: { receivedCents: 35_000, releasedCents: 35_000, refundedCents: 0 },
+      deposits: { receivedCents: 39_500, releasedCents: 39_500, refundedCents: 1_000 },
       accountsReceivableCents: 11_500,
-      skipped: [
-        { reason: 'VAT_ACCOUNT_LINE', lines: 2, grossCents: 1_962 },
-        { reason: 'SAME_ACCOUNT', lines: 1, grossCents: 500 },
-      ],
+      skipped: [{ reason: 'SAME_ACCOUNT', lines: 5, grossCents: 32_570 }],
       roundingCents: 0,
       findings: [],
     });
     const balance = result.summary.accounts.reduce((sum, account) => sum + account.balanceCents, 0);
-    expect(balance).toBe(0);
+    expect(balance).toBe(5_848 + 767);
   });
 
-  it('keeps every apaleo line traceable: booked or skipped, each exactly once', () => {
+  it('keeps every apaleo line traceable: booked or skipped', () => {
     const booked = result.bookings.flatMap((b) => b.sourceEntryNumbers);
     const skipped = result.skipped.map((s) => s.line.sourceEntryNumber);
     expect([...booked, ...skipped].sort()).toEqual(LEDGER.map((line) => line.sourceEntryNumber).sort());
@@ -81,20 +85,10 @@ describe('posting the fixture month', () => {
     expect(JSON.stringify(result.bookings)).not.toContain('Müller');
   });
 
-  it('renders through the s02 writer without validation errors', () => {
-    const header = {
-      beraternummer: 1_234_567,
-      mandantennummer: 42,
-      wjBeginn: '2026-01-01',
-      sachkontenlaenge: 4,
-      datumVom: '2026-09-01',
-      datumBis: '2026-09-30',
-      sachkontenrahmen: '03',
-      erzeugtAm: FIXED_CLOCK,
-    } as const;
-    const rendered = renderBuchungsstapel({ header, bookings: result.bookings });
-    expect(rendered.text.split('\r\n')).toHaveLength(2 + 22 + 1);
-    expect(rendered.warnings).toEqual([]);
-    expect(rendered.text).toContain('"Zahlung Gastforderung"');
+  it('renders through the BMD writer without validation errors or notes', () => {
+    const rendered = renderBuchungsimport(result.bookings, { from: '2026-09-01', to: '2026-09-30', propertyId: 'BSP', sachkontenlaenge: 4, personenkontenlaenge: 6 });
+    expect(rendered.text.split('\r\n')).toHaveLength(1 + 24 + 1);
+    expect(rendered.notes).toEqual([]);
+    expect(rendered.text).toContain(';Zahlung Mastercard;');
   });
 });

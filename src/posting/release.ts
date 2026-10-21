@@ -1,12 +1,12 @@
 import type { ChartIndex } from '../core/chart.js';
 import type { AccountRef, LedgerLine } from '../core/source.js';
 import { VAT_ACCOUNT_TYPES, lineRate } from '../mapping/index.js';
-import { datevVat, normaliseTaxes, taxPercents } from './taxes.js';
+import { normaliseTaxes, taxFromGross, taxPercents } from './taxes.js';
 
 /**
- * Deposit releases without `taxes[]` (design decision 3a). The release (debit
- * Liabilities, credit Receivables) must reverse the VAT on the versteuerte-
- * Anzahlungen Automatikkonto, so it needs a rate although apaleo sent none. The
+ * Deposit releases without `taxes[]` (design decision 4). The release (debit
+ * Liabilities, credit Receivables) must reverse the VAT on the deposit account,
+ * so it needs a rate and a tax amount although apaleo sent none. The
  * rate comes from the `PostPrepaymentVat` line(s) of the same business date and
  * reference that reverse the VAT apaleo booked on the deposit, else from the VAT
  * of the Liabilities account (or its parent) in the chart. Never 0 % by default.
@@ -14,7 +14,7 @@ import { datevVat, normaliseTaxes, taxPercents } from './taxes.js';
  * Other untaxed lines on a Liabilities account (a prepayment received or a
  * deposit refunded without `taxes[]`) take the rate of a matching
  * `PostPrepaymentVat` line too: when apaleo booked or reversed VAT for them,
- * booking them on the 0 % deposit row would leave the VAT open in DATEV, or
+ * booking them on the 0 % deposit row would leave the VAT open in BMD, or
  * never declare it. Without such a line they keep rate 0 (no chart fallback).
  */
 
@@ -27,7 +27,7 @@ export type ReleaseRate =
       pairEntries: string[];
       /** VAT apaleo reverses on the pair lines, with the sign of the release. */
       pairVatCents: number;
-      /** VAT DATEV will compute on all deposit lines of the same day, reference and direction, signed like `pairVatCents`. */
+      /** The tax computed from the gross of all deposit lines of the same day, reference and direction, signed like `pairVatCents`. */
       releaseVatCents: number;
       /** Entry numbers of those lines; the amount check covers them together. */
       releaseEntries: string[];
@@ -82,9 +82,9 @@ function reversedVat(line: LedgerLine): number {
 
 const groupKey = (line: LedgerLine) => `${line.businessDate}\u0000${line.reference}\u0000${depositDirection(line)}`;
 
-/** The rates the tool knows: 7 % and 19 % plus every positive VAT rate in the chart. */
+/** The rates the tool knows: the Austrian 10 %, 13 % and 20 % plus every positive VAT rate in the chart. */
 function knownRates(chart: ChartIndex | undefined): number[] {
-  const rates = new Set<number>([7, 19]);
+  const rates = new Set<number>([10, 13, 20]);
   for (const account of chart?.accounts ?? []) if (account.vat && account.vat.percent > 0) rates.add(account.vat.percent);
   return [...rates].sort((a, b) => a - b);
 }
@@ -123,7 +123,7 @@ export function inferReleaseRates(lines: readonly LedgerLine[], chart: ChartInde
           rate,
           pairEntries: pairLines.map((pair) => pair.sourceEntryNumber),
           pairVatCents,
-          releaseVatCents: releases.reduce((sum, release) => sum + depositDirection(release) * Math.abs(datevVat(release.grossCents, rate)), 0),
+          releaseVatCents: releases.reduce((sum, release) => sum + depositDirection(release) * Math.abs(taxFromGross(release.grossCents, rate)), 0),
           releaseEntries: releases.map((release) => release.sourceEntryNumber),
         });
         continue;
@@ -147,7 +147,7 @@ function rateOfPair(
   const percents = taxPercents(pairLines.flatMap((line) => normaliseTaxes(line.taxes)));
   if (percents.length > 1) return { problem: `the PostPrepaymentVat lines ${entries} carry more than one rate (${percents.join(' %, ')} %)` };
   if (percents.length === 1) return { rate: percents[0] as number };
-  const matching = knownRates(chart).filter((rate) => Math.abs(datevVat(releaseGross, rate) - pairVatCents) <= 1);
+  const matching = knownRates(chart).filter((rate) => Math.abs(taxFromGross(releaseGross, rate) - pairVatCents) <= 1);
   if (matching.length === 1) return { rate: matching[0] as number };
   return { problem: `the PostPrepaymentVat lines ${entries} carry no rate, and their amount matches no known rate` };
 }
@@ -188,6 +188,16 @@ export function resolutionRate(line: LedgerLine, releases: ReadonlyMap<LedgerLin
   const release = releases.get(line);
   if (!release) return lineRate(line);
   return release.kind === 'unknown' ? undefined : release.rate;
+}
+
+/**
+ * The unsigned tax of an untaxed deposit line booked at an inferred rate: the
+ * VAT apaleo moved on its `PostPrepaymentVat` line when it is the only line of
+ * the pair, else the tax contained in its gross at the rate.
+ */
+export function inferredTaxCents(line: LedgerLine, release: Extract<ReleaseRate, { kind: 'pair' | 'chart' }>): number {
+  if (release.kind === 'pair' && release.releaseEntries.length === 1) return Math.abs(release.pairVatCents);
+  return Math.abs(taxFromGross(line.grossCents, release.rate));
 }
 
 /** `resolutionRate` over the releases of `lines`, to pass as `rateOf` to `checkCoverage`. */

@@ -1,21 +1,20 @@
+import type { BmdBooking, BmdDialect } from '../bmd/types.js';
 import type { PostingConfig } from '../core/config.js';
 import type { Finding } from '../core/findings.js';
 import type { LedgerLine } from '../core/source.js';
-import type { ExtfBooking } from '../datev/types.js';
-import type { Skr } from '../mapping/index.js';
 
-/** One DATEV booking, with the source entries it came from for traceability. */
-export interface PostedBooking extends ExtfBooking {
+/** One BMD booking, with the source entries it came from for traceability. */
+export interface PostedBooking extends BmdBooking {
   sourceEntryNumbers: string[];
 }
 
 /**
  * Why a ledger line produced no booking although nothing is wrong with it:
  * - `VAT_ACCOUNT_LINE`: a side is an apaleo Vat or VatOnLiabilities account;
- *   DATEV computes that VAT itself from the Automatikkonten or BU keys.
+ *   BMD books the tax from the `steuer` field of the revenue or deposit line.
  * - `ZERO_AMOUNT`: the gross amount is 0.
- * - `SAME_ACCOUNT`: both sides map to the same DATEV account (for example a
- *   move between two guest folios).
+ * - `SAME_ACCOUNT`: both sides map to the same BMD account (for example a
+ *   move between two guest folios, or the `/Offset` line of a payment).
  */
 export const SKIP_REASONS = ['VAT_ACCOUNT_LINE', 'ZERO_AMOUNT', 'SAME_ACCOUNT'] as const;
 export type SkipReason = (typeof SKIP_REASONS)[number];
@@ -26,14 +25,18 @@ export interface SkippedLine {
 }
 
 export interface PostingOptions extends PostingConfig {
-  /** Length of DATEV G/L account numbers; needed to recognise Automatikkonten. */
+  /** The Steuercode in the fix hints of `E-UNMAPPED`. */
+  dialect: BmdDialect;
+  /** Scales the template's example accounts in the fix hints of `E-UNMAPPED`. */
   sachkontenlaenge: number;
-  /** The Mandant's chart of accounts; decides which accounts are Automatikkonten. */
-  skr: Skr;
+  /** The property's Buchungssymbol. */
+  buchsymbol: string;
+  /** The Buchungssymbol of lines without VAT side that have a Payments side. */
+  buchsymbolZahlung: string;
 }
 
-/** Soll and Haben of one DATEV account over all bookings. Balance is Soll minus Haben. */
-export interface DatevAccountTotal {
+/** Soll and Haben of one BMD account over all bookings (movement model). Balance is Soll minus Haben. */
+export interface BmdAccountTotal {
   account: string;
   sollCents: number;
   habenCents: number;
@@ -41,22 +44,23 @@ export interface DatevAccountTotal {
 }
 
 /**
- * Revenue or deposits booked at one DATEV VAT rate, signed (allowances and
- * releases reduce it), with the VAT DATEV will compute booking by booking and
- * the precise VAT apaleo charged on the same lines.
+ * Revenue or deposits booked at one rate, signed as owed (allowances and
+ * releases reduce it): net, tax and gross as passed to BMD, and the precise VAT
+ * apaleo charged on the same lines.
  */
 export interface VatTotal {
   ratePercent: number;
-  grossCents: number;
-  /** Sum of DATEV's VAT per booking. */
+  netCents: number;
+  /** Sum of `steuer` of the bookings. */
   vatCents: number;
+  grossCents: number;
   /** Sum of apaleo's precise taxes, as decimal text. */
   apaleoVat: string;
 }
 
 export type RevenueTotal = VatTotal;
 
-/** Payments received on one DATEV clearing account, signed (refunds reduce it). */
+/** Payments received on one BMD clearing account, signed (refunds reduce it). */
 export interface PaymentTotal {
   account: string;
   cents: number;
@@ -76,7 +80,7 @@ export interface FindingCount {
 
 /** Totals of one posting run, all in cents. */
 export interface PostingSummary {
-  accounts: DatevAccountTotal[];
+  accounts: BmdAccountTotal[];
   revenueByRate: VatTotal[];
   /** Deposits (Liabilities) per VAT rate: received minus released. */
   depositVatByRate: VatTotal[];
@@ -85,10 +89,10 @@ export interface PostingSummary {
   payments: PaymentTotal[];
   /** Classified by side and sign (`depositMovement`), unsigned; refunds (paid back via a payment) are part of the released amount. */
   deposits: { receivedCents: number; releasedCents: number; refundedCents: number };
-  /** Net movement on accounts receivable (collective debtor): debits positive. */
+  /** Net movement on accounts receivable (Sammeldebitor): debits positive. */
   accountsReceivableCents: number;
   skipped: SkippedTotal[];
-  /** Sum of the one-cent differences (DATEV's VAT minus apaleo's) reported as `W-VAT-ROUNDING`. */
+  /** Sum of the one-cent differences (BMD's check value minus `steuer`) reported as `W-VAT-ROUNDING`. */
   roundingCents: number;
   findings: FindingCount[];
 }
@@ -100,8 +104,9 @@ export interface PostingResult {
   findings: Finding[];
   summary: PostingSummary;
   /**
-   * Per VAT rate, how many one-cent differences the run reported as
-   * `W-VAT-ROUNDING`. The plausibility check allows that many cents at that
+   * Per VAT rate, how many one-cent differences between the booked tax and
+   * apaleo's tax the run reported (`W-VAT-ROUNDING` on a deposit line whose
+   * tax was computed). The plausibility check allows that many cents at that
    * rate only.
    */
   vatRoundingByRate: ReadonlyMap<number, number>;

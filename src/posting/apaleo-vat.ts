@@ -2,14 +2,14 @@ import { formatCents, negateDecimal } from '../core/money.js';
 import type { LedgerLine } from '../core/source.js';
 import { VAT_RELEVANT_TYPES } from '../mapping/index.js';
 import type { ReleaseRate } from './release.js';
-import { datevVat, normaliseTaxes } from './taxes.js';
+import { normaliseTaxes, taxFromGross } from './taxes.js';
 
 /** VAT apaleo charged on a line at one rate, signed as owed: positive when the line credits its revenue or deposit side. */
 export interface ApaleoVat {
   rate: number;
   /** apaleo's per-line tax rounded to cents (what the cent-exact checks compare). */
   cents: number;
-  /** apaleo's precise tax (what the protocol shows beside DATEV's VAT). */
+  /** apaleo's precise tax (what the protocol shows beside the tax of the bookings). */
   precise: string;
 }
 
@@ -27,7 +27,7 @@ export function vatDirection(line: LedgerLine): number {
  * The VAT apaleo charged on a booked line: its taxes, or for an untaxed deposit
  * line the VAT apaleo moved for it. A `PostPrepaymentVat` pair counts once, on
  * the first deposit line it covers; a rate from the chart has no amount in
- * apaleo, so DATEV's VAT stands in for it.
+ * apaleo, so the tax contained in the gross stands in for it.
  */
 export function apaleoVatOf(line: LedgerLine, release: ReleaseRate | undefined): ApaleoVat[] {
   const direction = vatDirection(line);
@@ -41,6 +41,6 @@ export function apaleoVatOf(line: LedgerLine, release: ReleaseRate | undefined):
   }
   const fixed = (rate: number, cents: number): ApaleoVat[] => [{ rate, cents, precise: formatCents(cents) }];
   if (release?.kind === 'pair') return release.releaseEntries[0] === line.sourceEntryNumber ? fixed(release.rate, -release.pairVatCents) : [];
-  if (release?.kind === 'chart') return fixed(release.rate, direction * datevVat(line.grossCents, release.rate));
+  if (release?.kind === 'chart') return fixed(release.rate, direction * taxFromGross(line.grossCents, release.rate));
   return [];
 }

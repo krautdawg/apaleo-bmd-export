@@ -1,15 +1,18 @@
+import { TEXT_MAX_LENGTH } from '../bmd/format.js';
 import type { ChartIndex } from '../core/chart.js';
+import { depositMovement } from '../core/deposits.js';
 import type { PostingConfig } from '../core/config.js';
 import type { AccountRef, LedgerLine } from '../core/source.js';
-import type { MappingRow } from '../mapping/index.js';
+import { KOST_TYPES, type MappingRow } from '../mapping/index.js';
 
-/** The German label of an apaleo command, the first word of the Buchungstext. */
+/**
+ * The German label of an apaleo command, the first word of the Buchungstext
+ * of a line that is neither revenue, deposit, payment, debtor transfer nor bad
+ * debt (for example a move between two guest folios).
+ */
 const COMMAND_LABELS: Readonly<Record<string, string>> = {
-  PostCharge: 'Erlös',
-  PostPayment: 'Zahlung',
-  PostPrepayment: 'Anzahlung',
   MoveLineItem: 'Umbuchung',
-  PostToAccountsReceivables: 'Forderung',
+  PostToAccountsReceivables: 'Forderung an Debitor',
   PostToLossOfAccountsReceivables: 'Forderungsverlust',
   PostPrepaymentVat: 'USt Anzahlung',
 };
@@ -18,7 +21,7 @@ const DEFAULT_COMMAND_LABEL = 'Buchung';
 /**
  * Fixed labels for guest, booking and per-reservation accounts: their names may
  * contain the guest's name (a folio called "Müller, Hans"), which must never
- * reach the DATEV file.
+ * reach the BMD file.
  */
 const GUEST_ACCOUNT_LABELS: Readonly<Record<string, string>> = {
   Receivables: 'Gastforderung',
@@ -26,7 +29,42 @@ const GUEST_ACCOUNT_LABELS: Readonly<Record<string, string>> = {
   Liabilities: 'Anzahlung Gast',
 };
 
-const BUCHUNGSTEXT_LENGTH = 60;
+/** apaleo's standard revenue groups (the parent of `RevenueAccommodation_Reduced:7.00`). */
+const REVENUE_GROUPS: Readonly<Record<string, string>> = {
+  RevenueAccommodation: 'Logis',
+  RevenueFoodAndBeverages: 'Speisen und Getränke',
+  RevenueNoShow: 'No-Show',
+  RevenueCancellationFees: 'Stornogebühr',
+  RevenueOther: 'Sonstige Erlöse',
+};
+
+/**
+ * apaleo's city tax and levy types: money the hotel collects for the
+ * Gemeinde, not revenue, so no `Erlös` and no English account name.
+ */
+const LEVY_LABELS: Readonly<Record<string, string>> = {
+  CityTaxes: 'Ortstaxe',
+  SecondCityTax: 'Ortstaxe 2',
+  GuestLevies: 'Gästeabgabe',
+};
+
+/** apaleo's generic English payment-method names; card brands keep their name. */
+const PAYMENT_LABELS: Readonly<Record<string, string>> = {
+  'Cash Payment': 'Bar',
+  Cash: 'Bar',
+  'Cash and ATM': 'Bar',
+  'Bank Transfer': 'Überweisung',
+  'Direct Debit': 'Lastschrift',
+  'Voucher Payment': 'Gutschein',
+  'Other Payment': 'Sonstige',
+  'Credit Card Payment': 'Kreditkarte',
+  'Online banking': 'Onlinebanking',
+  'Open Invoice': 'Offene Rechnung',
+  Cheque: 'Scheck',
+};
+const PAYMENT_SUFFIX = / (?:Credit Card Payment|Card Payment|Payment)$/;
+const BRAND_SPELLING: Readonly<Record<string, string>> = { MasterCard: 'Mastercard', GiroCard: 'Girocard' };
+
 
 export function commandLabel(command: string): string {
   return COMMAND_LABELS[command] ?? DEFAULT_COMMAND_LABEL;
@@ -53,27 +91,87 @@ export function accountLabel(ref: AccountRef, chart: ChartIndex): string {
 }
 
 /**
- * `<command label> <account label>`, cut to the 60 characters DATEV allows. When
- * the account label already starts with the command label (`Anzahlung Gast` on a
- * prepayment), it stands alone.
+ * The German label of a revenue account: apaleo's standard groups by their
+ * German name and the rate (`Logis 13 %`), other accounts by their own name
+ * without apaleo's English prefix `Revenues `.
  */
-export function buchungstext(line: LedgerLine, labelled: AccountRef, chart: ChartIndex): string {
-  const command = commandLabel(line.command);
-  const account = accountLabel(labelled, chart);
-  const text = account.startsWith(`${command} `) ? account : `${command} ${account}`;
-  return text.slice(0, BUCHUNGSTEXT_LENGTH).trim();
+export function revenueLabel(ref: AccountRef, chart: ChartIndex, rate: number): string {
+  const numbers = [ref.number.split(/[_:]/)[0] ?? ref.number];
+  let parent = chart.find(ref.number, ref.type)?.parentNumber ?? ref.parentNumber;
+  while (parent !== undefined && !numbers.includes(parent)) {
+    numbers.push(parent);
+    parent = chart.find(parent, ref.type)?.parentNumber;
+  }
+  const group = numbers.map((number) => REVENUE_GROUPS[number]).find((label) => label !== undefined);
+  return group ? `${group} ${rate} %` : ref.name.replace(/^Revenues\s+/, '');
 }
 
-/** The receipt number when configured and present, else the reference. Never an account name. */
-export function belegfeld1(line: LedgerLine, mode: PostingConfig['belegfeld1']): string {
+/** A payment method in German: generic names translated, card brands kept (`Visa Debit Card Payment` → `Visa Debit`). */
+export function paymentLabel(name: string): string {
+  const fixed = PAYMENT_LABELS[name];
+  if (fixed) return fixed;
+  const label = name.replace(/^Payment by /, '').replace(PAYMENT_SUFFIX, '');
+  return Object.entries(BRAND_SPELLING).reduce((text, [from, to]) => text.replace(from, to), label) || 'Zahlung';
+}
+
+/**
+ * The Buchungstext (design decision 14), German only and cut to the 40
+ * characters BMD reads. It names the business case from the command, the
+ * sign and the account types, then a German label:
+ * - revenue: `Erlös` (credited and positive, or debited and negative) or
+ *   `Erlösminderung` + revenue label;
+ * - city tax and levies: `Ortstaxe`, `Ortstaxe 2` or `Gästeabgabe`
+ *   (`Korrektur ` before it when reduced), with the rate if not 0;
+ * - deposits, by side and sign: `Anzahlung` (via a payment), `Umbuchung
+ *   Anzahlung` (from a folio), `Auflösung Anzahlung` (against a folio),
+ *   `Erstattung Anzahlung` (paid back), each with the deposit's VAT rate;
+ * - payments: `Zahlung` or `Erstattung` + payment label;
+ * - `Forderung an Debitor`, `Forderungsverlust` with the rate;
+ * - else the command label + `accountLabel` of `labelled`.
+ * `rate` is the VAT rate of the booking (0 without VAT).
+ */
+export function buchungstext(line: LedgerLine, labelled: AccountRef, chart: ChartIndex, rate: number): string {
+  return [...businessText(line, labelled, chart, rate)].slice(0, TEXT_MAX_LENGTH).join('').trim();
+}
+
+function businessText(line: LedgerLine, labelled: AccountRef, chart: ChartIndex, rate: number): string {
+  const side = (type: string) =>
+    line.credit.type === type ? { ref: line.credit, credited: true } : line.debit.type === type ? { ref: line.debit, credited: false } : undefined;
+  const positive = line.grossCents > 0;
+  const revenue = side('Revenues');
+  if (revenue) return `${revenue.credited === positive ? 'Erlös' : 'Erlösminderung'} ${revenueLabel(revenue.ref, chart, rate)}`;
+  const levy = Object.keys(LEVY_LABELS).map(side).find((found) => found !== undefined);
+  if (levy) {
+    const label = `${LEVY_LABELS[levy.ref.type] ?? ''}${rate === 0 ? '' : ` ${rate} %`}`;
+    return levy.credited === positive ? label : `Korrektur ${label}`;
+  }
+  const deposit = depositMovement(line);
+  if (deposit) {
+    const label = deposit.direction === 'increase'
+      ? (deposit.viaPayment ? 'Anzahlung' : 'Umbuchung Anzahlung')
+      : (deposit.viaPayment ? 'Erstattung Anzahlung' : 'Auflösung Anzahlung');
+    return `${label} ${rate} %`;
+  }
+  const payment = side('Payments');
+  if (payment) return `${payment.credited === positive ? 'Erstattung' : 'Zahlung'} ${paymentLabel(payment.ref.name)}`;
+  if (side('AccountsReceivable') && side('Receivables')) return 'Forderung an Debitor';
+  if (side('LossOfAccountsReceivable')) return `Forderungsverlust ${rate} %`;
+  const command = commandLabel(line.command);
+  const account = accountLabel(labelled, chart);
+  return account.startsWith(`${command} `) ? account : `${command} ${account}`;
+}
+
+/** extbelegnr: the receipt number when configured and present, else the reference. Never an account name. */
+export function extbelegnr(line: LedgerLine, mode: PostingConfig['extbelegnr']): string {
   const receipt = line.receipt.number.trim();
   return mode === 'receipt' && receipt !== '' ? receipt : line.reference;
 }
 
-/** KOST1 and KOST2: each the first non-empty value of the rows, in the order given. */
-export function costCentres(rows: readonly MappingRow[]): { kost1?: string; kost2?: string } {
-  const first = (field: 'kost1' | 'kost2') => rows.map((row) => row[field]).find((value) => value !== '');
-  const kost1 = first('kost1');
-  const kost2 = first('kost2');
-  return { ...(kost1 === undefined ? {} : { kost1 }), ...(kost2 === undefined ? {} : { kost2 }) };
+/**
+ * The Kostenstelle of a booking (design decision 7): the `kost` of the `konto`
+ * row, only when that row is a revenue or bad-debt row. On every other booking
+ * BMD would read `kost` as the Belegnummer of the invoice a payment clears.
+ */
+export function kostOf(kontoRow: MappingRow): string | undefined {
+  return KOST_TYPES.has(kontoRow.apaleoType) && kontoRow.kost !== '' ? kontoRow.kost : undefined;
 }

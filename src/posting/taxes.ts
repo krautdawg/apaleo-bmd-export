@@ -18,19 +18,33 @@ export function taxTotal(taxes: readonly LedgerTax[]): number {
   return taxes.reduce((sum, tax) => sum + tax.amountCents, 0);
 }
 
+/** `numerator / denominator` rounded half away from zero, for non-negative BigInts. */
+function roundedQuotient(numerator: bigint, denominator: bigint): number {
+  let quotient = numerator / denominator;
+  if (2n * (numerator - quotient * denominator) >= denominator) quotient += 1n;
+  return Number(quotient);
+}
+
+/** A rate in hundredths of a percent: 4.9 → 490n. Rates have at most two decimals. */
+const hundredths = (ratePercent: number) => BigInt(Math.round(ratePercent * 100));
+
 /**
- * The VAT DATEV computes from a gross amount in cents at a rate:
- * `gross × rate / (100 + rate)`, rounded half away from zero. Exact integer
- * arithmetic (rates are taken to two decimals), so no floating-point noise can
- * move a half cent. The result has the sign of `grossCents`.
+ * The VAT contained in a gross amount in cents at a rate: `gross × rate / (100 + rate)`,
+ * rounded half away from zero, with the sign of `grossCents`. Exact integer
+ * arithmetic, so no floating-point noise can move a half cent. The tax of a
+ * deposit release without `taxes[]` and with a chart rate only (design decision 4).
  */
-export function datevVat(grossCents: number, ratePercent: number): number {
-  const rate = BigInt(Math.round(ratePercent * 100));
-  const gross = BigInt(Math.abs(grossCents));
-  const numerator = gross * rate;
-  const denominator = 10_000n + rate;
-  let vat = numerator / denominator;
-  if (2n * (numerator - vat * denominator) >= denominator) vat += 1n;
-  const cents = Number(vat);
+export function taxFromGross(grossCents: number, ratePercent: number): number {
+  const rate = hundredths(ratePercent);
+  const cents = roundedQuotient(BigInt(Math.abs(grossCents)) * rate, 10_000n + rate);
   return grossCents < 0 && cents !== 0 ? -cents : cents;
+}
+
+/**
+ * BMD's own check of a booking: the tax on the net amount, `round(|betrag| × rate / 100)`,
+ * unsigned. It may differ by one cent from apaleo's tax rounded on its own
+ * (`W-VAT-ROUNDING`).
+ */
+export function bmdCheckTax(betragCents: number, ratePercent: number): number {
+  return roundedQuotient(BigInt(Math.abs(betragCents)) * hundredths(ratePercent), 10_000n);
 }
