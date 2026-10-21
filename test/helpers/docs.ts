@@ -7,9 +7,9 @@ import { configSchema } from '../../src/core/config.js';
 
 /**
  * The docs consistency rules (s08 design decision 5, extended in s09 design
- * decision 7). Each check takes the
- * text of one Markdown file and returns one problem per stale mention, naming
- * the file, so a failing test says exactly what to fix.
+ * decision 7 and for Austria in b08 design decisions 1 and 4). Each check takes
+ * the text of one Markdown file and returns one problem per stale mention,
+ * naming the file, so a failing test says exactly what to fix.
  */
 
 export const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -112,7 +112,7 @@ export function checkCommandLines(file: string, markdown: string, commands: read
  * A backticked config key. The design's pattern plus an optional `[]` after the
  * section, so `properties[].mapping` is checked too and not silently ignored.
  */
-export const CONFIG_KEY = /^(apaleo|bmd|datev|output|posting|properties|schedule|checks)(\[\])?(\.[A-Za-z[\]]+)+$/;
+export const CONFIG_KEY = /^(apaleo|bmd|output|posting|properties|schedule|checks)(\[\])?(\.[A-Za-z[\]]+)+$/;
 
 interface SchemaDef {
   type: string;
@@ -339,4 +339,121 @@ export function checkInformalAddress(file: string, markdown: string): string[] {
     }
   }
   return problems;
+}
+
+// --- Austrian terms ------------------------------------------------------------
+
+/**
+ * Terms of German DATEV practice that have no place in an Austrian BMD doc
+ * (b08 design decision 1): a copied DATEV paragraph, a German levy or a German
+ * VAT rate. The Austrian words are Buchungsimport, Steuercode, EKR, Ortstaxe,
+ * Kanzlei and UVA.
+ */
+export const GERMAN_PRACTICE_TERMS = [
+  'Buchungsstapel',
+  'BU-Schlüssel',
+  'SKR03',
+  'SKR04',
+  'Automatikkonto',
+  'Kurtaxe',
+  'Beherbergungssteuer',
+  'Übernachtungssteuer',
+  'Beraternummer',
+  'Mandantennummer',
+  'EXTF',
+  'Belegfeld',
+  'Festschreibung',
+  'UStVA',
+  'ELSTER',
+  '19 %',
+  '7 %',
+] as const;
+
+/** The project this tool started from; the README sentence that names it may say DATEV. */
+export const DATEV_ORIGIN = 'apaleo-datev-export';
+/** The section of `docs/troubleshooting.md` with the findings that detect a copied German setup. */
+export const GERMAN_SETUP_SECTION = 'Einrichtung aus Deutschland übernommen';
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** A rate (`19 %`) must not follow a digit or decimal sign, so `4,9 %` and `17 %` pass; a word must start a word, its plural is caught too. */
+const termPattern = (term: string) =>
+  /^\d/.test(term) ? new RegExp(`(?<![\\d,.])${escapeRegExp(term).replace(' ', '\\s?')}`, 'u') : new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(term)}`, 'u');
+
+const TERM_PATTERNS = GERMAN_PRACTICE_TERMS.map((term) => ({ term, pattern: termPattern(term) }));
+const DATEV_TOKEN = /(?<![\p{L}\p{N}])DATEV(?![\p{L}\p{N}])/u;
+
+interface ProseLine {
+  /** The `## ` heading the line belongs to, or "" before the first one. */
+  section: string;
+  text: string;
+}
+
+/** The prose lines of a file, each with its `## ` section. */
+function proseLines(markdown: string): ProseLine[] {
+  let section = '';
+  return prose(markdown)
+    .split('\n')
+    .map((text) => {
+      const heading = /^##[ \t]+(.+?)[ \t]*#*[ \t]*$/.exec(text);
+      if (heading) section = heading[1] ?? '';
+      return { section, text };
+    });
+}
+
+/** The places that must name DATEV (b08 design decision 1); `CHANGELOG.md` names it throughout. */
+const ALLOWED_DATEV_MENTIONS: Record<string, (line: ProseLine) => boolean> = {
+  'README.md': ({ section, text }) => text.includes(DATEV_ORIGIN) || (section === 'Was es nicht macht' && /^- .*Zielformate/.test(text)),
+  'docs/troubleshooting.md': ({ section }) => section === GERMAN_SETUP_SECTION,
+};
+const FILES_ABOUT_THE_ORIGIN = new Set(['CHANGELOG.md']);
+
+/** Problems where a German file uses a term of German DATEV practice or names DATEV outside the allowed places. */
+export function checkGermanPracticeTerms(file: string, markdown: string): string[] {
+  if (FILES_ABOUT_THE_ORIGIN.has(file)) return [];
+  const allowed = ALLOWED_DATEV_MENTIONS[file] ?? (() => false);
+  const problems: string[] = [];
+  for (const line of proseLines(markdown)) {
+    if (allowed(line)) continue;
+    const quoted = line.text.trim();
+    for (const { term, pattern } of TERM_PATTERNS) {
+      if (pattern.test(line.text)) problems.push(`${file}: "${quoted}": "${term}" is a term of German DATEV practice; use the Austrian BMD term`);
+    }
+    if (DATEV_TOKEN.test(line.text)) problems.push(`${file}: "${quoted}": "DATEV" is named outside the origin sentence and the findings for a copied German setup`);
+  }
+  return problems;
+}
+
+// --- Compatibility claims --------------------------------------------------------
+
+/** What the docs may say only after a recorded test import (b08 design decision 4). */
+export const COMPATIBILITY_CLAIMS = ['getestet mit BMD', 'kompatibel mit BMD', 'BMD-zertifiziert'] as const;
+
+/** The rows of the `## Testimporte` table in `docs/maintainers.md` that record an import (a non-empty cell). */
+export function recordedTestImports(maintainers: string): string[][] {
+  const start = maintainers.search(/^## Testimporte$/m);
+  if (start < 0) return [];
+  const rest = maintainers.slice(start).split('\n').slice(1);
+  const end = rest.findIndex((line) => line.startsWith('## '));
+  const rows = (end < 0 ? rest : rest.slice(0, end))
+    .filter((line) => line.trim().startsWith('|'))
+    .slice(1)
+    .filter((line) => !/^\|[\s|:-]+\|$/.test(line.trim()))
+    .map((line) =>
+      line
+        .trim()
+        .slice(1, -1)
+        .split('|')
+        .map((cell) => cell.trim()),
+    );
+  return rows.filter((cells) => cells.some((cell) => cell !== ''));
+}
+
+/** Problems where a file claims BMD compatibility while no test import is recorded. */
+export function checkCompatibilityClaims(file: string, markdown: string, recordedImports: number): string[] {
+  if (recordedImports > 0) return [];
+  const text = prose(markdown).toLowerCase();
+  return COMPATIBILITY_CLAIMS.filter((claim) => text.includes(claim.toLowerCase())).map(
+    (claim) => `${file}: "${claim}" claims a tested BMD import, but docs/maintainers.md records no import under ## Testimporte`,
+  );
 }
