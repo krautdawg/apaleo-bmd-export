@@ -23,7 +23,7 @@ Die erste Zeile nennt die Felder, jede weitere ist eine Buchung. Als Beispiel di
 | `satzart` | `0` | Immer 0: eine Buchung der Finanzbuchhaltung. |
 | `konto` | `4000` | Das führende Konto. Bei Erlösen, Anzahlungen und Forderungsverlusten ist es das Konto mit Steuercode, sonst das Konto, das im Soll steht (Kassa, Schwebende Geldbewegungen, Sammeldebitor). |
 | `gkonto` | `2390` | Das Gegenkonto, hier die Verrechnung der Gastforderungen. |
-| `belegnr` | `090100002` | Monat und Tag des ersten Tags der Datei (`0901`) und ein fünfstelliger Zähler. So wiederholen sich die Belegnummern eines Hotels zwischen seinen Dateien nicht. |
+| `belegnr` | `090100002` | Monat und Tag des ersten Tags der Datei (`0901`) und ein fünfstelliger Zähler. So wiederholen sich die Belegnummern eines Hotels innerhalb eines Geschäftsjahres zwischen seinen Dateien nicht. |
 | `belegdatum`, `buchdatum` | `14.09.2026` | Der Geschäftstag in apaleo, in beiden Feldern. BMD ordnet die Buchung damit der Periode zu. |
 | `buchsymbol` | `HO` | Das Buchungssymbol aus `bmd.buchsymbol`, das die Kanzlei in BMD angelegt hat. |
 | `buchcode` | `2` | 1 Soll, 2 Haben, aus Sicht von `konto`. Folgt dem Vorzeichen von `betrag`. |

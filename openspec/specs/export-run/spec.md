@@ -79,7 +79,7 @@ The export SHALL verify that the absolute gross of all ledger lines equals the s
 - **THEN** error `E-CONSERVATION` is raised and no file is written
 
 ### Requirement: Dry run
-With `--dry-run` the export SHALL run every step except writing, SHALL print the posting summary (totals per BMD account; net, tax and gross per VAT rate with apaleo's precise VAT and the difference to the tax per booking; deposit tax per rate the same way; Ortstaxe and other levies; payments per clearing account; deposits received, released and refunded; accounts receivable; write-offs; skipped lines with unsigned totals; findings) and the import block of the protocol, and SHALL exit with code 1 if any error finding exists.
+With `--dry-run` the export SHALL run every step except writing, SHALL print the posting summary (totals per BMD account; net, tax and gross per VAT rate with apaleo's precise VAT and the difference to the tax per booking; deposit tax per rate the same way; Ortstaxe and other levies; payments per clearing account; deposits received, released and refunded; accounts receivable; write-offs; skipped lines with unsigned totals; findings) and the import block of the protocol, and SHALL exit with code 1 if any error finding exists. The protocol file SHALL contain the same summary.
 
 #### Scenario: Review before the first file
 - **WHEN** the user runs `apaleo-bmd export --month 2026-10 --property BSP --dry-run`
