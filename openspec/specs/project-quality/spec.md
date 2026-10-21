@@ -33,11 +33,11 @@ A GitHub Actions workflow SHALL run on every push and pull request, install with
 - **THEN** the merge is gated on `gh pr checks <number> --watch --fail-fast` exiting 0, and the pull request is merged only after that. While the repository is private, GitHub branch protection and rulesets are not available on the free plan, so GitHub itself does not block a red pull request; the gate is the documented merge step in CONTRIBUTING.md and docs/maintainers.md and in the automated slice workflow
 
 ### Requirement: Licence and disclaimer files
-The repository SHALL contain an MIT `LICENSE` (English original text) and a `DISCLAIMER.md` whose German text comes first and is binding ("Verbindlich ist die deutsche Fassung."), followed by a section `## English (non-binding translation)`. Both versions SHALL state that the software is provided as is, without warranty or liability, that it is not tax or legal advice, and that a Steuerberater must review the account mapping and the first DATEV imports. `README.md` and `README.en.md` SHALL link both files.
+The repository SHALL contain an MIT `LICENSE` (English original text) and a `DISCLAIMER.md` whose German text comes first and is binding ("Verbindlich ist die deutsche Fassung."), followed by a section `## English (non-binding translation)`. Both versions SHALL state that the software is provided as is, without warranty or liability, that it is not tax or legal advice, and that a Steuerberater must review the account mapping and the first BMD imports. `README.md` and `README.en.md` SHALL link both files.
 
 #### Scenario: Licence and disclaimer are checked by a test
 - **WHEN** `pnpm test` runs
-- **THEN** a test asserts that `LICENSE` and `DISCLAIMER.md` exist at the repository root, that `README.md` and `README.en.md` link to both, that `DISCLAIMER.md` starts with `# Haftungsausschluss`, and that the German text with "ohne ausdrückliche oder stillschweigende Gewährleistung", "haften", "keine Steuerberatung" and "Kontenzuordnung" comes before the English translation with "without warranty", "not liable", "not tax advice" and "must review the account mapping"
+- **THEN** a test asserts that `LICENSE` and `DISCLAIMER.md` exist at the repository root, that `README.md` and `README.en.md` link to both, that `DISCLAIMER.md` starts with `# Haftungsausschluss`, and that the German text with "ohne ausdrückliche oder stillschweigende Gewährleistung", "haften", "keine Steuerberatung", "Kontenzuordnung" and "BMD" comes before the English translation with "without warranty", "not liable", "not tax advice" and "must review the account mapping"
 
 #### Scenario: German text is binding
 - **WHEN** a reader compares the German and English disclaimer
