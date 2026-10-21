@@ -45,11 +45,27 @@ Every subcommand SHALL receive a `CommandContext` (`env`, `stdout`, `stderr`, `c
 - **THEN** its output depends only on that instant, not on the machine clock
 
 ### Requirement: Config file and environment loading
-The CLI SHALL load configuration from the file given by `--config`, else from `APALEO_BMD_CONFIG`, else from `./apaleo-bmd.config.yaml`, accepting YAML or JSON. Values SHALL be validated against a schema, and every validation error SHALL name the offending key path. Secrets SHALL only be read from environment variables, and a secret key present in the config file SHALL be rejected. Environment overrides SHALL be limited to a documented allow-list of scalar keys; any other `APALEO_BMD_*` variable SHALL be rejected with an error naming it.
+The CLI SHALL load configuration from the file given by `--config`, else from `APALEO_BMD_CONFIG`, else from `./apaleo-bmd.config.yaml`, accepting YAML or JSON. Values SHALL be validated against a schema, and every validation error SHALL name the offending key path. Secrets SHALL only be read from environment variables, and a secret key present in the config file SHALL be rejected. Environment overrides SHALL be limited to a documented allow-list of scalar keys; any other `APALEO_BMD_*` variable SHALL be rejected with an error naming it. A `datev` section SHALL be rejected with an error that names the `bmd` section. The `bmd` section SHALL accept `dialect` (`ntcs` or `bmd55`, default `ntcs`), `sachkontenlaenge`, `personenkontenlaenge`, `buchsymbol` (required, no default) and `buchsymbolZahlung` (optional), and each property MAY override `buchsymbol` and `buchsymbolZahlung`; a Buchungssymbol SHALL be 1 to 4 characters of `A-Z` and `0-9`, at most 2 with `bmd55`. `doctor` and the export protocol SHALL warn `W-BUCHSYMBOL-SHARED` when two configured properties have the same effective Buchungssymbol.
 
 #### Scenario: Invalid config value
-- **WHEN** the config file sets `datev.beraternummer: 12`
-- **THEN** loading fails with an error that names `datev.beraternummer` and the allowed range
+- **WHEN** the config file sets `bmd.sachkontenlaenge: 3`
+- **THEN** loading fails with an error that names `bmd.sachkontenlaenge` and the allowed range
+
+#### Scenario: Buchungssymbol missing
+- **WHEN** the config file has a `bmd` section without `buchsymbol`
+- **THEN** loading fails with an error that names `bmd.buchsymbol` as required and points to `docs/bmd-import.md` for creating the symbol in BMD
+
+#### Scenario: Symbol too long for BMD 5.5
+- **WHEN** the config file sets `bmd.dialect: bmd55` and `bmd.buchsymbol: PMS`
+- **THEN** loading fails with an error that names `bmd.buchsymbol` and the limit of 2 characters
+
+#### Scenario: Two properties share a symbol
+- **WHEN** properties `BSP` and `BS2` are configured and neither overrides `bmd.buchsymbol`
+- **THEN** `doctor` warns `W-BUCHSYMBOL-SHARED` naming both properties and the symbol, and explains that in one Mandant their Belegnummern would repeat
+
+#### Scenario: Old DATEV section
+- **WHEN** the config file contains `datev.beraternummer`
+- **THEN** loading fails with an error saying that `datev` is not a section of apaleo-bmd and naming `bmd`
 
 #### Scenario: Secret in config file
 - **WHEN** the config file contains `apaleo.clientSecret`
@@ -60,7 +76,7 @@ The CLI SHALL load configuration from the file given by `--config`, else from `A
 - **THEN** loading fails with an error that gives the file path, line, column and kind of error, and does not quote any content of the file
 
 #### Scenario: Empty section or value
-- **WHEN** a section such as `apaleo:` has all its keys commented out, or a value such as `datev.beraternummer:` is left empty
+- **WHEN** a section such as `apaleo:` has all its keys commented out, or a value such as `bmd.buchsymbol:` is left empty
 - **THEN** the key is treated as missing, so defaults apply and a required key is reported as `is required`, whether or not an environment override is set
 
 #### Scenario: Environment override
