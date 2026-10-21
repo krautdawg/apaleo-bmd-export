@@ -1,60 +1,85 @@
 schema: spec-driven
 
 context: |
-  Project: apaleo-datev-export. A free, MIT-licensed, open-source tool that exports
-  accounting data from the apaleo hotel PMS into DATEV-Format (EXTF) files that a
-  German Steuerberater imports into DATEV Rechnungswesen. It is a free alternative
-  to the paid DATEV connectors in the apaleo Store (EUR 24-51/month per property).
-  It is a gift to the community: no strings attached, no hosted service, no
-  warranty, no liability. "Just something that works."
+  Project: apaleo-bmd-export. A free, MIT-licensed, open-source tool that exports
+  accounting data from the apaleo hotel PMS into BMD Buchungsimport files (the
+  semicolon-separated "BMD-Standard" booking import, variable record layout with a
+  header line) that an Austrian Steuerberater or Buchhaltung imports into BMD NTCS
+  (and BMD Com / BMD 5.5 where the same import exists). It is a free alternative to
+  the paid BMD connectors in the apaleo Store (EUR 18-51/month per property). It is
+  a gift to the community: no strings attached, no hosted service, no warranty, no
+  liability. "Just something that works."
 
-  Users: hotel back-office staff, small hotel groups, their Steuerberater, and
-  technical helpers. Each hotel runs its own copy against its own apaleo account
-  using an apaleo "custom app" (simple client, client credentials) that the hotel
-  admin registers under Apps > Connected apps. No apaleo Store listing, no apaleo
-  certification, no DATEV partnership: DATEV file import needs none.
+  Origin: a copy of apaleo-datev-export v0.1.0 (apaleo -> DATEV EXTF). Its apaleo
+  source adapter, export pipeline, plausibility checks, schedule mode and Docker
+  setup are reused as-is where possible; the DATEV writer, SKR03/SKR04 templates and
+  DATEV-only posting logic are replaced by a BMD writer, Austrian EKR templates and
+  Austrian posting rules.
 
-  Scope: one-way apaleo -> DATEV EXTF file export. Out of scope: DATEV online API
-  push (needs DATEV approval), hosted multi-tenant SaaS, web UI, GoBD-certified
-  archive, payment-provider (Adyen) settlement postings, other PMSs and other target
-  formats. Keep a clean SourceAdapter / Writer boundary so Mews, Smoobu, Stripe
-  sources or BMD / lexoffice targets can be added later by contributors.
+  Users: Austrian hotel back-office staff, small hotel groups, their Steuerberater /
+  Buchhaltung, and technical helpers. Each hotel runs its own copy against its own
+  apaleo account using an apaleo "custom app" (simple client, client credentials)
+  that the hotel admin registers under Apps > Connected apps. No apaleo Store
+  listing, no apaleo certification, no BMD partnership: the BMD file import needs
+  none.
+
+  Scope: one-way apaleo -> BMD import file export (Buchungen, Satzart 0). Out of
+  scope: any BMD API or BMD Com push, hosted multi-tenant SaaS, web UI, archive with
+  legal certification, payment-provider (Adyen) settlement and fee postings, booking
+  portal commissions, Personenkonten master data in v1, other PMSs and other target
+  formats. Keep a clean SourceAdapter / TargetWriter boundary so Mews, Smoobu or
+  Stripe sources or RZL / DATEV / lexoffice targets can be added later by
+  contributors.
 
   Tech stack: TypeScript (strict), Node.js 24 LTS, pnpm, ESM. Minimal runtime
-  dependencies. Vitest for tests. CLI via a small arg parser. Config as a YAML or
-  JSON file plus environment variables for secrets. Account mapping as an editable
-  CSV. Installed from source (git clone + pnpm build) and as a locally built
-  Docker image; there is NO npm publish and NO registry image push in scope, so
-  do not add publish or release tasks. Scheduling is `schedule --once` run from
-  cron or a compose loop (no in-process daemon). Delivery: local output folder
-  only (no SMTP email in v1).
+  dependencies. Vitest for tests. CLI `apaleo-bmd` via a small arg parser. Config as
+  a YAML or JSON file plus environment variables for secrets. Account mapping as an
+  editable CSV. Installed from source (git clone + pnpm build) and as a locally built
+  Docker image; there is NO npm publish and NO registry image push in scope, so do
+  not add publish or release tasks. Scheduling is `schedule --once` run from cron or
+  a compose loop (no in-process daemon). Delivery: local output folder only (no SMTP
+  email, no S3 in v1).
 
   Domain sources of truth:
   - apaleo Finance API Swagger: https://api.apaleo.com/swagger/finance-v1/swagger.json
     (export-gross-daily, chart of accounts, aggregates) and the apaleo developer
     docs for custom apps and OAuth client types.
-  - DATEV format description on developer.datev.de (header, Buchungsstapel,
-    character set); docs/datev-format.md records what was checked and when.
-  - docs/posting-rules.md for the posting logic (revenue by VAT rate, city tax,
-    payments to clearing accounts, deposits and prepayment VAT).
-  - ameax/datev-extf (MIT, PHP) as an independent cross-check of the field order.
+  - BMD import field descriptions: BMD "PR08 / PR08A - Verbuchen Erfassungsfile"
+    (Satzart 0 fields, bucod, steucod, sign rules), the BMD HOW2 "Import von
+    Buchungen und Personenkonten", the NTCS changes (Vorsteuer code 2, field names
+    buchdatum/belegdatum/gkonto/prozent/steuercode/buchcode/buchsymbol), and the dvo
+    "BuErf-Import" handbook; openspec/research/bmd-target.md and later
+    docs/bmd-format.md record what was checked, the URLs and the date.
+  - UStG 1994 § 10 (RIS) for Austrian VAT rates (20 %, 13 %, 10 %, 4.9 % since
+    2026-07-01, 0 %), KFS/BW 6 Einheitskontenrahmen (EKR) for account classes, and
+    the Länder tourism laws for Ortstaxe / Nächtigungsabgabe.
+  - docs/posting-rules.md for the posting logic (revenue by VAT rate with the tax
+    amount passed explicitly, Ortstaxe as durchlaufender Posten, payments to
+    clearing accounts, Anzahlungen and their VAT).
+  - Open-source cross-checks (read only, never copied): heliumv FibuExportFormatterBMD
+    (AGPL), funkring at_bmd (Odoo), tgassner/TdTools (BMD 5.5 -> NTCS converter).
 
-  Conventions: conventional commits; one OpenSpec change per vertical slice; every
-  slice ships with tests and keeps `pnpm test`, `pnpm lint`, `pnpm typecheck` green.
-  No real apaleo credentials exist yet: test against recorded/fabricated fixtures
-  shaped exactly like the apaleo Swagger schemas, and keep a live smoke-test command
-  for when a developer account exists. Never commit secrets.
+  Conventions: conventional commits; one OpenSpec change per vertical slice, named
+  b01-, b02-, ... in build order; every slice ships with tests and keeps
+  `pnpm test`, `pnpm lint`, `pnpm typecheck` green. No real apaleo credentials and
+  no BMD installation exist yet: test against recorded/fabricated fixtures shaped
+  exactly like the apaleo Swagger schemas and against golden BMD files built from
+  the documented field rules; keep a live smoke-test command for when a developer
+  account exists, and a checklist for the first real BMD NTCS test import with a
+  Kanzlei. Never commit secrets.
 
-  README and docs: German-first. The audience is hotels and Steuerberater in DACH,
-  so README.md and every doc (docs/, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT,
-  DISCLAIMER, CHANGELOG, GitHub templates, comments in the example configs) are
-  German only, address the reader with "du", and use DATEV terms as practitioners
-  do. One short README.en.md serves international contributors; no topic is kept in
-  two languages and there are no *.de.md files. Code, identifiers, CLI output and
-  commit messages stay English. The README H1 keeps "apaleo DATEV Export" and
-  "kostenlos" for search. Clear, plain language, copy-paste setup steps, prominent
-  "Keine Gewähr, keine Steuerberatung, lass deine Kontenzuordnung von deiner
-  Steuerberatung prüfen" disclaimer.
+  README and docs: German-first, for Austria. The audience is Austrian hotels and
+  their Steuerberater / Buchhaltung, so README.md and every doc (docs/, CONTRIBUTING,
+  SECURITY, CODE_OF_CONDUCT, DISCLAIMER, CHANGELOG, GitHub templates, comments in the
+  example configs) are German only, address the reader with "du", and use Austrian
+  accounting terms as practitioners do (Buchungsimport, Kontenplan, EKR, Sachkonto,
+  Personenkonto, Gegenkonto, Steuercode, Buchungssymbol, Belegnummer, Ortstaxe /
+  Nächtigungsabgabe, Anzahlung, UVA, Kanzlei). One short README.en.md serves
+  international contributors; no topic is kept in two languages and there are no
+  *.de.md files. Code, identifiers, CLI output and commit messages stay English. The
+  README H1 keeps "apaleo BMD Export" and "kostenlos" for search. Clear, plain
+  language, copy-paste setup steps, prominent "Keine Gewähr, keine Steuerberatung,
+  lass deine Kontenzuordnung von deiner Steuerberatung prüfen" disclaimer.
 
 rules:
   proposal:

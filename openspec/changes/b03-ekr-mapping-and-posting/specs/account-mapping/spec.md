@@ -1,0 +1,120 @@
+## MODIFIED Requirements
+
+### Requirement: Mapping file format
+The tool SHALL read and write a mapping CSV with the columns `apaleo_account;apaleo_type;apaleo_name;apaleo_vat_percent;bmd_account;steuercode;bmd_vat_percent;kost;comment`, keyed by apaleo account number and type. Written files SHALL be UTF-8 with byte-order mark and `;` separators. Reading SHALL accept UTF-8 with or without BOM and CP1252, `;` or `,` separators, and a decimal comma or point in the two rate columns. A file whose header has the DATEV columns (`datev_account`, `bu_key`) SHALL be rejected with an error that names `init-mapping --template ekr`.
+
+#### Scenario: Excel round trip
+- **WHEN** the committed fixture `test/fixtures/mapping/excel-at-saved.csv` (the written original after an Excel AT save: CP1252, `;`, CRLF, leading zeros stripped, rate `4,9` with a decimal comma, Excel's quoting) is loaded with Sachkontenlänge 4
+- **THEN** it yields the same rows and values as the written original, with the stripped leading zeros of the class-0 account restored and reported as `W-PADDED` warnings, and the rate read as 4.9
+
+#### Scenario: Duplicate key
+- **WHEN** two rows share the same apaleo account and type
+- **THEN** loading fails with an error naming both line numbers
+
+#### Scenario: Old DATEV mapping
+- **WHEN** the user points `--mapping` at a mapping CSV with the column `datev_account`
+- **THEN** loading fails, says the file is a DATEV mapping, and names `init-mapping --template ekr`
+
+### Requirement: Unmapped accounts block the export
+The tool SHALL refuse to produce a BMD file when any account booked in the period does not resolve to a row with a BMD account, and SHALL list each such account with number, type, name, number of lines and gross total. `mapping check --from --to` SHALL resolve each line with the rate the posting rules use, including the inferred rate of an untaxed deposit release.
+
+#### Scenario: Untaxed deposit release
+- **WHEN** the period contains a deposit release (debit Liabilities, credit Receivables, no tax entries) with a `PostPrepaymentVat` line of the same day and reference at 10 %, and the mapping has rate wildcards for Liabilities at 10 % and 0 %
+- **THEN** `mapping check --from --to` resolves the release through the 10 % wildcard, never through the 0 % wildcard, reports nothing for it, and exits with code 0 if nothing else fails
+
+#### Scenario: Untaxed deposit release without a rate source
+- **WHEN** the period contains such a deposit release without a matching `PostPrepaymentVat` line, and the chart gives its Liabilities account no VAT rate
+- **THEN** `mapping check --from --to` reports `E-VAT-RATE-UNKNOWN` once for all such lines, does not mention the 0 % row, and exits with code 1
+
+#### Scenario: Untaxed deposit release without deposit rows
+- **WHEN** the rate of such a deposit release is inferred as 20 % and the mapping has no Liabilities row for 20 % that applies to it
+- **THEN** `mapping check --from --to` reports `E-UNMAPPED` for the Liabilities account and suggests a `*` Liabilities row at 20 %
+
+#### Scenario: Parent row with the wrong VAT rate
+- **WHEN** a mapping has only the parent row `5000;Revenues;Revenues;;4030;3;20` and the period books accommodation (`5011`) and food (`5111`) at 10 %
+- **THEN** `mapping check --from --to` reports `E-VAT-MISMATCH` for `5011` and `5111` (booked at 10 %, the row applies 20 % on `4030`) and exits with code 1
+
+#### Scenario: New revenue account
+- **WHEN** the period contains lines on revenue account `5010` that has no mapping row
+- **THEN** the check fails with exit code 1 and a finding `E-UNMAPPED` naming `5010`, its type, its name, the line count and the gross total, and no file is written
+
+### Requirement: Mapping validation
+`apaleo-bmd mapping check` SHALL validate that BMD accounts are digits only and have exactly `bmd.sachkontenlaenge` digits, or for AccountsReceivable rows exactly `bmd.sachkontenlaenge` or `bmd.personenkontenlaenge` digits (`E-ACCOUNT-LENGTH`); that a Steuercode is an integer from 0 to 99; that a row with a Steuercode has a `bmd_vat_percent` (`E-VAT-RATE-MISSING`) and a row with a `bmd_vat_percent` above 0 has a Steuercode (`E-STEUERCODE-MISSING`); that no row of type Revenues, Liabilities, CityTaxes, SecondCityTax, GuestLevies or LossOfAccountsReceivable uses the input-tax codes 0 or 2 (`E-STEUERCODE-INPUT-TAX`); that a Steuercode other than 1 or 3 gives the warning `W-STEUERCODE-UNCHECKED`; that a rate other than 0, 4.9, 10, 13 or 20 gives the warning `W-VAT-RATE-UNUSUAL`; that the row's rate (`bmd_vat_percent`, 0 without Steuercode) equals `apaleo_vat_percent` where both are known, and with `--from --to` equals the rate each booked line of a VAT-relevant type carries (`E-VAT-MISMATCH`, also for rows reached through the parent chain). The command SHALL exit with code 1 on any error. Short numbers SHALL only be left-padded when the padding is unambiguous (Sachkontenlänge 4 and a 1–3 digit number), with a warning.
+
+#### Scenario: VAT mismatch
+- **WHEN** an apaleo revenue account at 10 % is mapped to `4020` with Steuercode 3 and `bmd_vat_percent` 20
+- **THEN** the check reports `E-VAT-MISMATCH` naming the row and both rates
+
+#### Scenario: German mapping copied
+- **WHEN** a row maps apaleo revenue at 7 % to `4000` with Steuercode 3 and `bmd_vat_percent` 7
+- **THEN** the check warns `W-VAT-RATE-UNUSUAL` naming the row and the Austrian rates
+
+#### Scenario: Input-tax code on a revenue row
+- **WHEN** a row maps apaleo revenue at 10 % to `4000` with Steuercode 2
+- **THEN** the check reports `E-STEUERCODE-INPUT-TAX` naming the row and exits with code 1
+
+#### Scenario: Rate without Steuercode
+- **WHEN** a row has `bmd_vat_percent` 10 and an empty Steuercode
+- **THEN** the check reports `E-STEUERCODE-MISSING`
+
+#### Scenario: Template-length account at a longer Sachkontenlänge
+- **WHEN** `bmd.sachkontenlaenge` is 5 and a row maps to `2890`
+- **THEN** the check reports `E-ACCOUNT-LENGTH` for the row, explains that the number needs 5 digits (for example `28900`), and does not pad it to `02890`
+
+#### Scenario: Sammeldebitor as Personenkonto
+- **WHEN** an AccountsReceivable row maps to `200000` with `bmd.personenkontenlaenge` 6
+- **THEN** no finding is reported for the row
+
+#### Scenario: Valid mapping
+- **WHEN** every row passes all checks
+- **THEN** the command prints a summary of rows by type and exits with code 0
+
+### Requirement: init-mapping command
+`apaleo-bmd init-mapping --property <id> --template ekr [--out <file>] [--update]` SHALL read the property's chart of accounts and write a mapping CSV with one row per leaf account pre-filled from the template, SHALL refuse to overwrite an existing file unless `--update` is given, and with `--update` SHALL keep every existing row unchanged and append rows only for accounts not yet present.
+
+#### Scenario: First run
+- **WHEN** the user runs `init-mapping --property BSP --template ekr` and no file exists
+- **THEN** `mapping-BSP.csv` is written with all leaf accounts, template suggestions where a rule matched, and the command prints how many rows are mapped and unmapped
+
+#### Scenario: Update keeps edits
+- **WHEN** the user has edited row `5000` and apaleo has added account `5020`, and runs `init-mapping --property BSP --template ekr --update`
+- **THEN** row `5000` is unchanged and a row for `5020` is appended, and the command lists the added account
+
+#### Scenario: Existing file without update
+- **WHEN** `mapping-BSP.csv` exists and the user runs `init-mapping` without `--update`
+- **THEN** the command exits with code 1 and nothing is written
+
+#### Scenario: Old flag
+- **WHEN** the user runs `init-mapping --property BSP --skr 03`
+- **THEN** the CLI exits with code 2 naming the unknown flag `--skr`
+
+## ADDED Requirements
+
+### Requirement: EKR hotel template
+The tool SHALL ship a rule-based template based on the Austrian Einheitskontenrahmen (KFS/BW 6) that maps, by apaleo type, VAT percent and account-name pattern: accommodation revenue at 10 % (`4000`), food revenue at 10 % (`4010`), drinks at 20 % (`4020`), other revenue at 20 % (`4030`), revenue at 13 % (`4040`) and 4.9 % (`4050`) with Steuercode 3, revenue at 0 % (`4090`) without Steuercode, cash payments to `2700`, every non-cash payment to the clearing account `2890` (never to a bank account), guest receivables to `2390`, accounts receivable to the Personenkonto `200000`, and deposits by VAT rate (`3200` at 10 %, `3201` at 20 % with Steuercode 1, `3209` at 0 % without Steuercode). City tax, second city tax and guest levies, LossOfAccountsReceivable, House and TransitoryItems SHALL be written with an empty BMD account and a comment describing the options. Template rows SHALL be written with 4-digit base numbers and scaled to `bmd.sachkontenlaenge` with trailing zeros (reported as a note), SHALL each be marked `Vorschlag (ungeprüft)`, and accounts that no rule matches SHALL stay unmapped.
+
+#### Scenario: Template does not guess
+- **WHEN** the chart contains a House account and a TransitoryItems account
+- **THEN** the generated rows for them have an empty BMD account and an explanatory comment
+
+#### Scenario: Ortstaxe is not pre-filled
+- **WHEN** the chart contains a CityTaxes account
+- **THEN** its generated row has an empty BMD account and a comment naming both options (liability to the Gemeinde without Steuercode, or the Kanzlei's durchlaufender Posten), and `mapping check --from --to` reports `E-UNMAPPED` for it until the user fills it in
+
+#### Scenario: Food and drinks
+- **WHEN** the chart contains revenue accounts "Frühstück Speisen" at 10 % and "Getränke" at 20 %
+- **THEN** the food account maps to `4010` with Steuercode 3 and rate 10, and the drinks account to `4020` with Steuercode 3 and rate 20
+
+#### Scenario: Template scales to Sachkontenlänge 5
+- **WHEN** `init-mapping --template ekr` runs with `bmd.sachkontenlaenge` 5
+- **THEN** the template's `4000` is written as `40000`, the Personenkonto `200000` is left as it is, and the command prints a note naming Sachkontenlänge 5
+
+## REMOVED Requirements
+
+### Requirement: Grman mapping export accepted
+**Reason**: The Grman file is an export of the DATEV connector; BMD users switching from a paid BMD connector have no documented export format to read.
+**Migration**: Run `apaleo-bmd init-mapping --template ekr` and copy the account numbers from the old connector's mapping screen; the mapping guide shows how.
+
+### Requirement: SKR03 and SKR04 hotel templates
+**Reason**: SKR03 and SKR04 are German DATEV charts; Austrian Kanzleien use EKR-based Kontenpläne.
+**Migration**: Use the EKR hotel template (`init-mapping --template ekr`).
