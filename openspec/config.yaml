@@ -5,8 +5,9 @@ context: |
   accounting data from the apaleo hotel PMS into BMD Buchungsimport files (the
   semicolon-separated "BMD-Standard" booking import, variable record layout with a
   header line) that an Austrian Steuerberater or Buchhaltung imports into BMD NTCS
-  (and BMD Com / BMD 5.5 where the same import exists). It is a free alternative to
-  the paid BMD connectors in the apaleo Store (EUR 18-51/month per property). It is
+  (default dialect; a `bmd.dialect: bmd55` switch writes the BMD 5.5 header names,
+  dates and Steuercodes). It is a free alternative to the paid BMD connectors in
+  the apaleo Store (EUR 18-51/month depending on vendor and number of properties). It is
   a gift to the community: no strings attached, no hosted service, no warranty, no
   liability. "Just something that works."
 
@@ -46,10 +47,12 @@ context: |
     docs for custom apps and OAuth client types.
   - BMD import field descriptions: BMD "PR08 / PR08A - Verbuchen Erfassungsfile"
     (Satzart 0 fields, bucod, steucod, sign rules), the BMD HOW2 "Import von
-    Buchungen und Personenkonten", the NTCS changes (Vorsteuer code 2, field names
-    buchdatum/belegdatum/gkonto/prozent/steuercode/buchcode/buchsymbol), and the dvo
-    "BuErf-Import" handbook; openspec/research/bmd-target.md and later
-    docs/bmd-format.md record what was checked, the URLs and the date.
+    Buchungen und Personenkonten", "Das Buchenprogramm in NTCS" (NTCS Steuercodes:
+    1 Umsatzsteuer, 2 Vorsteuer, 3 Vorsteuer-Berichtigung; UVA Kennzahlen in
+    Anhang A; field names buchdatum/belegdatum/gkonto/prozent/steuercode/buchcode/
+    buchsymbol), and the dvo "BuErf-Import" handbook (§9 Steuercodes). BMD 5.5 codes
+    (03 Soll-USt, 01 Ist-USt, 00 Vorsteuer) apply only with `bmd.dialect: bmd55`.
+    openspec/research/bmd-target.md and later docs/bmd-format.md record what was checked, the URLs and the date.
   - UStG 1994 § 10 (RIS) for Austrian VAT rates (20 %, 13 %, 10 %, 4.9 % since
     2026-07-01, 0 %), KFS/BW 6 Einheitskontenrahmen (EKR) for account classes, and
     the Länder tourism laws for Ortstaxe / Nächtigungsabgabe.
@@ -85,4 +88,4 @@ rules:
   proposal:
     - Keep proposals under 400 words and include a Non-goals section
   tasks:
-    - Tasks must be small, checkable, and each slice must end in a releasable state with tests
+    - Tasks must be small, checkable, and each slice must end green (tests, lint, typecheck) and internally consistent; the repository is publishable only after the final docs slice

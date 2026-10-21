@@ -1,6 +1,6 @@
 ## Why
 
-The schedule mode and the Docker setup came over from the DATEV project unchanged apart from the binary name (b01): the default time zone is Europe/Berlin, the image is still tagged and labelled as the DATEV tool, the CI image job runs a DATEV-era demo, and `docs/docker.md` explains a German setup. Austrian hotels run the tool unattended, so these defaults must be right before the docs and release (b07).
+The schedule mode and the Docker setup came over from the DATEV project unchanged apart from the binary name (b01): the default time zone is Europe/Berlin, the image is still tagged and labelled as the DATEV tool, the CI image job runs a DATEV-era demo, and `docs/docker.md` explains a German setup. Austrian hotels run the tool unattended, so these defaults must be right before the docs and release (b08).
 
 ## What Changes
 

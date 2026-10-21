@@ -14,7 +14,7 @@
 ## Decisions
 
 1. **Manifest without body hash.** `sha256` of the file is enough because the file is deterministic. Entries of older replaced files keep what is known. Manifest gains `taxByRate` (cents per rate) so a later run or the Kanzlei can compare with the UVA.
-2. **Protocol sections.** Header (tool, version, property, period, `DEMO` when demo), the disclaimer line, an "Import" block (file name, line count, Buchungssymbol, Belegnummern range, `verbuchkz` A / `gegenbuchkz` E, Steuercodes and rates used, Sachkonten and Personenkonten length), then the summary tables, then findings. The Import block mirrors the checklist in `docs/bmd-import.md`.
+2. **Protocol sections.** Header (tool, version, property, period, `DEMO` when demo), the disclaimer line, an "Import" block (file name, line count, dialect, Buchungssymbole, Belegnummern range, `verbuchkz` A / `gegenbuchkz` E, Steuercodes and rates used, Sachkonten and Personenkonten length), then the summary tables, then findings. The Import block mirrors the checklist in `docs/bmd-import.md`.
 3. **Demo marking in the data.** BMD has no file-level description, so the demo marks every `text` with the prefix `DEMO ` (the 40-character limit applies after the prefix) besides the file name and protocol. Alternative: a dedicated Buchungssymbol `DM`; rejected because a Kanzlei might really use `DM`.
 4. **Demo property.** "Hotel Beispiel" in Wien, time zone Europe/Vienna, rates 10 % and 20 %, Ortstaxe, one deposit, one company invoice; the same data as the b03 demo, extended so the protocol shows each section.
 

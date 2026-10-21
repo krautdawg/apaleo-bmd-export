@@ -19,7 +19,7 @@
 
 ## Risks / Trade-offs
 
-- [Someone relied on the Berlin default] → no users yet; CHANGELOG entry in b07.
+- [Someone relied on the Berlin default] → no users yet; CHANGELOG entry in b08.
 - [The CI demo assertion couples to the file name] → intended: a rename must be deliberate.
 
 ## Migration Plan

@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Mapping file format
-The tool SHALL read and write a mapping CSV with the columns `apaleo_account;apaleo_type;apaleo_name;apaleo_vat_percent;bmd_account;steuercode;bmd_vat_percent;kost;comment`, keyed by apaleo account number and type. Written files SHALL be UTF-8 with byte-order mark and `;` separators. Reading SHALL accept UTF-8 with or without BOM and CP1252, `;` or `,` separators, and a decimal comma or point in the two rate columns. A file whose header has the DATEV columns (`datev_account`, `bu_key`) SHALL be rejected with an error that names `init-mapping --template ekr`.
+The tool SHALL read and write a mapping CSV with the columns `apaleo_account;apaleo_type;apaleo_name;apaleo_vat_percent;bmd_account;steuercode;bmd_vat_percent;kost;comment`, keyed by apaleo account number and type. Written files SHALL be UTF-8 with byte-order mark and `;` separators. Reading SHALL accept UTF-8 with or without BOM and CP1252, `;` or `,` separators, and a decimal comma or point in the two rate columns. A file whose header has the DATEV columns (`datev_account`, `bu_key`) or the Grman connector layout SHALL be rejected with an error that names `init-mapping --template ekr`.
 
 #### Scenario: Excel round trip
 - **WHEN** the committed fixture `test/fixtures/mapping/excel-at-saved.csv` (the written original after an Excel AT save: CP1252, `;`, CRLF, leading zeros stripped, rate `4,9` with a decimal comma, Excel's quoting) is loaded with Sachkontenlänge 4
@@ -31,7 +31,7 @@ The tool SHALL refuse to produce a BMD file when any account booked in the perio
 - **THEN** `mapping check --from --to` reports `E-UNMAPPED` for the Liabilities account and suggests a `*` Liabilities row at 20 %
 
 #### Scenario: Parent row with the wrong VAT rate
-- **WHEN** a mapping has only the parent row `5000;Revenues;Revenues;;4030;3;20` and the period books accommodation (`5011`) and food (`5111`) at 10 %
+- **WHEN** a mapping has only the parent row `5000;Revenues;Revenues;;4030;1;20` and the period books accommodation (`5011`) and food (`5111`) at 10 %
 - **THEN** `mapping check --from --to` reports `E-VAT-MISMATCH` for `5011` and `5111` (booked at 10 %, the row applies 20 % on `4030`) and exits with code 1
 
 #### Scenario: New revenue account
@@ -39,19 +39,35 @@ The tool SHALL refuse to produce a BMD file when any account booked in the perio
 - **THEN** the check fails with exit code 1 and a finding `E-UNMAPPED` naming `5010`, its type, its name, the line count and the gross total, and no file is written
 
 ### Requirement: Mapping validation
-`apaleo-bmd mapping check` SHALL validate that BMD accounts are digits only and have exactly `bmd.sachkontenlaenge` digits, or for AccountsReceivable rows exactly `bmd.sachkontenlaenge` or `bmd.personenkontenlaenge` digits (`E-ACCOUNT-LENGTH`); that a Steuercode is an integer from 0 to 99; that a row with a Steuercode has a `bmd_vat_percent` (`E-VAT-RATE-MISSING`) and a row with a `bmd_vat_percent` above 0 has a Steuercode (`E-STEUERCODE-MISSING`); that no row of type Revenues, Liabilities, CityTaxes, SecondCityTax, GuestLevies or LossOfAccountsReceivable uses the input-tax codes 0 or 2 (`E-STEUERCODE-INPUT-TAX`); that a Steuercode other than 1 or 3 gives the warning `W-STEUERCODE-UNCHECKED`; that a rate other than 0, 4.9, 10, 13 or 20 gives the warning `W-VAT-RATE-UNUSUAL`; that the row's rate (`bmd_vat_percent`, 0 without Steuercode) equals `apaleo_vat_percent` where both are known, and with `--from --to` equals the rate each booked line of a VAT-relevant type carries (`E-VAT-MISMATCH`, also for rows reached through the parent chain). The command SHALL exit with code 1 on any error. Short numbers SHALL only be left-padded when the padding is unambiguous (Sachkontenlänge 4 and a 1–3 digit number), with a warning.
+`apaleo-bmd mapping check` SHALL validate that BMD accounts are digits only and have exactly `bmd.sachkontenlaenge` digits, or for AccountsReceivable rows exactly `bmd.sachkontenlaenge` or `bmd.personenkontenlaenge` digits (`E-ACCOUNT-LENGTH`); that a Steuercode is an integer from 0 to 99; that a row with a Steuercode has a `bmd_vat_percent`, 0 included (`E-VAT-RATE-MISSING`), and a row with a `bmd_vat_percent` above 0 has a Steuercode (`E-STEUERCODE-MISSING`); that no row of type Revenues, Liabilities, CityTaxes, SecondCityTax, GuestLevies or LossOfAccountsReceivable uses an input-tax code of the configured `bmd.dialect` (`ntcs`: 2 Vorsteuer and 3 Vorsteuer-Berichtigung; `bmd55`: 0) (`E-STEUERCODE-INPUT-TAX`); that a Steuercode outside the dialect's output-tax set (`ntcs`: 1; `bmd55`: 1 and 3) gives the warning `W-STEUERCODE-UNCHECKED`, also at rate 0; that a Revenues row at rate 0 without Steuercode gives the warning `W-UNTAXED-REVENUE` (check that the BMD account has no fixed Steuercode, or enter the Kanzlei's code for non-taxable revenue); that a rate other than 0, 4.9, 10, 13 or 20 gives the warning `W-VAT-RATE-UNUSUAL`; that `kost` is empty or 1 to 9 digits (`E-KOST-FORMAT`) and that a `kost` on a row whose type is not Revenues or LossOfAccountsReceivable gives the warning `W-KOST-IGNORED`; that the row's rate (`bmd_vat_percent`, 0 without Steuercode) equals `apaleo_vat_percent` where both are known, and with `--from --to` equals the rate each booked line of a VAT-relevant type carries (`E-VAT-MISMATCH`, also for rows reached through the parent chain). The command SHALL exit with code 1 on any error. Short numbers SHALL only be left-padded when the padding is unambiguous (Sachkontenlänge 4 and a 1–3 digit number), with a warning.
 
 #### Scenario: VAT mismatch
-- **WHEN** an apaleo revenue account at 10 % is mapped to `4020` with Steuercode 3 and `bmd_vat_percent` 20
+- **WHEN** an apaleo revenue account at 10 % is mapped to `4020` with Steuercode 1 and `bmd_vat_percent` 20
 - **THEN** the check reports `E-VAT-MISMATCH` naming the row and both rates
 
 #### Scenario: German mapping copied
-- **WHEN** a row maps apaleo revenue at 7 % to `4000` with Steuercode 3 and `bmd_vat_percent` 7
+- **WHEN** a row maps apaleo revenue at 7 % to `4000` with Steuercode 1 and `bmd_vat_percent` 7
 - **THEN** the check warns `W-VAT-RATE-UNUSUAL` naming the row and the Austrian rates
 
 #### Scenario: Input-tax code on a revenue row
-- **WHEN** a row maps apaleo revenue at 10 % to `4000` with Steuercode 2
-- **THEN** the check reports `E-STEUERCODE-INPUT-TAX` naming the row and exits with code 1
+- **WHEN** `bmd.dialect` is `ntcs` and a row maps apaleo revenue at 10 % to `4000` with Steuercode 2 or 3
+- **THEN** the check reports `E-STEUERCODE-INPUT-TAX` naming the row, the code and its NTCS meaning (Vorsteuer, Vorsteuer-Berichtigung), and exits with code 1
+
+#### Scenario: BMD 5.5 Soll-USt code
+- **WHEN** `bmd.dialect` is `bmd55` and a row maps apaleo revenue at 10 % to `4000` with Steuercode 3
+- **THEN** no Steuercode finding is reported for the row
+
+#### Scenario: Non-taxable code at rate 0
+- **WHEN** a Revenues row at 0 % maps to `4090` with Steuercode 81 and `bmd_vat_percent` 0
+- **THEN** neither `E-STEUERCODE-MISSING` nor `E-VAT-RATE-MISSING` is reported, `W-STEUERCODE-UNCHECKED` names code 81, and the command exits with code 0 if nothing else fails
+
+#### Scenario: Untaxed revenue without Steuercode
+- **WHEN** a Revenues row at 0 % maps to `4090` with an empty Steuercode
+- **THEN** the check warns `W-UNTAXED-REVENUE` naming the row and saying that the BMD account must not carry a fixed Steuercode
+
+#### Scenario: Kostenstelle on a payment row
+- **WHEN** a Payments row has `kost` `10`
+- **THEN** the check warns `W-KOST-IGNORED` naming the row, and a row with `kost` `K10` reports `E-KOST-FORMAT`
 
 #### Scenario: Rate without Steuercode
 - **WHEN** a row has `bmd_vat_percent` 10 and an empty Steuercode
@@ -91,7 +107,7 @@ The tool SHALL refuse to produce a BMD file when any account booked in the perio
 ## ADDED Requirements
 
 ### Requirement: EKR hotel template
-The tool SHALL ship a rule-based template based on the Austrian Einheitskontenrahmen (KFS/BW 6) that maps, by apaleo type, VAT percent and account-name pattern: accommodation revenue at 10 % (`4000`), food revenue at 10 % (`4010`), drinks at 20 % (`4020`), other revenue at 20 % (`4030`), revenue at 13 % (`4040`) and 4.9 % (`4050`) with Steuercode 3, revenue at 0 % (`4090`) without Steuercode, cash payments to `2700`, every non-cash payment to the clearing account `2890` (never to a bank account), guest receivables to `2390`, accounts receivable to the Personenkonto `200000`, and deposits by VAT rate (`3200` at 10 %, `3201` at 20 % with Steuercode 1, `3209` at 0 % without Steuercode). City tax, second city tax and guest levies, LossOfAccountsReceivable, House and TransitoryItems SHALL be written with an empty BMD account and a comment describing the options. Template rows SHALL be written with 4-digit base numbers and scaled to `bmd.sachkontenlaenge` with trailing zeros (reported as a note), SHALL each be marked `Vorschlag (ungeprüft)`, and accounts that no rule matches SHALL stay unmapped.
+The tool SHALL ship a rule-based template based on the Austrian Einheitskontenrahmen (KFS/BW 6) that maps, by apaleo type, VAT percent and account-name pattern: accommodation revenue at 10 % (`4000`), food revenue at 10 % (`4010`), drinks at 20 % (`4020`), other revenue at 20 % (`4030`), revenue at 13 % (`4040`) and 4.9 % (`4050`), all with the output-tax Steuercode of `bmd.dialect` (`1` with `ntcs`, `3` with `bmd55`), revenue at 0 % (`4090`) without Steuercode and with a comment on the fixed-Steuercode check, cash payments to `2700`, every non-cash payment to the clearing account `2890` (never to a bank account), guest receivables to `2390`, accounts receivable to the Personenkonto `200000`, and deposits by VAT rate (`3200` at 10 % and `3201` at 20 % with the output-tax Steuercode of the dialect, `3209` at 0 % without Steuercode). City tax, second city tax and guest levies, LossOfAccountsReceivable, House and TransitoryItems SHALL be written with an empty BMD account and a comment describing the options. Template rows SHALL be written with 4-digit base numbers and scaled to `bmd.sachkontenlaenge` with trailing zeros (reported as a note), SHALL each be marked `Vorschlag (ungeprüft)`, and accounts that no rule matches SHALL stay unmapped.
 
 #### Scenario: Template does not guess
 - **WHEN** the chart contains a House account and a TransitoryItems account
@@ -103,7 +119,11 @@ The tool SHALL ship a rule-based template based on the Austrian Einheitskontenra
 
 #### Scenario: Food and drinks
 - **WHEN** the chart contains revenue accounts "Frühstück Speisen" at 10 % and "Getränke" at 20 %
-- **THEN** the food account maps to `4010` with Steuercode 3 and rate 10, and the drinks account to `4020` with Steuercode 3 and rate 20
+- **THEN** the food account maps to `4010` with Steuercode 1 and rate 10, and the drinks account to `4020` with Steuercode 1 and rate 20
+
+#### Scenario: Template in the BMD 5.5 dialect
+- **WHEN** `init-mapping --template ekr` runs with `bmd.dialect` `bmd55`
+- **THEN** the revenue and deposit rows with tax carry Steuercode 3 (Soll-Umsatzsteuer in BMD 5.5) instead of 1
 
 #### Scenario: Template scales to Sachkontenlänge 5
 - **WHEN** `init-mapping --template ekr` runs with `bmd.sachkontenlaenge` 5

@@ -1,11 +1,11 @@
 ## ADDED Requirements
 
 ### Requirement: Bad debt with VAT correction
-Lines that debit a LossOfAccountsReceivable account SHALL be booked through its mapping row: with tax entries, the bad-debt row SHALL carry an output-tax Steuercode and the line's rate, so that the booking has the bad-debt account as `konto`, the positive net amount and the positive tax amount (an USt-Berichtigung); without tax entries the row SHALL have no Steuercode and the line is booked without tax fields. The posting summary SHALL show the total of written-off receivables per rate.
+Lines that debit a LossOfAccountsReceivable account SHALL be booked through its mapping row: with tax entries, the bad-debt row SHALL carry the output-tax Steuercode of the dialect (`ntcs`: 1) and the line's rate, so that the booking has the bad-debt account as `konto`, the positive net amount and the positive tax amount (an USt-Berichtigung that reduces the Umsatzsteuer); without tax entries the row SHALL have no Steuercode and the line is booked without tax fields. The posting summary SHALL show the total of written-off receivables per rate.
 
 #### Scenario: Write-off with VAT correction
-- **WHEN** a line debits the LossOfAccountsReceivable 10 % account (mapped to `7800`, Steuercode 3, rate 10) and credits guest receivables (`2390`) with gross 55.00, net 50.00 and taxes 5.00 at 10 %
-- **THEN** the booking has konto `7800`, gkonto `2390`, amount 50.00, tax 5.00, Steuercode 3, and the summary shows 55.00 written off at 10 %
+- **WHEN** a line debits the LossOfAccountsReceivable 10 % account (mapped to `7800`, Steuercode 1, rate 10) and credits guest receivables (`2390`) with gross 55.00, net 50.00 and taxes 5.00 at 10 %
+- **THEN** the booking has konto `7800`, gkonto `2390`, amount 50.00, tax 5.00, Steuercode 1, and the summary shows 55.00 written off at 10 %
 
 #### Scenario: Write-off without VAT
 - **WHEN** a write-off line of 30.00 has no tax entries and debits an account mapped to `7809` without Steuercode
@@ -27,4 +27,4 @@ The test suite SHALL post a fabricated Austrian fixture month (rooms at 10 %, br
 
 #### Scenario: Totals of the Austrian month
 - **WHEN** `test/posting/fixture-month-at.test.ts` runs
-- **THEN** revenue per rate, tax per rate, Ortstaxe, deposits received and released, payments per clearing account, write-offs and the balance per BMD account equal the recorded constants, and no `E-` finding is raised
+- **THEN** revenue per rate, tax per rate, Ortstaxe, deposits received and released, payments per clearing account, write-offs and the balance per BMD account equal the recorded constants, every taxed booking carries Steuercode 1, and no `E-` finding is raised

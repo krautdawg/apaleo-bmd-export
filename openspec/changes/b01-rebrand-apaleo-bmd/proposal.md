@@ -8,7 +8,7 @@ This repository is a copy of apaleo-datev-export v0.1.0: package, binary, config
 - **BREAKING** Config file `./apaleo-bmd.config.yaml` (or `.yml`/`.json`), `APALEO_BMD_CONFIG`, and the override prefix `APALEO_BMD_` (`APALEO_BMD_OUTPUT_DIR`, `APALEO_BMD_TIMEZONE`, ...). `APALEO_CLIENT_ID` and `APALEO_CLIENT_SECRET` stay. `apaleo-datev.config.example.yaml` becomes `apaleo-bmd.config.example.yaml`; `.gitignore` covers the new config names.
 - A `TargetWriter` interface in `src/export/` (render bytes, file name, file pattern for existence and overlap, "unchanged" comparison, protocol title). The DATEV EXTF writer becomes its only implementation for now; its output stays byte-identical (golden files unchanged).
 - Dockerfile entry point and config path, compose and `.env` examples follow the new names so the image keeps working.
-- Every `apaleo-datev` command line in README and docs becomes `apaleo-bmd` (the docs test enforces it). The content of the docs is rewritten in b07.
+- Every `apaleo-datev` command line in README and docs becomes `apaleo-bmd` (the docs test enforces it), and the quick-start clone URL, `cd` line, CI badges, the CI quick-start filter and the CI image tag point to apaleo-bmd-export. The content of the docs is rewritten in b08.
 
 ## Capabilities
 
@@ -25,9 +25,9 @@ None.
 
 ## Non-goals
 
-- No BMD output yet (b02), no mapping or posting change (b03), no German content rewrite (b07).
+- No BMD output yet (b02), no mapping or posting change (b03), no German content rewrite (b08).
 - No change of repository visibility, no publishing, no npm or registry release.
-- The scheduler and account-mapping spec wording keeps the old command name until b03/b06 touch those requirements; the code is renamed here.
+- The scheduler and account-mapping spec wording keeps the old command name until b03/b07 touch those requirements; the code is renamed here.
 
 ## Impact
 

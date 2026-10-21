@@ -15,15 +15,15 @@ With `--dry-run` the export SHALL run every step except writing, SHALL print the
 - **THEN** the summary and the import block are printed and no file or folder is created
 
 ### Requirement: Output layout and manifest
-The export SHALL write each file to `<output.dir>/<propertyId>/<YYYY-MM>/` with the deterministic name `BMD_Buchungsimport_<from>-<to>_<propertyId>.csv`, SHALL write a protocol text file `<name>.protokoll.txt` beside it, and SHALL record in `manifest.json` the file name, SHA-256 of the file, booking count, Soll and Haben totals, tax per rate, mapping file SHA-256, tool version and creation time. The protocol SHALL contain an import block with the file name, line count, Buchungssymbol, range of Belegnummern, the `verbuchkz` and `gegenbuchkz` values, every Steuercode and rate used, and the configured Sachkonten and Personenkonten lengths.
+The export SHALL write each file to `<output.dir>/<propertyId>/<YYYY-MM>/` with the deterministic name `BMD_Buchungsimport_<from>-<to>_<propertyId>.csv`, SHALL write a protocol text file `<name>.protokoll.txt` beside it, and SHALL record in `manifest.json` the file name, SHA-256 of the file, booking count, Soll and Haben totals, tax per rate, mapping file SHA-256, tool version and creation time. The protocol SHALL contain an import block with the file name, line count, the dialect, every Buchungssymbol used, the range of Belegnummern, the `verbuchkz` and `gegenbuchkz` values, every Steuercode and rate used, and the configured Sachkonten and Personenkonten lengths.
 
 #### Scenario: Files after a run
 - **WHEN** a monthly export for BSP 2026-10 succeeds
 - **THEN** the folder `exports/BSP/2026-10/` contains `BMD_Buchungsimport_20261001-20261031_BSP.csv`, its protocol and a manifest entry with the file hash and the tax per rate
 
 #### Scenario: Import block
-- **WHEN** the October file has 812 bookings with Buchungssymbol `AR` and Steuercodes 1 and 3
-- **THEN** the protocol names `AR`, Belegnummern `100000001` to `100000812`, `verbuchkz A`, `gegenbuchkz E`, Steuercode 1 with its rates and Steuercode 3 with its rates
+- **WHEN** the October file for 2026-10-01 to 2026-10-31 has 812 bookings with Buchungssymbole `HO` and `HZ`, Steuercode 1 at 10 % and 20 % and Steuercode 81 at 0 %, in the `ntcs` dialect
+- **THEN** the protocol names the dialect `ntcs`, `HO` and `HZ`, Belegnummern `100100001` to `100100812`, `verbuchkz A`, `gegenbuchkz E`, Steuercode 1 with 10 % and 20 % and Steuercode 81 with 0 %
 
 ### Requirement: Idempotent re-runs
 Re-running an export for a period whose file exists SHALL do nothing when the new file is byte-identical to the existing one, SHALL refuse with `E-FILE-EXISTS` when any byte differs, and with `--overwrite` SHALL keep the old file under a `.replaced-<timestamp>.csv` name, write the new one and record both in the manifest. The comparison SHALL read the existing file, so it works without the manifest. When the file is unchanged but its protocol or current manifest entry is missing or describes another file (a run interrupted between writing the file and its companions), the run SHALL rewrite them and report `N-COMPANIONS-REPAIRED`. Writing SHALL hold an exclusive lock file in the property-month folder and SHALL re-check the file on disk under that lock, so two concurrent runs never both write or replace the same file; the run that finds the lock or a changed file SHALL fail that property-month with `E-EXPORT` and write nothing. An export whose period overlaps another BMD file in the same folder SHALL be refused with `E-PERIOD-OVERLAP`, because importing both would book the shared days twice.

@@ -6,7 +6,7 @@
 ## 2. Protocol and dry run
 
 - [ ] 2.1 `src/export/summary.ts`: tables per BMD account, net/tax/gross per rate, Ortstaxe, payments, deposits, write-offs, skipped lines, findings
-- [ ] 2.2 Import block (file name, line count, Buchungssymbol, Belegnummern range, `verbuchkz`/`gegenbuchkz`, Steuercodes with rates, account lengths) in protocol and dry run; snapshot tests
+- [ ] 2.2 Import block (file name, line count, dialect, Buchungssymbole, Belegnummern range, `verbuchkz`/`gegenbuchkz`, Steuercodes with rates, account lengths) in protocol and dry run; snapshot tests
 
 ## 3. Demo and examples
 
