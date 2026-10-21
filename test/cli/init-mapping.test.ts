@@ -81,13 +81,12 @@ describe('apaleo-bmd init-mapping', () => {
       'LiabilitiesVat_Normal:20.00',
       'LiabilitiesVat_Null:0.00',
       'LiabilitiesVat_VeryReduced:10.00',
-      'CollectiveDebitor_LossOfAccountsReceivable',
     ]);
     expect(rowOf(ctx, ACC10)).toMatch(/^RevenueAccommodation_VeryReduced:10\.00;Revenues;Revenues Accommodation \(10%\);10;4000;1;10;;Vorschlag \(ungeprüft\): Erlöse Beherbergung 10 %/);
     expect(rowOf(ctx, '3501')).toMatch(/^3501;CityTaxes;City Tax \(no VAT\);0;;;;;Vorschlag \(ungeprüft\): bitte entscheiden/);
 
     expect(ctx.out()).toContain(`Wrote ${join(ctx.cwd, 'mapping-BSP.csv')} from template ekr-hotel@1 for property BSP.`);
-    expect(ctx.out()).toContain('31 rows: 20 mapped, 5 unmapped, 6 VAT account row(s) that need no BMD account.');
+    expect(ctx.out()).toContain('34 rows: 24 mapped, 4 unmapped, 6 VAT account row(s) that need no BMD account.');
     expect(ctx.out()).toContain('have your Steuerberatung check the file');
   });
 

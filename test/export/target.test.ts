@@ -7,7 +7,8 @@ import { FindingsError } from '../../src/core/errors.js';
 import { DEFAULT_TARGET, exportedFile, fileTag, runExport, type ExportRequest, type TargetWriter } from '../../src/export/index.js';
 import { BMD_DEFAULT_SETTINGS, createBmdTarget } from '../../src/bmd/index.js';
 import type { PostedBooking } from '../../src/posting/index.js';
-import { BSP, FIXTURE_FILES, createApaleoContext, createFixtureSource, fixturePath } from '../helpers/apaleo.js';
+import { BSP, FIXTURE_FILES, createApaleoContext, createFixtureSource } from '../helpers/apaleo.js';
+import { VIE_MAPPING } from '../helpers/live-mapping.js';
 import { exportSetup, latePosting, type ExportSetup } from '../helpers/export.js';
 
 /**
@@ -172,7 +173,7 @@ describe('the BMD target through the export', () => {
 });
 
 describe('the checks and the summary do not depend on the target (recorded VIE day 2026-10-21)', () => {
-  const MAPPING = readFileSync(fixturePath('live/VIE/mapping-VIE.live.csv'), 'utf8');
+  const MAPPING = VIE_MAPPING;
   const CONFIG = `${FIXTURE_FILES['apaleo-bmd.config.yaml']}properties:\n  - id: VIE\nchecks:\n  aggregates: true\n`;
 
   async function exportVie(target: TargetWriter<PostedBooking> | undefined) {

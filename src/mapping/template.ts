@@ -111,7 +111,11 @@ export function parseTemplate(text: string): Template {
   return { id, rules };
 }
 
-/** The first rule for the account's type and rate whose pattern matches its name or a parent's name. */
+/**
+ * The first rule for the account's type and rate whose pattern matches one of
+ * `names`: the account's number and name and those of its parents, so that a
+ * rule can name apaleo's groups (`RevenueNoShow`) as well as their names.
+ */
 export function matchRule(template: Template, account: SourceAccount, names: readonly string[]): TemplateRule | undefined {
   return template.rules.find(
     (rule) =>
@@ -179,7 +183,7 @@ export function suggestRows(accounts: readonly SourceAccount[], template: Templa
 
   for (const account of chart.accounts) {
     if (parents.has(`${account.number}\u0000${account.type}`)) continue;
-    const rule = matchRule(template, account, [account.name, ...parentNames(chart, account)]);
+    const rule = matchRule(template, account, [account.number, account.name, ...parentNames(chart, account)]);
     const container = account.ledger !== 'global' && account.hasChildren && wildcardTypes.has(account.type);
     if (container && !rule?.bmdAccount) continue;
     const comment = rule ? ruleComment(rule, settings) : NO_RULE_COMMENT;
@@ -239,6 +243,7 @@ function ruleValues(rule: TemplateRule | undefined, { sachkontenlaenge, personen
   };
 }
 
+/** Number and name of every parent of the account, nearest first. */
 function parentNames(chart: ChartIndex, account: SourceAccount): string[] {
   const names: string[] = [];
   const seen = new Set<string>([account.number]);
@@ -247,7 +252,7 @@ function parentNames(chart: ChartIndex, account: SourceAccount): string[] {
     seen.add(parent);
     const found = chart.find(parent, account.type);
     if (!found) break;
-    names.push(found.name);
+    names.push(found.number, found.name);
     parent = found.parentNumber;
   }
   return names;

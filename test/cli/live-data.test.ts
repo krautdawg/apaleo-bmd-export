@@ -2,12 +2,14 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { runCli } from '../../src/cli/run.js';
-import { FIXTURE_FILES, createApaleoContext, fixturePath } from '../helpers/apaleo.js';
+import { FIXTURE_FILES, createApaleoContext } from '../helpers/apaleo.js';
+import { VIE_MAPPING, VIE_NO_SHOW, VIE_TEMPLATE_MAPPING } from '../helpers/live-mapping.js';
 
 /**
  * The CLI on the recorded apaleo sandbox responses (`test/fixtures/apaleo/live/`)
  * through the fake apaleo API (design decision 13): VIE is the regression day of
- * the BMD target, with the mapping `init-mapping --template ekr` writes; BER, a
+ * the BMD target, with the mapping `init-mapping --template ekr` writes and the
+ * Kanzlei's one decision (the no-show at 13 %, `VIE_MAPPING`); BER, a
  * German property, shows that the EKR template maps none of its 7 % and 19 % accounts.
  */
 
@@ -15,21 +17,27 @@ const decodeCp1252 = (bytes: Uint8Array) => new TextDecoder('windows-1252').deco
 
 /** After the recorded days, so both are closed. */
 const AFTER_THE_DAY = new Date('2026-10-25T08:00:00Z');
-const LIVE_MAPPING = readFileSync(fixturePath('live/VIE/mapping-VIE.live.csv'), 'utf8');
-
 function liveContext(extraConfig = '', files: Record<string, string> = {}) {
   const config = `${FIXTURE_FILES['apaleo-bmd.config.yaml']}properties:\n  - id: VIE\n  - id: BER\n    buchsymbol: HB\n${extraConfig}`;
-  return createApaleoContext({ live: true }, { files: { 'apaleo-bmd.config.yaml': config, 'mapping-VIE.csv': LIVE_MAPPING, ...files }, now: AFTER_THE_DAY });
+  return createApaleoContext({ live: true }, { files: { 'apaleo-bmd.config.yaml': config, 'mapping-VIE.csv': VIE_MAPPING, ...files }, now: AFTER_THE_DAY });
 }
 
 describe('init-mapping and mapping check on the recorded VIE day', () => {
   it('init-mapping --template ekr writes the committed live mapping byte for byte', async () => {
     const ctx = liveContext();
     expect(await runCli(['init-mapping', '--property', 'VIE', '--template', 'ekr', '--out', 'fresh.csv'], ctx)).toBe(0);
-    expect(readFileSync(join(ctx.cwd, 'fresh.csv'), 'utf8')).toBe(LIVE_MAPPING);
+    expect(readFileSync(join(ctx.cwd, 'fresh.csv'), 'utf8')).toBe(VIE_TEMPLATE_MAPPING);
   });
 
-  it('passes mapping check --from --to with the committed live EKR mapping', async () => {
+  it('stops mapping check --from --to on the template mapping with E-UNMAPPED for the no-show at 13 %', async () => {
+    const ctx = liveContext('', { 'mapping-VIE.csv': VIE_TEMPLATE_MAPPING });
+    expect(await runCli(['mapping', 'check', '--property', 'VIE', '--from', '2026-10-21', '--to', '2026-10-21'], ctx)).toBe(1);
+    const unmapped = ctx.out().split('\n').filter((line) => line.includes('E-UNMAPPED'));
+    expect(unmapped).toHaveLength(1);
+    expect(unmapped[0]).toContain(`apaleo account ${VIE_NO_SHOW} (Revenues`);
+  });
+
+  it('passes mapping check --from --to once the Kanzlei filled in the no-show row', async () => {
     const ctx = liveContext();
     expect(await runCli(['mapping', 'check', '--property', 'VIE', '--from', '2026-10-21', '--to', '2026-10-21'], ctx)).toBe(0);
     expect(ctx.out()).not.toMatch(/sub-cent|not a whole number of cents/);

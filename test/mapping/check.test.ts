@@ -78,6 +78,26 @@ describe('checkMapping', () => {
     ]);
   });
 
+  describe('deposit rows (Anzahlungen, b05)', () => {
+    const deposit = (steuercode: string) =>
+      mappingRow({ apaleoAccount: '*', apaleoType: 'Liabilities', apaleoVatPercent: '10', bmdAccount: '3200', steuercode, bmdVatPercent: '10' });
+
+    it('passes a deposit row at 10 % on 3200 with Steuercode 1 in NTCS', () => {
+      expect(check([deposit('1')], { dialect: 'ntcs' })).toEqual([]);
+    });
+
+    it.each([
+      ['2', 'Vorsteuer'],
+      ['3', 'Vorsteuer-Berichtigung'],
+    ])('refuses the input-tax code %s on a deposit row in NTCS with E-STEUERCODE-INPUT-TAX', (code, meaning) => {
+      const findings = check([deposit(code)], { dialect: 'ntcs' });
+      expect(codes(findings)).toEqual(['E-STEUERCODE-INPUT-TAX']);
+      expect(findings[0]?.message).toContain('line 2');
+      expect(findings[0]?.message).toContain(`Steuercode ${code} means ${meaning} in BMD NTCS`);
+      expect(findings[0]?.message).toContain('Use the Umsatzsteuer code 1');
+    });
+  });
+
   it('accepts the BMD 5.5 Soll-USt code 3 with bmd.dialect bmd55, and rejects 0 there', () => {
     expect(check([revenue({ steuercode: '3' })], { dialect: 'bmd55' })).toEqual([]);
     expect(check([revenue({ steuercode: '1' })], { dialect: 'bmd55' })).toEqual([]);
