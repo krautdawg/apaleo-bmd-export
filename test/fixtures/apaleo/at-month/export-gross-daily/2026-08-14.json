@@ -1,0 +1,85 @@
+{
+  "transactions": [
+    {
+      "timestamp": "2026-08-14T11:20:00Z",
+      "date": "2026-08-14",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-CHARLIE-1",
+        "number": "TIR-CHARLIE-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "Revenues Cancellation fees (no VAT)",
+        "number": "RevenueCancellationFees_Without:0.00",
+        "parentNumber": "5000",
+        "type": "Revenues"
+      },
+      "command": "PostCharge",
+      "currency": "EUR",
+      "grossAmount": 45,
+      "netAmount": 45,
+      "receipt": {
+        "type": "Reservation",
+        "number": "TIR-CHARLIE-1-V1"
+      },
+      "sourceEntryNumber": "000000013",
+      "reference": "TIR-CHARLIE-1",
+      "referenceType": "Guest"
+    },
+    {
+      "timestamp": "2026-08-14T11:21:00Z",
+      "date": "2026-08-14",
+      "debitedAccount": {
+        "name": "MasterCard Credit Card Payment",
+        "number": "1104",
+        "parentNumber": "1000",
+        "type": "Payments"
+      },
+      "creditedAccount": {
+        "name": "Receivables for Reservation TIR-CHARLIE-1 (Offset)",
+        "number": "TIR-CHARLIE-1_Receivables/Offset",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "command": "PostPayment",
+      "currency": "EUR",
+      "grossAmount": 45,
+      "netAmount": 45,
+      "receipt": {
+        "type": "Custom",
+        "number": "CXL-TIR-C"
+      },
+      "sourceEntryNumber": "000000014",
+      "reference": "TIR-CHARLIE-1",
+      "referenceType": "Guest"
+    },
+    {
+      "timestamp": "2026-08-14T11:21:00Z",
+      "date": "2026-08-14",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-CHARLIE-1",
+        "number": "TIR-CHARLIE-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "Receivables for Reservation TIR-CHARLIE-1 (Offset)",
+        "number": "TIR-CHARLIE-1_Receivables/Offset",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "command": "PostPayment",
+      "currency": "EUR",
+      "grossAmount": -45,
+      "netAmount": -45,
+      "receipt": {
+        "type": "Custom",
+        "number": "CXL-TIR-C"
+      },
+      "sourceEntryNumber": "000000014",
+      "reference": "TIR-CHARLIE-1",
+      "referenceType": "Guest"
+    }
+  ]
+}

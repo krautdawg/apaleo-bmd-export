@@ -1,0 +1,126 @@
+{
+  "transactions": [
+    {
+      "timestamp": "2026-08-20T09:40:00Z",
+      "date": "2026-08-20",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-DELTA-1",
+        "number": "TIR-DELTA-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "Revenues Accommodation (10%)",
+        "number": "RevenueAccommodation_VeryReduced:10.00",
+        "parentNumber": "5000",
+        "type": "Revenues"
+      },
+      "command": "PostCharge",
+      "currency": "EUR",
+      "grossAmount": 132,
+      "netAmount": 120,
+      "taxes": [
+        {
+          "type": "VeryReduced",
+          "percent": 10,
+          "amount": 12
+        }
+      ],
+      "receipt": {
+        "type": "Reservation",
+        "number": "TIR-DELTA-1-V0"
+      },
+      "sourceEntryNumber": "000000016",
+      "reference": "TIR-DELTA-1",
+      "referenceType": "Guest"
+    },
+    {
+      "timestamp": "2026-08-20T09:40:00Z",
+      "date": "2026-08-20",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-DELTA-1",
+        "number": "TIR-DELTA-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "Revenues Food and beverages (10%)",
+        "number": "RevenueFoodAndBeverages_VeryReduced:10.00",
+        "parentNumber": "5000",
+        "type": "Revenues"
+      },
+      "command": "PostCharge",
+      "currency": "EUR",
+      "grossAmount": 21,
+      "netAmount": 19.09090909,
+      "taxes": [
+        {
+          "type": "VeryReduced",
+          "percent": 10,
+          "amount": 1.90909091
+        }
+      ],
+      "receipt": {
+        "type": "Reservation",
+        "number": "TIR-DELTA-1-V0"
+      },
+      "sourceEntryNumber": "000000017",
+      "reference": "TIR-DELTA-1",
+      "referenceType": "Guest"
+    },
+    {
+      "timestamp": "2026-08-20T09:45:00Z",
+      "date": "2026-08-20",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-DELTA-1",
+        "number": "TIR-DELTA-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "AccountsReceivable for Reservation TIR-DELTA-1 (Offset)",
+        "number": "TIR-DELTA-1_AccountsReceivable/Offset",
+        "parentNumber": "9999",
+        "type": "AccountsReceivable"
+      },
+      "command": "PostToAccountsReceivables",
+      "currency": "EUR",
+      "grossAmount": -153,
+      "netAmount": -153,
+      "receipt": {
+        "type": "Invoice",
+        "number": "TIR-2026-0815"
+      },
+      "sourceEntryNumber": "000000018",
+      "reference": "TIR-DELTA-1",
+      "referenceType": "Guest"
+    },
+    {
+      "timestamp": "2026-08-20T09:45:00Z",
+      "date": "2026-08-20",
+      "debitedAccount": {
+        "name": "AccountsReceivable for Reservation TIR-DELTA-1",
+        "number": "TIR-DELTA-1_AccountsReceivable",
+        "parentNumber": "9999",
+        "type": "AccountsReceivable"
+      },
+      "creditedAccount": {
+        "name": "AccountsReceivable for Reservation TIR-DELTA-1 (Offset)",
+        "number": "TIR-DELTA-1_AccountsReceivable/Offset",
+        "parentNumber": "9999",
+        "type": "AccountsReceivable"
+      },
+      "command": "PostToAccountsReceivables",
+      "currency": "EUR",
+      "grossAmount": 153,
+      "netAmount": 153,
+      "receipt": {
+        "type": "Invoice",
+        "number": "TIR-2026-0815"
+      },
+      "sourceEntryNumber": "000000018",
+      "reference": "TIR-DELTA-1",
+      "referenceType": "Guest"
+    }
+  ]
+}

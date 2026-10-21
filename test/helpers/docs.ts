@@ -225,11 +225,18 @@ export function checkLinks(file: string, markdown: string, root: string = ROOT):
 
 /** `*.de.md` files outside `node_modules/`, `dist/`, `.git/` and `openspec/`: German is the only language, so there are no split files. */
 export function splitLanguageFiles(root: string = ROOT): string[] {
-  const skip = /^(node_modules|dist|\.git|openspec)(\/|$)/;
-  return readdirSync(root, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.de.md'))
-    .map((entry) => relative(root, join(entry.parentPath, entry.name)))
-    .filter((path) => !skip.test(path))
+  // Top-level folders that are not ours or not docs; skipped before walking them, node_modules alone holds thousands of files.
+  const skip = new Set(['node_modules', 'dist', '.git', 'openspec']);
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => !skip.has(entry.name))
+    .flatMap((entry) => {
+      const path = join(root, entry.name);
+      if (entry.isFile()) return [path];
+      if (!entry.isDirectory()) return [];
+      return readdirSync(path, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => join(e.parentPath, e.name));
+    })
+    .filter((path) => path.endsWith('.de.md'))
+    .map((path) => relative(root, path))
     .sort();
 }
 

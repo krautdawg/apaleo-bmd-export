@@ -1,0 +1,140 @@
+{
+  "transactions": [
+    {
+      "timestamp": "2026-08-10T15:30:00Z",
+      "date": "2026-08-10",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-BRAVO-1",
+        "number": "TIR-BRAVO-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "Revenues Accommodation (10%)",
+        "number": "RevenueAccommodation_VeryReduced:10.00",
+        "parentNumber": "5000",
+        "type": "Revenues"
+      },
+      "command": "PostCharge",
+      "currency": "EUR",
+      "grossAmount": 98,
+      "netAmount": 89.09090909,
+      "taxes": [
+        {
+          "type": "VeryReduced",
+          "percent": 10,
+          "amount": 8.90909091
+        }
+      ],
+      "receipt": {
+        "type": "Reservation",
+        "number": "TIR-BRAVO-1-V0"
+      },
+      "sourceEntryNumber": "000000002",
+      "reference": "TIR-BRAVO-1",
+      "referenceType": "Guest"
+    },
+    {
+      "timestamp": "2026-08-10T15:30:00Z",
+      "date": "2026-08-10",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-BRAVO-1",
+        "number": "TIR-BRAVO-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "Revenues Food and beverages (10%)",
+        "number": "RevenueFoodAndBeverages_VeryReduced:10.00",
+        "parentNumber": "5000",
+        "type": "Revenues"
+      },
+      "command": "PostCharge",
+      "currency": "EUR",
+      "grossAmount": 16.5,
+      "netAmount": 15,
+      "taxes": [
+        {
+          "type": "VeryReduced",
+          "percent": 10,
+          "amount": 1.5
+        }
+      ],
+      "receipt": {
+        "type": "Reservation",
+        "number": "TIR-BRAVO-1-V0"
+      },
+      "sourceEntryNumber": "000000003",
+      "reference": "TIR-BRAVO-1",
+      "referenceType": "Guest"
+    },
+    {
+      "timestamp": "2026-08-10T15:30:01Z",
+      "date": "2026-08-10",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-BRAVO-1",
+        "number": "TIR-BRAVO-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "City Tax (no VAT)",
+        "number": "3501",
+        "parentNumber": "3500",
+        "type": "CityTaxes"
+      },
+      "command": "PostCharge",
+      "currency": "EUR",
+      "grossAmount": 3,
+      "netAmount": 3,
+      "taxes": [
+        {
+          "type": "Without",
+          "percent": 0,
+          "amount": 0
+        }
+      ],
+      "receipt": {
+        "type": "Reservation",
+        "number": "TIR-BRAVO-1-V0"
+      },
+      "sourceEntryNumber": "000000004",
+      "reference": "TIR-BRAVO-1",
+      "referenceType": "Guest"
+    },
+    {
+      "timestamp": "2026-08-10T21:05:00Z",
+      "date": "2026-08-10",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-BRAVO-1",
+        "number": "TIR-BRAVO-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "Revenues Food and beverages (20%)",
+        "number": "RevenueFoodAndBeverages_Normal:20.00",
+        "parentNumber": "5000",
+        "type": "Revenues"
+      },
+      "command": "PostCharge",
+      "currency": "EUR",
+      "grossAmount": 7.9,
+      "netAmount": 6.58333333,
+      "taxes": [
+        {
+          "type": "Normal",
+          "percent": 20,
+          "amount": 1.31666667
+        }
+      ],
+      "receipt": {
+        "type": "Custom",
+        "number": "BAR-TIR-1"
+      },
+      "sourceEntryNumber": "000000005",
+      "reference": "TIR-BRAVO-1",
+      "referenceType": "Guest"
+    }
+  ]
+}

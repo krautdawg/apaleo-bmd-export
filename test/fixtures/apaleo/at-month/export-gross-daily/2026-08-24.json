@@ -1,0 +1,126 @@
+{
+  "transactions": [
+    {
+      "timestamp": "2026-08-24T08:30:00Z",
+      "date": "2026-08-24",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-ECHO-1",
+        "number": "TIR-ECHO-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "Revenues Accommodation (10%)",
+        "number": "RevenueAccommodation_VeryReduced:10.00",
+        "parentNumber": "5000",
+        "type": "Revenues"
+      },
+      "command": "PostCharge",
+      "currency": "EUR",
+      "grossAmount": 89,
+      "netAmount": 80.90909091,
+      "taxes": [
+        {
+          "type": "VeryReduced",
+          "percent": 10,
+          "amount": 8.09090909
+        }
+      ],
+      "receipt": {
+        "type": "Reservation",
+        "number": "TIR-ECHO-1-V0"
+      },
+      "sourceEntryNumber": "000000019",
+      "reference": "TIR-ECHO-1",
+      "referenceType": "Guest"
+    },
+    {
+      "timestamp": "2026-08-24T08:30:00Z",
+      "date": "2026-08-24",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-ECHO-1",
+        "number": "TIR-ECHO-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "Revenues Food and beverages (20%)",
+        "number": "RevenueFoodAndBeverages_Normal:20.00",
+        "parentNumber": "5000",
+        "type": "Revenues"
+      },
+      "command": "PostCharge",
+      "currency": "EUR",
+      "grossAmount": 4.8,
+      "netAmount": 4,
+      "taxes": [
+        {
+          "type": "Normal",
+          "percent": 20,
+          "amount": 0.8
+        }
+      ],
+      "receipt": {
+        "type": "Reservation",
+        "number": "TIR-ECHO-1-V0"
+      },
+      "sourceEntryNumber": "000000020",
+      "reference": "TIR-ECHO-1",
+      "referenceType": "Guest"
+    },
+    {
+      "timestamp": "2026-08-24T08:35:00Z",
+      "date": "2026-08-24",
+      "debitedAccount": {
+        "name": "Bank Transfer",
+        "number": "1400",
+        "parentNumber": "1000",
+        "type": "Payments"
+      },
+      "creditedAccount": {
+        "name": "Receivables for Reservation TIR-ECHO-1 (Offset)",
+        "number": "TIR-ECHO-1_Receivables/Offset",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "command": "PostPayment",
+      "currency": "EUR",
+      "grossAmount": 93.8,
+      "netAmount": 93.8,
+      "receipt": {
+        "type": "Invoice",
+        "number": "TIR-2026-0816"
+      },
+      "sourceEntryNumber": "000000021",
+      "reference": "TIR-ECHO-1",
+      "referenceType": "Guest"
+    },
+    {
+      "timestamp": "2026-08-24T08:35:00Z",
+      "date": "2026-08-24",
+      "debitedAccount": {
+        "name": "Receivables for Reservation TIR-ECHO-1",
+        "number": "TIR-ECHO-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "Receivables for Reservation TIR-ECHO-1 (Offset)",
+        "number": "TIR-ECHO-1_Receivables/Offset",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "command": "PostPayment",
+      "currency": "EUR",
+      "grossAmount": -93.8,
+      "netAmount": -93.8,
+      "receipt": {
+        "type": "Invoice",
+        "number": "TIR-2026-0816"
+      },
+      "sourceEntryNumber": "000000021",
+      "reference": "TIR-ECHO-1",
+      "referenceType": "Guest"
+    }
+  ]
+}
