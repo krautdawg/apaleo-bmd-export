@@ -24,7 +24,7 @@ Das Tool liest nur diese Variablen. Jede andere Variable, die mit `APALEO_BMD_` 
 | `APALEO_BMD_CONFIG` | den Pfad der Konfigurationsdatei | Pfad |
 | `APALEO_CLIENT_ID` | `apaleo.clientId` | Text |
 | `APALEO_BMD_OUTPUT_DIR` | `output.dir` | Pfad |
-| `APALEO_BMD_TIMEZONE` | `schedule.timezone` | IANA-Zeitzone |
+| `APALEO_BMD_TIMEZONE` | `schedule.timezone` (Standard `Europe/Vienna`) | IANA-Zeitzone, zum Beispiel `Europe/Vienna` |
 
 Ein Wert aus der Umgebung geht dem Wert in der Datei vor.
 
@@ -99,7 +99,7 @@ Nur für `schedule --once`. Was jede Einstellung bewirkt, mit Beispielen: [docke
 
 | Schlüssel | Standard | Bedeutung |
 |---|---|---|
-| `schedule.timezone` | `Europe/Berlin` | „Heute“ ist das Datum in dieser IANA-Zeitzone. Auch über `APALEO_BMD_TIMEZONE`. |
+| `schedule.timezone` | `Europe/Vienna` | „Heute“ ist das Datum in dieser IANA-Zeitzone. Für ein Hotel in Österreich passt der Standard; ob ein Zeitraum abgeschlossen ist, prüft das Tool zusätzlich in der Zeitzone des Hotels aus apaleo. Auch über `APALEO_BMD_TIMEZONE`. |
 | `schedule.cadence` | `monthly` | `monthly` (eine Datei pro Monat) oder `daily` (eine Datei pro Tag). Ein Rhythmus pro Installation. |
 | `schedule.monthly` | | Einstellungen für `cadence: monthly`. |
 | `schedule.monthly.dayOfMonth` | `3` | Ein Monat ist ab diesem Tag des Folgemonats fällig, 1 bis 5. |
