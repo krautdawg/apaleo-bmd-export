@@ -12,12 +12,12 @@ const ENGLISH_README = readRepoFile('README.en.md');
 const GERMAN_TAGLINE = 'Kostenloser apaleo DATEV Export: Buchungsstapel (EXTF) für DATEV Rechnungswesen, Open Source';
 /** The install block of the German quick start (s09 design decision 3), which CI runs. */
 const INSTALL_BLOCK = [
-  'git clone https://github.com/krautdawg/apaleo-datev-export.git',
-  'cd apaleo-datev-export',
+  'git clone https://github.com/krautdawg/apaleo-bmd-export.git',
+  'cd apaleo-bmd-export',
   'corepack enable',
   'pnpm install --frozen-lockfile',
   'pnpm build',
-  'node dist/cli/main.js --help        # oder: pnpm link --global, dann apaleo-datev --help',
+  'node dist/cli/main.js --help        # oder: pnpm link --global, dann apaleo-bmd --help',
 ];
 
 /** The text from the start up to the first `## ` heading. */
@@ -103,7 +103,7 @@ describe('README quick start', () => {
     expect(section(README, '## Schnellstart mit Docker')).toContain('docker compose -f docker-compose.example.yml build');
     expect(README).toContain('Es gibt noch kein npm-Paket und kein Container-Image zum Herunterladen. Du installierst aus dem Quellcode.');
     for (const text of [README, ENGLISH_README]) {
-      expect(text).not.toMatch(/npx\s+apaleo-datev/);
+      expect(text).not.toMatch(/npx\s+apaleo-bmd/);
       expect(text).not.toContain('docker pull');
     }
   });
@@ -201,7 +201,7 @@ describe('docs folder', () => {
     const text = readRepoFile('docs/configuration.md');
     for (const path of configPaths()) expect(text, path).toContain(`\`${path}\``);
     for (const { variable } of [...ENV_OVERRIDES, ...SECRET_KEYS]) expect(text, variable).toContain(`\`${variable}\``);
-    expect(text).toContain('`APALEO_DATEV_CONFIG`');
+    expect(text).toContain('`APALEO_BMD_CONFIG`');
   });
 
   it('has the date-dependent rates, every unchecked template row and a sign-off checklist in the mapping guide, and no English summary', () => {

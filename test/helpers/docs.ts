@@ -39,7 +39,7 @@ export function sourceFiles(): string[] {
 
 // --- Commands --------------------------------------------------------------
 
-const PROGRAMS = ['apaleo-datev ', 'node dist/cli/main.js '];
+const PROGRAMS = ['apaleo-bmd ', 'node dist/cli/main.js '];
 /** Flags the CLI accepts before or instead of a command, and on every command. */
 const TOP_LEVEL_FLAGS = new Set(['help', 'version']);
 const GLOBAL_FLAGS = new Set(Object.keys(COMMON_OPTIONS));
@@ -74,14 +74,14 @@ export function commandPhrases(commands: readonly Command[]): Map<string, Comman
   return phrases;
 }
 
-/** Problems with the `apaleo-datev` command lines in the shell fences of one file. */
+/** Problems with the `apaleo-bmd` command lines in the shell fences of one file. */
 export function checkCommandLines(file: string, markdown: string, commands: readonly Command[]): string[] {
   const phrases = commandPhrases(commands);
   const problems: string[] = [];
   for (const raw of shellLines(markdown)) {
     const program = PROGRAMS.find((p) => raw.startsWith(p));
     if (!program) continue;
-    // A shell comment, pipe, redirection or second command ends the apaleo-datev part.
+    // A shell comment, pipe, redirection or second command ends the apaleo-bmd part.
     const line = raw.slice(program.length).split(/\s(?:#|&&|\|\||\||>>?|;)/)[0]?.trim() ?? '';
     const words = line.split(/\s+/).filter(Boolean);
     const flags = [...line.matchAll(/(?:^|[\s[])--([A-Za-z][\w-]*)/g)].map((m) => m[1] ?? '');

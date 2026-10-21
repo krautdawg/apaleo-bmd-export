@@ -1,4 +1,4 @@
-# skr04-hotel@1: Vorlage für die Kontenzuordnung eines Hotels im SKR 04, gelesen von apaleo-datev init-mapping.
+# skr04-hotel@1: Vorlage für die Kontenzuordnung eines Hotels im SKR 04, gelesen von apaleo-bmd init-mapping.
 # Jede Zeile ist ein Vorschlag, den der Steuerberater bestätigt. Keine Gewähr, keine Steuerberatung.
 # Spalten: apaleo-Kontotyp, name_pattern (regulärer Ausdruck ohne Groß-/Kleinschreibung auf Kontoname und Elternkonten,
 # leer = jeder Name, * = jeder Name und zusätzlich eine Platzhalterzeile), apaleo-USt-Satz (leer = jeder),

@@ -4,7 +4,7 @@
 Running the tool in a locally built container: the multi-stage, non-root Node.js 24 image with `/config` and `/data` volumes, the compose and `.env` examples that run `schedule --once` in a loop with secrets from the environment only, and the CI check that builds and runs the image without publishing it.
 ## Requirements
 ### Requirement: Container image
-The repository SHALL contain a multi-stage `Dockerfile` on Node.js 24 slim that runs as a non-root user, reads its config from `/config/apaleo-datev.config.yaml`, writes exports to `/data`, and uses `apaleo-datev` as entry point with `schedule --once` as default command.
+The repository SHALL contain a multi-stage `Dockerfile` on Node.js 24 slim that runs as a non-root user, reads its config from `/config/apaleo-bmd.config.yaml`, writes exports to `/data`, and uses `apaleo-bmd` as entry point with `schedule --once` as default command.
 
 #### Scenario: Run a one-off export in the container
 - **WHEN** the user runs the locally built image with the config and mapping mounted at `/config`, a volume at `/data`, `APALEO_CLIENT_SECRET` set, and the arguments `export --month 2026-10`
@@ -15,14 +15,14 @@ The repository SHALL contain a multi-stage `Dockerfile` on Node.js 24 slim that 
 - **THEN** the process runs as user `node`, not root
 
 ### Requirement: Secrets from the environment only
-The container SHALL need no secret in the mounted config: `APALEO_CLIENT_SECRET` SHALL come from the environment, and other overrides SHALL be limited to the documented allow-list of scalar keys from the `cli` capability plus `APALEO_DATEV_TIMEZONE`.
+The container SHALL need no secret in the mounted config: `APALEO_CLIENT_SECRET` SHALL come from the environment, and other overrides SHALL be limited to the documented allow-list of scalar keys from the `cli` capability plus `APALEO_BMD_TIMEZONE`.
 
 #### Scenario: Compose with env file
 - **WHEN** the user copies `.env.example` to `.env`, fills in the secret and runs `docker compose -f docker-compose.example.yml up -d --build`
 - **THEN** the loop runs `schedule --once` with the secret from `.env` and the config from the mounted file
 
 #### Scenario: Array key through the environment
-- **WHEN** the compose file sets `APALEO_DATEV_PROPERTIES=BSP`
+- **WHEN** the compose file sets `APALEO_BMD_PROPERTIES=BSP`
 - **THEN** the run fails with the message that `properties` can only be set in the config file
 
 ### Requirement: Compose and env examples

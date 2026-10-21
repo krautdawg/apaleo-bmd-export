@@ -3,7 +3,8 @@ import * as nodeFs from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { runCli } from '../../src/cli/run.js';
-import { bodyOf, sha256, withoutCreationTime, type Manifest } from '../../src/export/index.js';
+import { withoutCreationTime } from '../../src/datev/target.js';
+import { bodyOf, sha256, type Manifest } from '../../src/export/index.js';
 import { ApaleoError, ApaleoPermissionError } from '../../src/sources/apaleo/index.js';
 import { BSP } from '../helpers/apaleo.js';
 import { splitFields } from '../helpers/extf.js';
@@ -43,7 +44,7 @@ function chargeOn(day: `${number}-${number}-${number}`, entry: string) {
   };
 }
 
-describe('apaleo-datev export', () => {
+describe('apaleo-bmd export', () => {
   it('writes the golden EXTF file, its protocol and the manifest for a month and exits 0', async () => {
     const setup = exportSetup();
     expect(await runCli(['export', '--month', '2026-09', '--property', BSP], setup.ctx)).toBe(0);
@@ -62,7 +63,7 @@ describe('apaleo-datev export', () => {
     const protocol = read(setup, PROTOCOL).toString('utf8');
     expect(protocol).toContain('Totals per DATEV account:');
     expect(protocol).toContain(`SHA-256: ${sha256(file)}`);
-    expect(protocol).toContain('Tool: apaleo-datev 0.1.0');
+    expect(protocol).toContain('Tool: apaleo-bmd 0.0.0');
   });
 
   it('exits 2 and explains --month and --from/--to when the period is missing', async () => {
@@ -149,7 +150,7 @@ describe('apaleo-datev export', () => {
     expect(out).toMatch(/^ {2}7 % +664\.00 +43\.44$/m);
     expect(out).toContain(`File: a real run writes exports/BSP/2026-09/${FILE}`);
     expect(out).toContain('Result: dry run, nothing written');
-    expect(readdirSync(setup.ctx.cwd).sort()).toEqual(['apaleo-datev.config.yaml', 'mapping-BSP.csv']);
+    expect(readdirSync(setup.ctx.cwd).sort()).toEqual(['apaleo-bmd.config.yaml', 'mapping-BSP.csv']);
   });
 
   it('exits 1 in a dry run with an error finding', async () => {
@@ -247,12 +248,12 @@ describe('re-running an export', () => {
   it('writes nothing while another run holds the folder lock', async () => {
     const setup = exportSetup();
     await nodeFs.mkdir(folder(setup), { recursive: true });
-    writeFileSync(join(folder(setup), '.apaleo-datev.lock'), 'pid 1\n');
+    writeFileSync(join(folder(setup), '.apaleo-bmd.lock'), 'pid 1\n');
     expect(await runCli(['export', '--month', '2026-09', '--property', BSP], setup.ctx)).toBe(1);
     const out = setup.ctx.out();
-    expect(out).toContain('E-EXPORT: another apaleo-datev run is writing into');
+    expect(out).toContain('E-EXPORT: another apaleo-bmd run is writing into');
     expect(out).toContain('Result: 0 written, 0 unchanged, 1 failed.');
-    expect(readdirSync(folder(setup))).toEqual(['.apaleo-datev.lock']);
+    expect(readdirSync(folder(setup))).toEqual(['.apaleo-bmd.lock']);
   });
 
   it('does not write over a file another run created after this run checked the folder', async () => {
@@ -261,12 +262,12 @@ describe('re-running an export', () => {
       ...nodeFs,
       writeFile: async (path, data, options) => {
         // The other run finishes between this run's check and its write.
-        if (String(path).endsWith('.apaleo-datev.lock')) writeFileSync(join(folder(setup), FILE), 'written by another run');
+        if (String(path).endsWith('.apaleo-bmd.lock')) writeFileSync(join(folder(setup), FILE), 'written by another run');
         return nodeFs.writeFile(path, data, options);
       },
     };
     expect(await runCli(['export', '--month', '2026-09', '--property', BSP], setup.ctx)).toBe(1);
-    expect(setup.ctx.out()).toContain('changed while this run was checking it, probably by another apaleo-datev run');
+    expect(setup.ctx.out()).toContain('changed while this run was checking it, probably by another apaleo-bmd run');
     expect(read(setup, FILE).toString('utf8')).toBe('written by another run');
     expect(readdirSync(folder(setup))).toEqual([FILE]);
   });
@@ -281,7 +282,7 @@ describe('re-running an export', () => {
 
   it('refuses a re-run whose header changed (WJ-Beginn) and replaces the file with --overwrite', async () => {
     const setup = await exportedOnce();
-    const configPath = join(setup.ctx.cwd, 'apaleo-datev.config.yaml');
+    const configPath = join(setup.ctx.cwd, 'apaleo-bmd.config.yaml');
     writeFileSync(configPath, readFileSync(configPath, 'utf8').replace('mandantennummer: 42\n', 'mandantennummer: 42\n  wjBeginn: "09-01"\n'));
     const old = read(setup, FILE);
     expect(headerFields(old)[12]).toBe('20260101');
@@ -319,7 +320,7 @@ describe('re-running an export', () => {
     const before = readdirSync(folder(setup)).map((name) => [name, read(setup, name)] as const);
     expect(await runCli(['export', '--month', '2026-09', '--property', BSP, '--overwrite'], setup.ctx)).toBe(1);
     expect(setup.ctx.out()).toContain('E-EXPORT');
-    expect(setup.ctx.out()).toContain('manifest.json is not a manifest written by apaleo-datev');
+    expect(setup.ctx.out()).toContain('manifest.json is not a manifest written by apaleo-bmd');
     expect(readdirSync(folder(setup)).map((name) => [name, read(setup, name)] as const)).toEqual(before);
   });
 });

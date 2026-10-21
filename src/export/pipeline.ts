@@ -4,17 +4,18 @@ import { VERSION } from '../cli/version.js';
 import { ChartIndex } from '../core/chart.js';
 import type { LoadedConfig } from '../core/config.js';
 import { localDateIn, nextDay } from '../core/date.js';
-import { UserError } from '../core/errors.js';
+import { FindingsError, UserError } from '../core/errors.js';
 import { isErrorFinding, type Finding } from '../core/findings.js';
 import { formatCents } from '../core/money.js';
 import type { LedgerLine, SourceAdapter, SourceProperty } from '../core/source.js';
-import { ExtfValidationError, buchungsstapelFileName, encodeCp1252, renderBuchungsstapel, type ExtfHeader } from '../datev/index.js';
+import { datevTarget } from '../datev/target.js';
 import { checkCoverage, loadMapping, type Mapping, type Skr } from '../mapping/index.js';
 import { buildBookings, releaseRateOf, type PostedBooking, type PostingOptions, type PostingResult } from '../posting/index.js';
 import { checkAggregates, plausibilityFindings } from './checks.js';
 import { monthFolder, planOutput, repairCompanions, sha256, writeOutput, type OutputPlan, type WrittenFile } from './output.js';
 import { dayRuleFindings, finalFrom, lastFinalDay, splitPeriod, type DateRange, type PeriodPart } from './period.js';
 import { renderSummary } from './summary.js';
+import type { TargetFileMeta, TargetWriter } from './target.js';
 import { ApaleoPermissionError } from '../sources/apaleo/index.js';
 
 export interface ExportRequest {
@@ -41,7 +42,12 @@ export interface ExportDeps {
   post?: typeof buildBookings;
   /** Called with each property-month as soon as it is done, so a caller can print it before the next one runs. */
   onOutcome?: (outcome: PartOutcome) => void;
+  /** The file format to write. Default `DEFAULT_TARGET`; tests pass a fake one. */
+  target?: TargetWriter<PostedBooking>;
 }
+
+/** The target the export writes when the caller names none. */
+export const DEFAULT_TARGET: TargetWriter<PostedBooking> = datevTarget;
 
 /**
  * - `written`, `replaced`: the file was written (a replaced file is kept beside it).
@@ -58,7 +64,7 @@ export interface PartOutcome {
   part: PeriodPart;
   status: PartStatus;
   findings: Finding[];
-  /** The EXTF file the part writes or would write. */
+  /** The file the part writes or would write. */
   path?: string;
   /** For a dry run: what a real run would do with the file. */
   plan?: OutputPlan['action'];
@@ -105,11 +111,6 @@ class PropertyInputs {
   get mappingPath(): string {
     const configured = this.deps.loaded.config.properties.find((p) => p.id === this.id)?.mapping;
     return resolve(this.deps.ctx.cwd, configured ?? `mapping-${this.id}.csv`);
-  }
-
-  get mandantennummer(): number {
-    const { config } = this.deps.loaded;
-    return config.properties.find((p) => p.id === this.id)?.mandantennummer ?? config.datev.mandantennummer;
   }
 
   loadMapping(): Promise<MappingFile> {
@@ -166,7 +167,7 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
   if (!inputs.property) {
     findings.push({
       code: 'E-PROPERTY-UNKNOWN',
-      message: `the property ${inputs.id} is not visible to this apaleo custom app. Run "apaleo-datev properties" to list the ids it can read`,
+      message: `the property ${inputs.id} is not visible to this apaleo custom app. Run "apaleo-bmd properties" to list the ids it can read`,
     });
     return failed();
   }
@@ -206,13 +207,12 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
       return outcome('empty');
     }
 
-    const header = extfHeader(part, inputs, skr, deps, request.demo === true);
-    const rendered = renderBuchungsstapel({ header, bookings: result.bookings });
-    // The writer already replaced every character outside CP1252 and reported it.
-    const { bytes } = encodeCp1252(rendered.text);
-    findings.push(...rendered.warnings);
-    const path = join(monthFolder(deps.ctx.cwd, deps.loaded.config.output.dir, inputs.id, part.month), buchungsstapelFileName(header, request.demo === true ? `${inputs.id}_${DEMO_FILE_MARKER}` : inputs.id));
-    const plan = await planOutput(deps.ctx, path, bytes, part, request.overwrite);
+    const target = deps.target ?? DEFAULT_TARGET;
+    const meta: TargetFileMeta = { config: deps.loaded.config, propertyId: inputs.id, part, skr, demo: request.demo === true, createdAt: deps.ctx.now() };
+    const { bytes, findings: renderFindings } = target.render(result.bookings, meta);
+    findings.push(...renderFindings);
+    const path = join(monthFolder(deps.ctx.cwd, deps.loaded.config.output.dir, inputs.id, part.month), target.fileName(meta));
+    const plan = await planOutput(deps.ctx, target, path, bytes, part, request.overwrite);
     if (plan.action === 'refuse') findings.push(plan.finding);
     if (hasError(findings)) return outcome('failed', { path });
     if (request.dryRun) return outcome('checked', { path, plan: plan.action });
@@ -220,7 +220,7 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
     const companions = (status: PartStatus, fileBytes: Uint8Array): WrittenFile => ({
       path,
       bytes: fileBytes,
-      protocol: protocolText(outcome(status, { path }).summary, path, fileBytes, mappingSha256, deps.ctx.now(), request.demo === true),
+      protocol: protocolText(target.protocolTitle, outcome(status, { path }).summary, path, fileBytes, mappingSha256, deps.ctx.now(), request.demo === true),
       entry: {
         from: part.from,
         to: part.to,
@@ -247,7 +247,7 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
     await writeOutput(deps.ctx, plan, companions(status, bytes));
     return outcome(status, { path });
   } catch (error) {
-    if (error instanceof ExtfValidationError) findings.push(...error.findings);
+    if (error instanceof FindingsError) findings.push(...error.findings);
     else if (error instanceof UserError) findings.push({ code: 'E-EXPORT', message: error.message });
     else if (isSystemError(error)) findings.push(fileSystemFinding(error, resolve(deps.ctx.cwd, deps.loaded.config.output.dir), request.demo === true));
     else throw error;
@@ -363,44 +363,25 @@ export function fileSystemFinding(error: NodeJS.ErrnoException, dir: string, dem
   };
 }
 
-function extfHeader(part: PeriodPart, inputs: PropertyInputs, skr: Skr, { loaded, ctx }: ExportDeps, demo: boolean): ExtfHeader {
-  const { datev } = loaded.config;
-  return {
-    beraternummer: datev.beraternummer,
-    mandantennummer: inputs.mandantennummer,
-    wjBeginn: part.wjBeginn,
-    sachkontenlaenge: datev.sachkontenlaenge,
-    datumVom: part.from,
-    datumBis: part.to,
-    sachkontenrahmen: skr,
-    festschreibung: datev.festschreibung,
-    bezeichnung: `${demo ? 'DEMO ' : ''}apaleo ${inputs.id} ${part.month}`.slice(0, 30),
-    erzeugtAm: ctx.now(),
-  };
-}
-
 function sideTotals(bookings: readonly PostedBooking[]): { soll: number; haben: number } {
   const sum = (side: 'S' | 'H') => bookings.filter((b) => b.side === side).reduce((total, b) => total + b.amountCents, 0);
   return { soll: sum('S'), haben: sum('H') };
 }
 
-/** Appended to the property id in the name of a demo file, so a demo file never looks like a real export in a file list. */
-export const DEMO_FILE_MARKER = 'DEMO';
-
 /** The first line of a demo protocol and of the demo's output (`export --demo`). */
 export const DEMO_NOTICE =
   'DEMO: bundled sample data of the fabricated "Hotel Beispiel", not read from apaleo. Never import a demo file into a real DATEV Mandant.';
 
-function protocolText(summary: string, path: string, bytes: Uint8Array, mappingSha256: string, now: Date, demo: boolean): string {
+function protocolText(title: string, summary: string, path: string, bytes: Uint8Array, mappingSha256: string, now: Date, demo: boolean): string {
   return [
     ...(demo ? [DEMO_NOTICE] : []),
-    'apaleo-datev export protocol. No warranty, not tax advice: have your Steuerberater check the bookings.',
+    `${title}. No warranty, not tax advice: have your Steuerberater check the bookings.`,
     '',
     summary,
     `File: ${basename(path)}`,
     `SHA-256: ${sha256(bytes)}`,
     `Mapping SHA-256: ${mappingSha256}`,
-    `Tool: apaleo-datev ${VERSION}`,
+    `Tool: apaleo-bmd ${VERSION}`,
     `Created: ${now.toISOString()}`,
     '',
   ].join('\n');

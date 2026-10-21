@@ -32,7 +32,7 @@ export const initMapping: Command = {
   },
   async run(args, ctx) {
     const propertyId = stringOption(args.values, 'property');
-    if (!propertyId) throw new UsageError('init-mapping needs --property <id>. Run "apaleo-datev properties" to list them.');
+    if (!propertyId) throw new UsageError('init-mapping needs --property <id>. Run "apaleo-bmd properties" to list them.');
     const skr = parseSkr(stringOption(args.values, 'skr'));
     if (!skr) throw new UsageError('init-mapping needs --skr 03 or --skr 04 (ask the Kanzlei which chart the Mandant uses).');
     const update = args.values.update === true;
@@ -71,7 +71,7 @@ export const initMapping: Command = {
       printCounts(ctx, suggestion.rows);
       ctx.stdout.write(
         'Every row is a suggestion: have your Steuerberater check the file, fill in the empty DATEV accounts, ' +
-          'then run "apaleo-datev mapping check".\n',
+          'then run "apaleo-bmd mapping check".\n',
       );
       return EXIT_OK;
     }
@@ -82,7 +82,7 @@ export const initMapping: Command = {
       const comment = mappingHeaderComment(template, sachkontenlaenge);
       await replaceKeepingBackup(ctx, path, backup, renderMappingFile([comment], [...converted, ...added]));
       ctx.stdout.write(
-        `Converted the Grman export ${path} to the apaleo-datev layout (${converted.length} rows kept, the original is ${backup}).\n`,
+        `Converted the Grman export ${path} to the apaleo-bmd layout (${converted.length} rows kept, the original is ${backup}).\n`,
       );
       printAdded(ctx, added);
       return EXIT_OK;

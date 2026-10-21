@@ -16,7 +16,7 @@ import { createTestContext } from '../helpers/context.js';
 const VALID = 'datev:\n  beraternummer: 1234567\n  mandantennummer: 42\n';
 const APALEO_DEFAULTS = { baseUrl: 'https://api.apaleo.com', identityUrl: 'https://identity.apaleo.com' };
 
-async function load(content: string, env: Env = {}, fileName = 'apaleo-datev.config.yaml') {
+async function load(content: string, env: Env = {}, fileName = 'apaleo-bmd.config.yaml') {
   const ctx = createTestContext({ files: { [fileName]: content }, env });
   return loadConfig({ path: join(ctx.cwd, fileName), env: ctx.env, readFile: ctx.fs.readFile });
 }
@@ -28,11 +28,11 @@ async function loadError(content: string, env: Env = {}, fileName?: string): Pro
 }
 
 describe('config path resolution', () => {
-  it('prefers --config, then APALEO_DATEV_CONFIG, then the default file', () => {
-    const env = { APALEO_DATEV_CONFIG: 'from-env.yaml' };
+  it('prefers --config, then APALEO_BMD_CONFIG, then the default file', () => {
+    const env = { APALEO_BMD_CONFIG: 'from-env.yaml' };
     expect(resolveConfigPath('flag.yaml', env, '/work')).toBe(resolve('/work/flag.yaml'));
     expect(resolveConfigPath(undefined, env, '/work')).toBe(resolve('/work/from-env.yaml'));
-    expect(resolveConfigPath(undefined, {}, '/work')).toBe(resolve('/work/apaleo-datev.config.yaml'));
+    expect(resolveConfigPath(undefined, {}, '/work')).toBe(resolve('/work/apaleo-bmd.config.yaml'));
     expect(resolveConfigPath('/abs/c.json', env, '/work')).toBe('/abs/c.json');
   });
 });
@@ -96,7 +96,7 @@ describe('loading', () => {
     expect(secrets.apaleoClientSecret).toBe('abc');
   });
 
-  const example = readFileSync(new URL('../../apaleo-datev.config.example.yaml', import.meta.url), 'utf8');
+  const example = readFileSync(new URL('../../apaleo-bmd.config.example.yaml', import.meta.url), 'utf8');
 
   it('rejects the unedited example config until the Kanzlei numbers are filled in', async () => {
     const error = await loadError(example);
@@ -199,7 +199,7 @@ describe('validation errors name the key path', () => {
 
   it('reports YAML syntax errors with the file path', async () => {
     const error = await loadError('datev: [unclosed\n');
-    expect(error.message).toMatch(/Cannot parse config file .*apaleo-datev\.config\.yaml: line \d+, column \d+: /);
+    expect(error.message).toMatch(/Cannot parse config file .*apaleo-bmd\.config\.yaml: line \d+, column \d+: /);
   });
 
   it('does not quote neighbouring lines, such as a secret, in a YAML syntax error', async () => {
@@ -315,53 +315,58 @@ describe('secrets', () => {
 });
 
 describe('environment overrides', () => {
-  it('APALEO_DATEV_OUTPUT_DIR wins over output.dir in the file', async () => {
-    const { config } = await load(`${VALID}output:\n  dir: ./out\n`, { APALEO_DATEV_OUTPUT_DIR: '/data/out' });
+  it('APALEO_BMD_OUTPUT_DIR wins over output.dir in the file', async () => {
+    const { config } = await load(`${VALID}output:\n  dir: ./out\n`, { APALEO_BMD_OUTPUT_DIR: '/data/out' });
     expect(config.output.dir).toBe('/data/out');
   });
 
   it('applies every allow-listed scalar override', async () => {
     const { config } = await load(VALID, {
       APALEO_CLIENT_ID: 'client-1',
-      APALEO_DATEV_BERATERNUMMER: '7654321',
-      APALEO_DATEV_MANDANTENNUMMER: '99',
+      APALEO_BMD_BERATERNUMMER: '7654321',
+      APALEO_BMD_MANDANTENNUMMER: '99',
     });
     expect(config.apaleo.clientId).toBe('client-1');
     expect(config.datev.beraternummer).toBe(7654321);
     expect(config.datev.mandantennummer).toBe(99);
   });
 
-  it('APALEO_DATEV_TIMEZONE sets schedule.timezone and is validated like the file value', async () => {
-    const { config } = await load(VALID, { APALEO_DATEV_TIMEZONE: 'Europe/Vienna' });
+  it('APALEO_BMD_TIMEZONE sets schedule.timezone and is validated like the file value', async () => {
+    const { config } = await load(VALID, { APALEO_BMD_TIMEZONE: 'Europe/Vienna' });
     expect(config.schedule.timezone).toBe('Europe/Vienna');
-    const error = await loadError(VALID, { APALEO_DATEV_TIMEZONE: 'Mars/Olympus' });
+    const error = await loadError(VALID, { APALEO_BMD_TIMEZONE: 'Mars/Olympus' });
     expect(error.message).toContain('schedule.timezone: must be an IANA time zone name');
-    expect(error.message).toContain('from APALEO_DATEV_TIMEZONE');
+    expect(error.message).toContain('from APALEO_BMD_TIMEZONE');
   });
 
   it('ignores empty override values', async () => {
-    const { config } = await load(VALID, { APALEO_DATEV_OUTPUT_DIR: '' });
+    const { config } = await load(VALID, { APALEO_BMD_OUTPUT_DIR: '' });
     expect(config.output.dir).toBe('./exports');
   });
 
   it('names the variable when an override value is invalid', async () => {
-    const notNumber = await loadError(VALID, { APALEO_DATEV_BERATERNUMMER: 'abc' });
-    expect(notNumber.message).toContain('APALEO_DATEV_BERATERNUMMER must be a whole number');
-    const outOfRange = await loadError(VALID, { APALEO_DATEV_BERATERNUMMER: '12' });
+    const notNumber = await loadError(VALID, { APALEO_BMD_BERATERNUMMER: 'abc' });
+    expect(notNumber.message).toContain('APALEO_BMD_BERATERNUMMER must be a whole number');
+    const outOfRange = await loadError(VALID, { APALEO_BMD_BERATERNUMMER: '12' });
     expect(outOfRange.message).toContain('datev.beraternummer');
-    expect(outOfRange.message).toContain('from APALEO_DATEV_BERATERNUMMER');
+    expect(outOfRange.message).toContain('from APALEO_BMD_BERATERNUMMER');
   });
 
-  it('rejects an unknown APALEO_DATEV_* variable and names it', async () => {
-    const error = await loadError(VALID, { APALEO_DATEV_OUTPUTDIR: '/x' });
-    expect(error.message).toContain('APALEO_DATEV_OUTPUTDIR: unknown variable');
-    expect(error.message).toContain('APALEO_DATEV_OUTPUT_DIR');
+  it('rejects an unknown APALEO_BMD_* variable and names it', async () => {
+    const error = await loadError(VALID, { APALEO_BMD_OUTPUTDIR: '/x' });
+    expect(error.message).toContain('APALEO_BMD_OUTPUTDIR: unknown variable');
+    expect(error.message).toContain('APALEO_BMD_OUTPUT_DIR');
   });
 
   it('rejects an array key set from the environment', async () => {
-    const error = await loadError(VALID, { APALEO_DATEV_PROPERTIES: 'BER,MUC' });
-    expect(error.message).toContain('APALEO_DATEV_PROPERTIES');
+    const error = await loadError(VALID, { APALEO_BMD_PROPERTIES: 'BER,MUC' });
+    expect(error.message).toContain('APALEO_BMD_PROPERTIES');
     expect(error.message).toContain('"properties" is an array and can only be set in the config file');
+  });
+
+  it('ignores the old APALEO_DATEV_* names of the DATEV project', async () => {
+    const { config } = await load(VALID, { APALEO_DATEV_OUTPUT_DIR: '/old', APALEO_DATEV_PROPERTIES: 'BER', APALEO_DATEV_TIMEZONE: 'nope' });
+    expect(config.output.dir).toBe('./exports');
   });
 
   it('ignores unrelated environment variables', async () => {
@@ -370,11 +375,11 @@ describe('environment overrides', () => {
 
   it('only allow-lists scalar keys', () => {
     expect(ENV_OVERRIDES.map((o) => o.variable)).toEqual([
-      'APALEO_DATEV_OUTPUT_DIR',
+      'APALEO_BMD_OUTPUT_DIR',
       'APALEO_CLIENT_ID',
-      'APALEO_DATEV_BERATERNUMMER',
-      'APALEO_DATEV_MANDANTENNUMMER',
-      'APALEO_DATEV_TIMEZONE',
+      'APALEO_BMD_BERATERNUMMER',
+      'APALEO_BMD_MANDANTENNUMMER',
+      'APALEO_BMD_TIMEZONE',
     ]);
   });
 });
@@ -382,11 +387,11 @@ describe('environment overrides', () => {
 describe('missing config file', () => {
   it('throws ConfigNotFoundError with the path and how to create the file', async () => {
     const ctx = createTestContext();
-    const path = join(ctx.cwd, 'apaleo-datev.config.yaml');
+    const path = join(ctx.cwd, 'apaleo-bmd.config.yaml');
     const error = await loadConfig({ path, env: {}, readFile: ctx.fs.readFile }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ConfigNotFoundError);
     expect((error as Error).message).toContain(path);
-    expect((error as Error).message).toContain('apaleo-datev.config.example.yaml');
+    expect((error as Error).message).toContain('apaleo-bmd.config.example.yaml');
   });
 
   it('makes a command that needs config exit 1 with the path it looked for', async () => {
@@ -403,7 +408,7 @@ describe('missing config file', () => {
     };
     const ctx = createTestContext();
     expect(await runCli(['needs-config'], ctx, [needsConfig])).toBe(1);
-    expect(ctx.err()).toContain(`No config file found at ${join(ctx.cwd, 'apaleo-datev.config.yaml')}`);
+    expect(ctx.err()).toContain(`No config file found at ${join(ctx.cwd, 'apaleo-bmd.config.yaml')}`);
     expect(ctx.err()).toContain('--config <path>');
     expect(ctx.err()).not.toMatch(/\n\s+at /);
   });

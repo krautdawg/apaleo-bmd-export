@@ -7,7 +7,7 @@ import { createTestContext } from '../helpers/context.js';
 import { FakeSource } from '../helpers/fake-source.js';
 import { ledgerLine } from '../helpers/ledger.js';
 
-const CONFIG = FIXTURE_FILES['apaleo-datev.config.yaml'];
+const CONFIG = FIXTURE_FILES['apaleo-bmd.config.yaml'];
 const HEADER = 'apaleo_account;apaleo_type;apaleo_name;apaleo_vat_percent;datev_account;bu_key;datev_vat_percent;kost1;kost2;comment';
 const csv = (...lines: string[]) => [HEADER, ...lines].map((l) => `${l}\r\n`).join('');
 
@@ -25,15 +25,15 @@ function context(files: Record<string, string>, ledger?: LedgerLine[], config = 
   const data = structuredClone(BEISPIEL);
   if (ledger) data.ledger[BSP] = ledger;
   const fake = new FakeSource(data);
-  const ctx = createTestContext({ files: { 'apaleo-datev.config.yaml': config, ...files }, sourceFactory: () => fake });
+  const ctx = createTestContext({ files: { 'apaleo-bmd.config.yaml': config, ...files }, sourceFactory: () => fake });
   return { ctx, fake };
 }
 
-describe('apaleo-datev mapping check (offline)', () => {
+describe('apaleo-bmd mapping check (offline)', () => {
   it('prints a summary of rows by type and exits 0 for a valid mapping', async () => {
     const { ctx, fake } = context({ 'mapping-BSP.csv': VALID });
     expect(await runCli(['mapping', 'check', '--property', BSP, '--skr', '03'], ctx)).toBe(0);
-    expect(ctx.out()).toContain(`Mapping file: ${join(ctx.cwd, 'mapping-BSP.csv')} (apaleo-datev layout, 5 rows, SKR 03)`);
+    expect(ctx.out()).toContain(`Mapping file: ${join(ctx.cwd, 'mapping-BSP.csv')} (apaleo-bmd layout, 5 rows, SKR 03)`);
     expect(ctx.out()).toMatch(/type\s+rows\s+mapped\s+unmapped/);
     expect(ctx.out()).toMatch(/Revenues\s+1\s+1\s+0/);
     expect(ctx.out()).toMatch(/Payments\s+2\s+2\s+0/);
@@ -102,7 +102,7 @@ describe('apaleo-datev mapping check (offline)', () => {
   });
 });
 
-describe('apaleo-datev mapping check --from --to', () => {
+describe('apaleo-bmd mapping check --from --to', () => {
   it('fails with E-UNMAPPED for a new revenue account 5010, naming type, name, line count and gross total', async () => {
     const credit = { number: '5010', name: 'Spa', type: 'Revenues' };
     const ledger = [
@@ -128,7 +128,7 @@ describe('apaleo-datev mapping check --from --to', () => {
     const path = join(ctx.cwd, 'mapping-BSP.csv');
     const text = (await ctx.fs.readFile(path, 'utf8')).replace(/^3501;CityTaxes;City Tax 0%;0;;/m, '3501;CityTaxes;City Tax 0%;0;1590;');
     await ctx.fs.writeFile(path, text);
-    const after = createTestContext({ files: { 'apaleo-datev.config.yaml': CONFIG, 'mapping-BSP.csv': text }, sourceFactory: () => new FakeSource(BEISPIEL) });
+    const after = createTestContext({ files: { 'apaleo-bmd.config.yaml': CONFIG, 'mapping-BSP.csv': text }, sourceFactory: () => new FakeSource(BEISPIEL) });
     expect(await runCli(period, after)).toBe(0);
     expect(after.out()).not.toContain('E-');
     // The untaxed deposit release of 2026-09-22 takes 7 % from its PostPrepaymentVat line and resolves to the 7 % deposit row.
@@ -192,10 +192,10 @@ describe('apaleo-datev mapping check --from --to', () => {
   });
 });
 
-describe('apaleo-datev mapping usage', () => {
+describe('apaleo-bmd mapping usage', () => {
   it.each([
-    [['mapping'], 'Usage: apaleo-datev mapping check'],
-    [['mapping', 'lint'], 'Usage: apaleo-datev mapping check'],
+    [['mapping'], 'Usage: apaleo-bmd mapping check'],
+    [['mapping', 'lint'], 'Usage: apaleo-bmd mapping check'],
     [['mapping', 'check', '--from', '2026-09-01'], '--from and --to go together'],
     [['mapping', 'check', '--from', '2026-09-31', '--to', '2026-10-01'], '--from must be a date'],
     [['mapping', 'check', '--from', '2026-09-02', '--to', '2026-09-01'], 'lies before'],

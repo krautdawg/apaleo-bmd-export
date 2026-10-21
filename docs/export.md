@@ -1,15 +1,15 @@
 # Der Befehl export
 
-`apaleo-datev export` liest das apaleo-Buchungsjournal eines Zeitraums, bucht es mit deiner Kontenzuordnung und schreibt pro Hotel und Kalendermonat einen DATEV-Buchungsstapel in den Ausgabeordner. Deine Kanzlei holt die Dateien dort ab (ein gemeinsamer Ordner, ein Cloud-Ordner, oder du schickst sie). Nichts wird irgendwohin hochgeladen.
+`apaleo-bmd export` liest das apaleo-Buchungsjournal eines Zeitraums, bucht es mit deiner Kontenzuordnung und schreibt pro Hotel und Kalendermonat einen DATEV-Buchungsstapel in den Ausgabeordner. Deine Kanzlei holt die Dateien dort ab (ein gemeinsamer Ordner, ein Cloud-Ordner, oder du schickst sie). Nichts wird irgendwohin hochgeladen.
 
 Keine Gewähr, keine Steuerberatung: Lass deine Steuerberatung die Kontenzuordnung und die ersten Importe prüfen.
 
 ```sh
-apaleo-datev export --month 2026-10 --dry-run          # alles prüfen, Übersicht zeigen, nichts schreiben
-apaleo-datev export --month 2026-10                    # jedes Hotel aus der Konfiguration
-apaleo-datev export --month 2026-10 --property BSP     # ein Hotel
-apaleo-datev export --from 2026-09-25 --to 2026-10-05  # beide Tage eingeschlossen; zwei Dateien, eine pro Monat
-apaleo-datev export --month 2026-10 --overwrite        # nach einer Nachbuchung, siehe „Noch einmal exportieren“
+apaleo-bmd export --month 2026-10 --dry-run          # alles prüfen, Übersicht zeigen, nichts schreiben
+apaleo-bmd export --month 2026-10                    # jedes Hotel aus der Konfiguration
+apaleo-bmd export --month 2026-10 --property BSP     # ein Hotel
+apaleo-bmd export --from 2026-09-25 --to 2026-10-05  # beide Tage eingeschlossen; zwei Dateien, eine pro Monat
+apaleo-bmd export --month 2026-10 --overwrite        # nach einer Nachbuchung, siehe „Noch einmal exportieren“
 ```
 
 Der Exit-Code ist 0, wenn jedes Hotel und jeder Monat geschrieben wurde oder schon aktuell war, 1, wenn einer davon fehlgeschlagen ist, und 2 bei falschem Aufruf (zum Beispiel ohne Zeitraum).
@@ -17,8 +17,8 @@ Der Exit-Code ist 0, wenn jedes Hotel und jeder Monat geschrieben wurde oder sch
 ## Demo ohne apaleo
 
 ```sh
-apaleo-datev export --month 2026-09 --demo --dry-run   # die Übersicht für das erfundene Hotel Beispiel
-apaleo-datev export --month 2026-09 --demo             # die Datei, nur nach ./demo-output/
+apaleo-bmd export --month 2026-09 --demo --dry-run   # die Übersicht für das erfundene Hotel Beispiel
+apaleo-bmd export --month 2026-09 --demo             # die Datei, nur nach ./demo-output/
 ```
 
 `--demo` lässt genau diese Verarbeitung auf den aufgezeichneten apaleo-Antworten in `examples/demo/` laufen: keine Konfigurationsdatei, kein Secret, kein Netz. Die Uhr der Demo steht auf 2026-10-05, der September 2026 ist also abgeschlossen. Ihr Dateiname endet auf `_DEMO` (`EXTF_Buchungsstapel_1234567_42_20260901-20260930_BSP_DEMO.csv`), ihre Bezeichnung sagt `DEMO`, und ihr Protokoll beginnt mit einer Zeile `DEMO`; importiere sie nie in einen echten Mandanten. Die Demo schreibt unterhalb des Arbeitsverzeichnisses; im Docker-Image ist das das nur lesbare `/config`, siehe deshalb [docker.md](docker.md#die-demo-im-image). `--config` lässt sich nicht mit `--demo` kombinieren, und die Umgebung ändert nicht, wohin die Demo schreibt.
@@ -95,4 +95,4 @@ DATEV erkennt einen schon importierten Stapel nicht wieder: Dieselben Buchungen 
 
 Der Vergleich liest die Datei selbst, er funktioniert also auch, wenn `manifest.json` gelöscht wurde. Ist die Datei unverändert, aber ihr Protokoll oder ihr Eintrag im Manifest fehlt oder beschreibt eine andere Datei (zum Beispiel weil `manifest.json` gelöscht oder ein Lauf nach dem Schreiben der CSV-Datei unterbrochen wurde), schreibt der Lauf beides neu und meldet den Hinweis `N-COMPANIONS-REPAIRED`; die CSV-Datei selbst bleibt unberührt.
 
-Während ein Lauf in einen Ordner für Hotel und Monat schreibt, hält er dort die Sperrdatei `.apaleo-datev.lock` und prüft noch einmal, dass die Datei auf der Festplatte noch die ist, die er verglichen hat. Ein zweiter Lauf, der gleichzeitig startet, scheitert für diesen Monat mit `E-EXPORT` und schreibt nichts; starte ihn noch einmal, wenn der erste fertig ist. Wurde ein Lauf beim Schreiben abgebrochen, kann die Sperrdatei übrig bleiben: Wenn kein anderer Lauf aktiv ist, lösch sie und starte noch einmal.
+Während ein Lauf in einen Ordner für Hotel und Monat schreibt, hält er dort die Sperrdatei `.apaleo-bmd.lock` und prüft noch einmal, dass die Datei auf der Festplatte noch die ist, die er verglichen hat. Ein zweiter Lauf, der gleichzeitig startet, scheitert für diesen Monat mit `E-EXPORT` und schreibt nichts; starte ihn noch einmal, wenn der erste fertig ist. Wurde ein Lauf beim Schreiben abgebrochen, kann die Sperrdatei übrig bleiben: Wenn kein anderer Lauf aktiv ist, lösch sie und starte noch einmal.

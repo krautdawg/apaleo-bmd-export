@@ -13,7 +13,7 @@ async function smoke(argv: string[], server: FixtureServerOptions = {}, now?: Da
   return { code, out: ctx.out(), err: ctx.err(), ctx };
 }
 
-describe('apaleo-datev live-smoke', () => {
+describe('apaleo-bmd live-smoke', () => {
   it('reports account counts, ledger lines and totals for the day and exits 0', async () => {
     const { code, out, ctx } = await smoke(['--property', 'BSP', '--date', '2026-09-14']);
     expect(code).toBe(0);
@@ -28,7 +28,7 @@ describe('apaleo-datev live-smoke', () => {
     expect(out).toContain('OK    aggregates: 5 main accounts');
     expect(out).toMatch(/^ {8}5000\s+Revenues\s+0\.00\s+138\.80\s+0\.00\s+138\.80\s+0\.00\s+127\.19\s+gross$/m);
     expect(out).toContain('Result: every required step passed for business day 2026-09-14.');
-    expect(readdirSync(ctx.cwd)).toEqual(['apaleo-datev.config.yaml']);
+    expect(readdirSync(ctx.cwd)).toEqual(['apaleo-bmd.config.yaml']);
   });
 
   it('answers the open live questions', async () => {

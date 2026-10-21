@@ -14,23 +14,23 @@ There is no npm package or container image release yet. You install from source.
 2. Install (needs Node.js 24 and git):
 
    ```sh
-   git clone https://github.com/krautdawg/apaleo-datev-export.git
-   cd apaleo-datev-export
+   git clone https://github.com/krautdawg/apaleo-bmd-export.git
+   cd apaleo-bmd-export
    corepack enable
    pnpm install --frozen-lockfile
    pnpm build
    node dist/cli/main.js --help
    ```
 
-   The commands below use `apaleo-datev`. Without `pnpm link --global`, type `node dist/cli/main.js` instead.
+   The commands below use `apaleo-bmd`. Without `pnpm link --global`, type `node dist/cli/main.js` instead.
 
 3. Try it on the bundled demo data, without apaleo: `node dist/cli/main.js export --month 2026-09 --demo --dry-run`.
-4. Copy `apaleo-datev.config.example.yaml` to `apaleo-datev.config.yaml`, fill it in, and set the secret in the environment (`APALEO_CLIENT_SECRET`), never in the file. Then create the mapping, have your Steuerberater check it, and export:
+4. Copy `apaleo-bmd.config.example.yaml` to `apaleo-bmd.config.yaml`, fill it in, and set the secret in the environment (`APALEO_CLIENT_SECRET`), never in the file. Then create the mapping, have your Steuerberater check it, and export:
 
    ```sh
-   apaleo-datev init-mapping --property BSP --skr 03
-   apaleo-datev export --month 2026-09 --dry-run
-   apaleo-datev export --month 2026-09
+   apaleo-bmd init-mapping --property BSP --skr 03
+   apaleo-bmd export --month 2026-09 --dry-run
+   apaleo-bmd export --month 2026-09
    ```
 
 ## Documentation (German)

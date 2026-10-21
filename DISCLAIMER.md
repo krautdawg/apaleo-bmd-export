@@ -1,6 +1,6 @@
 # Haftungsausschluss
 
-apaleo-datev-export ist ein kostenloses Open-Source-Geschenk an die Community. Bitte lies diesen Hinweis, bevor du die Ergebnisse verwendest. Verbindlich ist die deutsche Fassung. Die englische Übersetzung darunter dient nur dem Verständnis.
+apaleo-bmd-export ist ein kostenloses Open-Source-Geschenk an die Community. Bitte lies diesen Hinweis, bevor du die Ergebnisse verwendest. Verbindlich ist die deutsche Fassung. Die englische Übersetzung darunter dient nur dem Verständnis.
 
 - **Ohne Gewähr.** Die Software wird so bereitgestellt, wie sie ist, ohne ausdrückliche oder stillschweigende Gewährleistung. Sie kann Fehler enthalten, und die erzeugten Dateien können unvollständig oder falsch sein.
 - **Keine Haftung.** Die Autorinnen, Autoren und Mitwirkenden haften, soweit gesetzlich zulässig, nicht für Schäden, Verluste, Säumniszuschläge, Zinsen, zusätzliche Buchhaltungskosten oder steuerliche Folgen, die aus der Nutzung der Software oder ihrer Ergebnisse entstehen.

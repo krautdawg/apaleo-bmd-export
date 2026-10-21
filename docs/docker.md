@@ -1,6 +1,6 @@
 # Zeitplan und Docker
 
-`apaleo-datev schedule --once` ermittelt, welche Zeiträume fällig sind, exportiert die, die noch nicht im Ausgabeordner liegen, und endet. Im Tool läuft keine eigene Uhr: Cron, ein systemd-Timer, ein Kubernetes CronJob oder die Schleife in `docker-compose.example.yml` ruft es auf. Du kannst es so oft aufrufen, wie du willst, zum Beispiel stündlich: Ein Zeitraum, dessen Datei schon existiert, kostet keine Anfrage an apaleo.
+`apaleo-bmd schedule --once` ermittelt, welche Zeiträume fällig sind, exportiert die, die noch nicht im Ausgabeordner liegen, und endet. Im Tool läuft keine eigene Uhr: Cron, ein systemd-Timer, ein Kubernetes CronJob oder die Schleife in `docker-compose.example.yml` ruft es auf. Du kannst es so oft aufrufen, wie du willst, zum Beispiel stündlich: Ein Zeitraum, dessen Datei schon existiert, kostet keine Anfrage an apaleo.
 
 Keine Gewähr, keine Steuerberatung: Lass deine Steuerberatung die Kontenzuordnung und die ersten Importe prüfen, bevor das Tool allein läuft.
 
@@ -10,7 +10,7 @@ Es gibt kein Image in einer Registry. Du baust es selbst aus diesem Repository, 
 
 ```yaml
 schedule:
-  timezone: Europe/Berlin   # IANA-Zeitzone; auch APALEO_DATEV_TIMEZONE
+  timezone: Europe/Berlin   # IANA-Zeitzone; auch APALEO_BMD_TIMEZONE
   cadence: monthly          # monthly (Standard) oder daily
   monthly:
     dayOfMonth: 3           # 1 bis 5
@@ -58,11 +58,11 @@ Jede Zeile erscheint, sobald ihr Hotel und Zeitraum fertig sind, ein Lauf, der m
 ## Docker Compose (empfohlen)
 
 ```sh
-git clone https://github.com/krautdawg/apaleo-datev-export.git
-cd apaleo-datev-export
+git clone https://github.com/krautdawg/apaleo-bmd-export.git
+cd apaleo-bmd-export
 cp .env.example .env                 # APALEO_CLIENT_SECRET eintragen
 mkdir -p config data
-cp apaleo-datev.config.example.yaml config/apaleo-datev.config.yaml   # dann bearbeiten
+cp apaleo-bmd.config.example.yaml config/apaleo-bmd.config.yaml   # dann bearbeiten
 # die Kontenzuordnung(en) nach config/ legen, zum Beispiel config/mapping-BSP.csv
 sudo chown 1000:1000 data            # der Container läuft als Benutzer node (uid 1000)
 docker compose -f docker-compose.example.yml up -d --build
@@ -79,24 +79,24 @@ So ist der Container aufgebaut:
 
 | Pfad | Inhalt | Einbindung |
 | --- | --- | --- |
-| `/config` | `apaleo-datev.config.yaml` und die Kontenzuordnungen (CSV); auch das Arbeitsverzeichnis | `./config`, nur lesbar |
-| `/data` | die Exporte (`APALEO_DATEV_OUTPUT_DIR=/data`, geht `output.dir` vor) | `./data` |
+| `/config` | `apaleo-bmd.config.yaml` und die Kontenzuordnungen (CSV); auch das Arbeitsverzeichnis | `./config`, nur lesbar |
+| `/data` | die Exporte (`APALEO_BMD_OUTPUT_DIR=/data`, geht `output.dir` vor) | `./data` |
 | `/app` | das gebaute Tool | im Image |
 
 Weil das Arbeitsverzeichnis `/config` ist, zeigt ein Pfad zur Kontenzuordnung in der Konfiguration wie `./mapping-BSP.csv` (der Standard für `properties[].mapping`) in den Ordner `config/`.
 
 ### Secrets und Umgebung
 
-Die eingebundene Konfiguration braucht kein Secret: `APALEO_CLIENT_SECRET` kommt aus `.env`, und Git ignoriert diese Datei. Schreib es nie in die Konfigurationsdatei; das Tool lehnt das ab. Neben dem Secret lassen sich nur diese einzelnen Werte aus der Umgebung setzen: `APALEO_DATEV_CONFIG`, `APALEO_DATEV_OUTPUT_DIR`, `APALEO_CLIENT_ID`, `APALEO_DATEV_BERATERNUMMER`, `APALEO_DATEV_MANDANTENNUMMER` und `APALEO_DATEV_TIMEZONE`. Listen wie `properties` bleiben in der Konfigurationsdatei: `APALEO_DATEV_PROPERTIES` lehnt das Tool mit einer entsprechenden Meldung ab.
+Die eingebundene Konfiguration braucht kein Secret: `APALEO_CLIENT_SECRET` kommt aus `.env`, und Git ignoriert diese Datei. Schreib es nie in die Konfigurationsdatei; das Tool lehnt das ab. Neben dem Secret lassen sich nur diese einzelnen Werte aus der Umgebung setzen: `APALEO_BMD_CONFIG`, `APALEO_BMD_OUTPUT_DIR`, `APALEO_CLIENT_ID`, `APALEO_BMD_BERATERNUMMER`, `APALEO_BMD_MANDANTENNUMMER` und `APALEO_BMD_TIMEZONE`. Listen wie `properties` bleiben in der Konfigurationsdatei: `APALEO_BMD_PROPERTIES` lehnt das Tool mit einer entsprechenden Meldung ab.
 
 ### Einmalige Befehle
 
 Mit Argumenten führt der Compose-Dienst genau diesen einen Befehl aus und endet, statt in der Schleife zu laufen:
 
 ```sh
-docker compose -f docker-compose.example.yml run --rm apaleo-datev export --month 2026-10 --dry-run
-docker compose -f docker-compose.example.yml run --rm apaleo-datev export --month 2026-10
-docker compose -f docker-compose.example.yml run --rm apaleo-datev mapping check --property BSP
+docker compose -f docker-compose.example.yml run --rm apaleo-bmd export --month 2026-10 --dry-run
+docker compose -f docker-compose.example.yml run --rm apaleo-bmd export --month 2026-10
+docker compose -f docker-compose.example.yml run --rm apaleo-bmd mapping check --property BSP
 ```
 
 So schließt du eine Lücke nach einem Ausfall, der länger als `schedule.catchUpDays` war, oder startest `export --overwrite` nach einer Nachbuchung.
@@ -109,13 +109,13 @@ Wenn dir Cron auf dem Host lieber ist als ein Container, der dauerhaft läuft, b
 docker compose -f docker-compose.example.yml build
 crontab -e
 # diese Zeile eintragen (Pfad anpassen):
-0 * * * * cd /opt/apaleo-datev-export && docker compose -f docker-compose.example.yml run --rm apaleo-datev schedule --once >> schedule.log 2>&1
+0 * * * * cd /opt/apaleo-bmd-export && docker compose -f docker-compose.example.yml run --rm apaleo-bmd schedule --once >> schedule.log 2>&1
 ```
 
 Ohne Docker, nach der Installation aus dem Quellcode (`pnpm install --frozen-lockfile && pnpm build`), lautet die Cron-Zeile:
 
 ```sh
-0 * * * * cd /opt/apaleo-datev-export && node dist/cli/main.js schedule --once >> schedule.log 2>&1
+0 * * * * cd /opt/apaleo-bmd-export && node dist/cli/main.js schedule --once >> schedule.log 2>&1
 ```
 
 Cron schickt die Ausgabe per Mail an den Benutzer des Rechners, wenn das eingerichtet ist; sonst behalte `./schedule.log` im Blick. Ein fehlgeschlagener Lauf endet mit 1 und nennt den Befund-Code. Eine Alarm-Mail gibt es in dieser Version nicht.
@@ -123,9 +123,9 @@ Cron schickt die Ausgabe per Mail an den Benutzer des Rechners, wenn das eingeri
 ## Einfaches docker run
 
 ```sh
-docker build -t apaleo-datev-export:local .
-docker run --rm --env-file .env -v "$PWD/config:/config:ro" -v "$PWD/data:/data" apaleo-datev-export:local
-docker run --rm --env-file .env -v "$PWD/config:/config:ro" -v "$PWD/data:/data" apaleo-datev-export:local export --month 2026-10
+docker build -t apaleo-bmd-export:local .
+docker run --rm --env-file .env -v "$PWD/config:/config:ro" -v "$PWD/data:/data" apaleo-bmd-export:local
+docker run --rm --env-file .env -v "$PWD/config:/config:ro" -v "$PWD/data:/data" apaleo-bmd-export:local export --month 2026-10
 ```
 
 Der Standardbefehl des Image ist `schedule --once`; Argumente ersetzen ihn.
@@ -135,14 +135,14 @@ Der Standardbefehl des Image ist `schedule --once`; Argumente ersetzen ihn.
 `export --demo` braucht keine Konfiguration und kein Secret. Der Probelauf funktioniert so, wie er ist:
 
 ```sh
-docker run --rm apaleo-datev-export:local export --month 2026-09 --demo --dry-run
+docker run --rm apaleo-bmd-export:local export --month 2026-09 --demo --dry-run
 ```
 
 Ohne `--dry-run` schreibt die Demo nach `./demo-output/` unterhalb des Arbeitsverzeichnisses, und das ist im Image `/config`, das root gehört (und das Compose nur lesbar einbindet). Der Lauf würde mit `E-EXPORT` und `EACCES` scheitern. Setze das Arbeitsverzeichnis auf einen Datenordner, in den der Benutzer node schreiben darf:
 
 ```sh
 mkdir -p data && sudo chown 1000:1000 data
-docker run --rm -w /data -v "$PWD/data:/data" apaleo-datev-export:local export --month 2026-09 --demo
+docker run --rm -w /data -v "$PWD/data:/data" apaleo-bmd-export:local export --month 2026-09 --demo
 ```
 
 Die Datei landet in `./data/demo-output/BSP/2026-09/` und endet auf `_BSP_DEMO.csv`. Lösch `./data/demo-output/` danach; importiere nie eine Demodatei in einen echten Mandanten.

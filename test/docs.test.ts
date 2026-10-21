@@ -55,12 +55,12 @@ describe('README and docs match the code', () => {
   });
 
   it('reads the command lines of the README, also in indented fences of the quick start', () => {
-    const lines = shellLines(readRepoFile('README.md')).filter((line) => /^(apaleo-datev|node dist\/cli\/main\.js) /.test(line));
-    expect(lines).toEqual(expect.arrayContaining(['apaleo-datev export --month 2026-09 --dry-run', 'node dist/cli/main.js export --month 2026-09 --demo --dry-run']));
+    const lines = shellLines(readRepoFile('README.md')).filter((line) => /^(apaleo-bmd|node dist\/cli\/main\.js) /.test(line));
+    expect(lines).toEqual(expect.arrayContaining(['apaleo-bmd export --month 2026-09 --dry-run', 'node dist/cli/main.js export --month 2026-09 --demo --dry-run']));
     expect(lines.length).toBeGreaterThanOrEqual(8);
   });
 
-  it.each(FILES)('%s: every apaleo-datev command and flag in a shell fence exists', (file) => {
+  it.each(FILES)('%s: every apaleo-bmd command and flag in a shell fence exists', (file) => {
     expect(checkCommandLines(file, readRepoFile(file), COMMANDS)).toEqual([]);
   });
 
@@ -101,37 +101,37 @@ describe('the docs checks', () => {
   const sh = (...lines: string[]) => ['Some text.', '', '```sh', ...lines, '```', ''].join('\n');
 
   it('names a stale flag, its command and the file', () => {
-    const problems = checkCommandLines('docs/datev-import.md', sh('apaleo-datev export --month 2026-10 --email'), COMMANDS);
-    expect(problems).toEqual(['docs/datev-import.md: "apaleo-datev export --month 2026-10 --email": --email is not an option of "export"']);
+    const problems = checkCommandLines('docs/datev-import.md', sh('apaleo-bmd export --month 2026-10 --email'), COMMANDS);
+    expect(problems).toEqual(['docs/datev-import.md: "apaleo-bmd export --month 2026-10 --email": --email is not an option of "export"']);
   });
 
   it('names a renamed command and the file', () => {
     const renamed: Command[] = COMMANDS.map((command) => (command.name === 'export' ? { ...command, name: 'write' } : command));
-    const problems = checkCommandLines('README.md', sh('apaleo-datev export --month 2026-10 --dry-run'), renamed);
+    const problems = checkCommandLines('README.md', sh('apaleo-bmd export --month 2026-10 --dry-run'), renamed);
     expect(problems).toHaveLength(1);
-    expect(problems[0]).toMatch(/^README\.md: "apaleo-datev export --month 2026-10 --dry-run": "export" is not a command/);
+    expect(problems[0]).toMatch(/^README\.md: "apaleo-bmd export --month 2026-10 --dry-run": "export" is not a command/);
   });
 
   it('reads two-word commands, global flags, both program spellings and stops at comments and pipes', () => {
     const text = sh(
-      'apaleo-datev mapping check --property BSP --from 2026-09-01 --to 2026-09-30   # --nonsense in a comment',
+      'apaleo-bmd mapping check --property BSP --from 2026-09-01 --to 2026-09-30   # --nonsense in a comment',
       'node dist/cli/main.js --help        # or: pnpm link --global',
       'node dist/cli/main.js export --month 2026-09 --demo --dry-run --debug | tee out.txt --x',
-      'apaleo-datev live-smoke --property BER [--date 2026-10-18]',
-      'APALEO_CLIENT_SECRET=... apaleo-datev export --unknown',
-      'docker compose run --rm apaleo-datev export --month 2026-10',
+      'apaleo-bmd live-smoke --property BER [--date 2026-10-18]',
+      'APALEO_CLIENT_SECRET=... apaleo-bmd export --unknown',
+      'docker compose run --rm apaleo-bmd export --month 2026-10',
     );
     expect(checkCommandLines('docs/x.md', text, COMMANDS)).toEqual([]);
-    expect(checkCommandLines('docs/x.md', sh('apaleo-datev mapping --property BSP'), COMMANDS)).toHaveLength(1);
-    expect(checkCommandLines('docs/x.md', sh('apaleo-datev live-smoke [--days 3]'), COMMANDS)).toEqual([
-      'docs/x.md: "apaleo-datev live-smoke [--days 3]": --days is not an option of "live-smoke"',
+    expect(checkCommandLines('docs/x.md', sh('apaleo-bmd mapping --property BSP'), COMMANDS)).toHaveLength(1);
+    expect(checkCommandLines('docs/x.md', sh('apaleo-bmd live-smoke [--days 3]'), COMMANDS)).toEqual([
+      'docs/x.md: "apaleo-bmd live-smoke [--days 3]": --days is not an option of "live-smoke"',
     ]);
   });
 
   it('ignores command lines outside sh and bash fences', () => {
-    const text = ['`apaleo-datev export --email`', '```text', 'apaleo-datev export --email', '```', '```yaml', 'apaleo-datev: --email', '```'].join('\n');
+    const text = ['`apaleo-bmd export --email`', '```text', 'apaleo-bmd export --email', '```', '```yaml', 'apaleo-bmd: --email', '```'].join('\n');
     expect(checkCommandLines('docs/x.md', text, COMMANDS)).toEqual([]);
-    expect(checkCommandLines('docs/x.md', ['```bash', 'apaleo-datev export --email', '```'].join('\n'), COMMANDS)).toHaveLength(1);
+    expect(checkCommandLines('docs/x.md', ['```bash', 'apaleo-bmd export --email', '```'].join('\n'), COMMANDS)).toHaveLength(1);
   });
 
   it('names a stale config key and the file', () => {

@@ -53,7 +53,7 @@ export async function loadMapping(path: string, options: LoadMappingOptions): Pr
     const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
     throw new UserError(
       missing
-        ? `No mapping file at ${path}. Create one with "apaleo-datev init-mapping --property <id> --skr 03|04".`
+        ? `No mapping file at ${path}. Create one with "apaleo-bmd init-mapping --property <id> --skr 03|04".`
         : `Cannot read the mapping file ${path}: ${(error as Error).message}`,
     );
   }

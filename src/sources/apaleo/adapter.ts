@@ -118,7 +118,7 @@ export class ApaleoSource implements SourceAdapter {
    * therefore fresh data instead of apaleo's stored answer for the old key.
    */
   idempotencyKey(kind: 'export' | 'aggregate', propertyId: string, from: LocalDate, to: LocalDate): string {
-    const prefix = kind === 'export' ? 'apaleo-datev' : 'apaleo-datev-aggregate';
+    const prefix = kind === 'export' ? 'apaleo-bmd' : 'apaleo-bmd-aggregate';
     return `${prefix}-${propertyId}-${from}-${to}-${this.runId}`;
   }
 

@@ -23,7 +23,7 @@ export const ACCESS_TOKEN = 'fixture-access-token-77a1';
 
 /** A config file and environment that pass validation and point at the fixtures. */
 export const FIXTURE_FILES = {
-  'apaleo-datev.config.yaml': `apaleo:\n  clientId: ${CLIENT_ID}\ndatev:\n  beraternummer: 1234567\n  mandantennummer: 42\n`,
+  'apaleo-bmd.config.yaml': `apaleo:\n  clientId: ${CLIENT_ID}\ndatev:\n  beraternummer: 1234567\n  mandantennummer: 42\n`,
 };
 export const FIXTURE_ENV = { APALEO_CLIENT_SECRET: CLIENT_SECRET };
 

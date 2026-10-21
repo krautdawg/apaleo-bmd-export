@@ -49,9 +49,9 @@ Behandle das Secret wie ein Passwort: Es liest dein ganzes Buchungsjournal. Lege
 ## 5. Verbindung prüfen
 
 ```sh
-apaleo-datev doctor        # Konfigurationsdatei, Client-ID und Secret gefunden?
-apaleo-datev properties    # listet die Hotels, die die App lesen darf
-apaleo-datev live-smoke --property BSP
+apaleo-bmd doctor        # Konfigurationsdatei, Client-ID und Secret gefunden?
+apaleo-bmd properties    # listet die Hotels, die die App lesen darf
+apaleo-bmd live-smoke --property BSP
 ```
 
 `live-smoke` liest einen Geschäftstag (standardmäßig vorgestern), zeigt Anzahlen und Summen und schreibt nichts. Der Befehl endet mit 0, wenn jeder erforderliche Schritt klappt. Fehlt die optionale Berechtigung, steht dort `SKIP`, kein Fehler. Antwortet apaleo mit 403, nennt die Meldung die Berechtigungen von oben.
