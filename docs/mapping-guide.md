@@ -111,7 +111,7 @@ Bis eine Zeile ausgefüllt ist, blockieren `mapping check --from --to` und der E
 
 ## Anzahlungen
 
-Anzahlungen der Gäste (Liabilities) gehen auf erhaltene Anzahlungen (EKR 320), je USt-Satz eine `*`-Zeile: 3200 (10 %), 3202 (13 %) und 3201 (20 %) mit dem Umsatzsteuer-Code, 3209 (0 %) ohne. Auch Sollversteuerer schulden die USt auf eine Anzahlung schon bei Erhalt (Mindest-Istbesteuerung, § 19 Abs. 2 Z 1 lit. a UStG). In BMD NTCS ist das die normale Umsatzsteuer mit Steuercode `1`: Die UVA zählt sie in KZ 000/022/029 unter „+ Anzahlungen“ (BMD NTCS Buchen, Anhang A). Ob Soll- oder Istversteuerung, steht im Firmen- und FIBU-Stamm, nicht auf der Buchung. Wird die Anzahlung mit der Rechnung verrechnet, bucht apaleo eine negative Belastung auf dieselbe Anzahlung, und das Tool bucht die USt dort wieder zurück; eine Rückzahlung an den Gast (eine negative Anzahlung) ebenso.
+Anzahlungen der Gäste (Liabilities) gehen auf erhaltene Anzahlungen (EKR 320), je USt-Satz eine `*`-Zeile: 3200 (10 %), 3202 (13 %) und 3201 (20 %) mit dem Umsatzsteuer-Code, 3209 (0 %) ohne. Auch Sollversteuerer schulden die USt auf eine Anzahlung schon bei Erhalt (Mindest-Istbesteuerung, § 19 Abs. 2 Z 1 lit. a UStG). In BMD NTCS ist das die normale Umsatzsteuer mit Steuercode `1`: Die UVA zählt sie in KZ 000/022/029/006 unter „+ Anzahlungen“ (BMD NTCS Buchen, Anhang A). Ob Soll- oder Istversteuerung, steht im Firmen- und FIBU-Stamm, nicht auf der Buchung. Wird die Anzahlung mit der Rechnung verrechnet, bucht apaleo eine negative Belastung auf dieselbe Anzahlung, und das Tool bucht die USt dort wieder zurück; eine Rückzahlung an den Gast (eine negative Anzahlung) ebenso.
 
 BMD NTCS kennt zwei Einrichtungen (BMD NTCS Buchen, Anhang C):
 
@@ -129,7 +129,7 @@ Schreibt das Hotel eine Gastforderung ab, bucht apaleo den Forderungsverlust (Lo
 - `7800` (10 %), `7802` (13 %) und `7801` (20 %) mit dem Umsatzsteuer-Code (NTCS `1`) und dem Satz,
 - `7809` (0 %) ohne Steuercode.
 
-Mit dem Umsatzsteuer-Code steht das Forderungsverlust-Konto vorn (`konto`), Betrag und Steuer sind positiv: eine Soll-Buchung auf das USt-Konto, die die Umsatzsteuer mindert, wie eine Gutschrift an einen Kunden. In der UVA sollte die Berichtigung als Minderung in KZ 029/022 (oder KZ 090) erscheinen; das prüft der erste Import (Checkliste in [bmd-format.md](bmd-format.md)). Ein Vorsteuer-Code auf dieser Zeile ist ein Fehler (`E-STEUERCODE-INPUT-TAX`).
+Mit dem Umsatzsteuer-Code steht das Forderungsverlust-Konto vorn (`konto`), Betrag und Steuer sind positiv: eine Soll-Buchung auf das USt-Konto, die die Umsatzsteuer mindert, wie eine Gutschrift an einen Kunden. In der UVA sollte die Berichtigung als Minderung in KZ 022/029/006 (oder KZ 090) erscheinen; das prüft der erste Import (Checkliste in [bmd-format.md](bmd-format.md)). Ein Vorsteuer-Code auf dieser Zeile ist ein Fehler (`E-STEUERCODE-INPUT-TAX`).
 
 Warum `*`-Zeilen: apaleo bucht Forderungsverluste wohl auf Konten je Reservierung unter den Containern `6900` und `CollectiveDebitor_LossOfAccountsReceivable`, wie bei den Debitoren. Belegt ist das noch nicht, denn keine aufgezeichnete Buchung enthält einen Forderungsverlust. Die `*`-Zeilen greifen nach Typ und Satz, egal unter welchem Container das Konto hängt; für die Container selbst schreibt die Vorlage keine Zeile. Bucht apaleo direkt auf einen Container, stoppt der Export mit `E-UNMAPPED`.
 

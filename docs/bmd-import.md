@@ -77,9 +77,9 @@ Mach den ersten Import mit deiner Kanzlei in einem Testmandanten, in die Vorerfa
 - [ ] Das Buchungssymbol nimmt alle Konten an, auch die Anzahlungen und die Ortstaxe.
 - [ ] Die Saldenliste des Monats zeigt pro Konto dieselben Summen wie „Totals per BMD account“ im Protokoll.
 - [ ] Die UVA-Vorschau zeigt die Umsatzsteuer pro Satz wie das Protokoll: Erlöse mit Steuercode 1 in KZ 022 (20 %), KZ 029 (10 %) und KZ 006 (13 %), und nichts in KZ 062 (Vorsteuer-Berichtigung).
-- [ ] Anzahlungen erscheinen in KZ 000/022/029 (in der UVA-Vorschau unter „+ Anzahlungen“), und ihre Auflösung bucht die USt wieder zurück.
-- [ ] Die USt-Berichtigung bei Forderungsverlust erscheint als Minderung der Umsatzsteuer (KZ 029/022 oder KZ 090), nicht als Vorsteuer.
-- [ ] Die Konten für die Ortstaxe und für Erlöse mit 0 % (in der Vorlage `4090` und `4091`) haben im Kontenplan keinen fixen Steuercode, den BMD in das leere Feld eintragen würde.
+- [ ] Anzahlungen erscheinen in KZ 000/022/029/006 (KZ 022 für 20 %, 029 für 10 %, 006 für 13 %; in der UVA-Vorschau unter „+ Anzahlungen“), und ihre Auflösung bucht die USt wieder zurück.
+- [ ] Die USt-Berichtigung bei Forderungsverlust erscheint als Minderung der Umsatzsteuer (KZ 022/029/006 oder KZ 090), nicht als Vorsteuer.
+- [ ] Das Konto, das die Kanzlei für die Ortstaxe gewählt hat (Beispiel `3580`), die Erlöskonten mit 0 % (`4090`, `4091`) und die Konten ohne USt für Anzahlungen (`3209`) und Forderungsverlust (`7809`) haben im Kontenplan keinen fixen Steuercode, den BMD in das leere Feld eintragen würde.
 - [ ] Eine Zahlung landet auf Schwebende Geldbewegungen ohne Steuer, eine Rechnung an eine Firma auf dem Sammeldebitor mit der Rechnungsnummer als OP-Nummer.
 - [ ] BMD meldet keine Belegnummern-Duplikate unter dem Buchungssymbol, auch nicht mit einer zweiten Datei eines anderen Monats.
 - [ ] Umlaute, ß und € sind im Buchungstext lesbar.
