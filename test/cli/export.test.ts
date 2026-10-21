@@ -72,7 +72,7 @@ describe('apaleo-bmd export', () => {
     const protocol = read(setup, PROTOCOL).toString('utf8');
     expect(protocol).toContain('Totals per BMD account');
     expect(protocol).toContain(`SHA-256: ${sha256(file)}`);
-    expect(protocol).toContain('Tool: apaleo-bmd 0.0.0');
+    expect(protocol).toContain('Tool: apaleo-bmd 0.1.0');
   });
 
   it('exits 2 and explains --month and --from/--to when the period is missing', async () => {

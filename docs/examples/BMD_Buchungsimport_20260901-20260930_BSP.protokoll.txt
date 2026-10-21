@@ -60,5 +60,5 @@ Findings:
 File: BMD_Buchungsimport_20260901-20260930_BSP.csv
 SHA-256: 0e188ce4c3de4ea8248059587776f9ea07b3d06e230800a75f2a50c401d3c115
 Mapping SHA-256: 7d8b88981d7c3d52ac97c3f4615d2c92e5ba4d6ebd21aa1b957dc864e690a219
-Tool: apaleo-bmd 0.0.0
+Tool: apaleo-bmd 0.1.0
 Created: 2026-10-05T08:00:00.000Z

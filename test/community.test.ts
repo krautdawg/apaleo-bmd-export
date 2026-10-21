@@ -53,7 +53,7 @@ describe('contribution and conduct files', () => {
 
 describe('CHANGELOG.md', () => {
   const text = readRepoFile('CHANGELOG.md');
-  const unreleased = text.split(/^## \[Unveröffentlicht\]$/m)[1] ?? '';
+  const unreleased = text.split(/^## \[0\.1\.0\] - \d{4}-\d{2}-\d{2}$/m)[1] ?? '';
   const part = (heading: string) => unreleased.split(new RegExp(`^### ${heading}$`, 'm'))[1]?.split(/^### /m)[0] ?? '';
 
   it('follows the German edition of Keep a Changelog with an Unveröffentlicht section', () => {
@@ -64,11 +64,11 @@ describe('CHANGELOG.md', () => {
 
   it('starts the history of apaleo-bmd-export and names apaleo-datev-export v0.1.0 as its origin instead of repeating its entries', () => {
     expect(text).toContain('[apaleo-datev-export](https://github.com/krautdawg/apaleo-datev-export) v0.1.0');
-    expect(text).not.toMatch(/^## \[0\.1\.0\]/m);
+    expect(text.match(/^## \[0\.1\.0\]/gm)).toHaveLength(1);
     expect(text).not.toContain('apaleo-datev` mit `--help`');
   });
 
-  it('Unreleased section: lists the BMD features under Hinzugefügt and the DATEV output under Entfernt, in German', () => {
+  it('0.1.0 section: lists the BMD features under Hinzugefügt and the DATEV output under Entfernt, in German', () => {
     const added = part('Hinzugefügt');
     for (const feature of ['BMD Buchungsimport', 'init-mapping --template ekr', 'Steuercodes', 'Ortstaxe', 'Anzahlungen', 'Forderungsverlust', 'export --demo', 'schedule --once', 'Docker']) {
       expect(added, feature).toContain(feature);

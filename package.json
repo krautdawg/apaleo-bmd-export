@@ -1,6 +1,6 @@
 {
   "name": "apaleo-bmd-export",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Free open-source export from the apaleo hotel PMS to BMD Buchungsimport files for BMD NTCS (Austria).",
   "private": true,
   "license": "MIT",
