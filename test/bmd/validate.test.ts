@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { BmdValidationError, buchungsimportFileName, renderBuchungsimport } from '../../src/bmd/index.js';
+import type { LocalDate } from '../../src/core/date.js';
 import { MAX_AMOUNT_CENTS, MAX_BOOKINGS_PER_FILE } from '../../src/bmd/format.js';
 import type { BmdBooking, BmdRenderOptions } from '../../src/bmd/types.js';
 import { validateBookings } from '../../src/bmd/validate.js';
@@ -122,6 +124,40 @@ describe('booking validation', () => {
 
     it.each(['1', '123456789', ''])('accepts "%s"', (kost) => {
       expect(errors({ kost })).toEqual([]);
+    });
+  });
+
+  describe('E-BMD-TAX-PERSONENKONTO', () => {
+    it('rejects a Steuercode on a booking that leads with a Personenkonto', () => {
+      expect(errors({ konto: '201001' })).toEqual([
+        expect.objectContaining({ code: 'E-BMD-TAX-PERSONENKONTO', index: 0, field: 'konto', label: 'Konto', value: '201001' }),
+      ]);
+    });
+
+    it('accepts a leading Personenkonto without tax, and a Personenkonto as Gegenkonto with tax', () => {
+      expect(validateBookings([bmdPayment({ konto: '201001', gkonto: '2890' })], octoberOptions())).toEqual([]);
+      expect(errors({ gkonto: '201001' })).toEqual([]);
+    });
+
+    it('cannot tell the account kinds apart when both lengths are equal, and then accepts the booking', () => {
+      expect(errors({ konto: '4010' }, { personenkontenlaenge: 4 })).toEqual([]);
+    });
+  });
+
+  describe('E-BMD-PERIOD', () => {
+    it.each([
+      [{ from: '2026-10-32' }, 'from'],
+      [{ to: 'morgen' }, 'to'],
+      [{ from: '2026-11-01' }, 'from'],
+    ] as const)('rejects the period %o once, without a booking index and without flagging every Belegdatum', (period, field) => {
+      const findings = validateBookings([bmdBooking(), bmdPayment()], octoberOptions(period as Partial<BmdRenderOptions>));
+      expect(findings).toEqual([expect.objectContaining({ code: 'E-BMD-PERIOD', field })]);
+      expect(findings[0]).not.toHaveProperty('index');
+    });
+
+    it('makes rendering fail with the finding instead of a TypeError', () => {
+      expect(() => renderBuchungsimport([bmdBooking()], octoberOptions({ from: 'gestern' as LocalDate }))).toThrow(BmdValidationError);
+      expect(() => buchungsimportFileName(octoberOptions({ from: '2026-11-01' }))).toThrow(BmdValidationError);
     });
   });
 

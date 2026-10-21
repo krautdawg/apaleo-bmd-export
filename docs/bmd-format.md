@@ -59,7 +59,7 @@ Für jeden Dialekt gibt es eigene Golden Files in `test/golden/bmd/`.
 | `buchsymbol` | das Buchungssymbol, `A-Z` und `0-9`. Leg in BMD ein eigenes Symbol für den PMS-Import an (zum Beispiel `HO`) |
 | `buchcode` | `1` bei positivem Betrag (Soll), `2` bei negativem (Haben) |
 | `prozent`, `steuercode`, `steuer` | nur wenn die Buchung einen Steuercode hat, sonst leer |
-| `betrag` | Betrag des führenden Kontos, bei Erlösen netto |
+| `betrag` | Betrag des führenden Kontos, bei Erlösen netto. Ein Personenkonto als führendes Konto würde BMD brutto lesen und die Steuer nicht übernehmen; darum lehnt der Writer eine Buchung mit Steuercode und führendem Personenkonto ab (`E-BMD-TAX-PERSONENKONTO`) |
 | `text` | Buchungstext, höchstens 40 Zeichen |
 | `kost` | Kostenstelle, 1 bis 9 Ziffern, oder leer |
 | `extbelegnr` | die Rechnungs- oder Zahlungsreferenz aus dem PMS, höchstens 35 Zeichen |

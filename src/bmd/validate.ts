@@ -10,11 +10,13 @@ const MAX_RATE = 99.99;
 
 /**
  * Every error in the bookings at once (codes `E-BMD-ACCOUNT` to `E-BMD-BELEGNR`), each with the booking index
- * and the field. Messages name fields as BMD does (Konto, Betrag, Steuercode).
+ * and the field, and `E-BMD-PERIOD` (no booking index) for an invalid or reversed file period. Messages name
+ * fields as BMD does (Konto, Betrag, Steuercode).
  */
 export function validateBookings(bookings: readonly BmdBooking[], options: BmdRenderOptions): Finding[] {
   const dialect = DIALECTS[options.dialect ?? DEFAULT_DIALECT];
-  const findings = bookings.flatMap((booking, index) => validateBooking(booking, index, options, dialect));
+  const period = validatePeriod(options);
+  const findings = [...period, ...bookings.flatMap((booking, index) => validateBooking(booking, index, options, dialect, period.length === 0))];
   if (bookings.length > MAX_BOOKINGS_PER_FILE) {
     findings.push({
       code: 'E-BMD-BELEGNR',
@@ -27,7 +29,24 @@ export function validateBookings(bookings: readonly BmdBooking[], options: BmdRe
   return findings;
 }
 
-function validateBooking(b: BmdBooking, index: number, options: BmdRenderOptions, dialect: DialectSpec): Finding[] {
+/**
+ * `E-BMD-PERIOD` for a `from` or `to` that is not a valid date, or a `from` after `to`. Without a valid period
+ * the bookings' dates cannot be checked against it and no Belegnummer can be formed.
+ */
+export function validatePeriod({ from, to }: Pick<BmdRenderOptions, 'from' | 'to'>): Finding[] {
+  const findings: Finding[] = [];
+  for (const [field, value] of [['from', from], ['to', to]] as const) {
+    if (!isLocalDate(value)) {
+      findings.push({ code: 'E-BMD-PERIOD', field, label: labelOf(field), value: String(value), message: `${labelOf(field)} must be a valid date written YYYY-MM-DD, got "${value}"` });
+    }
+  }
+  if (findings.length === 0 && from > to) {
+    findings.push({ code: 'E-BMD-PERIOD', field: 'from', label: labelOf('from'), value: from, message: `The file period starts on ${from}, after its last day ${to}` });
+  }
+  return findings;
+}
+
+function validateBooking(b: BmdBooking, index: number, options: BmdRenderOptions, dialect: DialectSpec, periodValid: boolean): Finding[] {
   const findings: Finding[] = [];
   const error = (code: string, field: string, value: unknown, message: string) =>
     findings.push({ code, index, field, label: labelOf(field), value: String(value), message });
@@ -36,12 +55,21 @@ function validateBooking(b: BmdBooking, index: number, options: BmdRenderOptions
     const problem = accountProblem(b[field], options);
     if (problem) error('E-BMD-ACCOUNT', field, b[field], `${labelOf(field)} "${b[field]}" ${problem}`);
   }
+  if (b.tax && isPersonenkonto(b.konto, options)) {
+    error(
+      'E-BMD-TAX-PERSONENKONTO',
+      'konto',
+      b.konto,
+      `Konto "${b.konto}" is a Personenkonto: with a leading Personenkonto BMD reads Betrag as gross and does not import Steuer, ` +
+        'so a booking with a Steuercode must lead with the Sachkonto (for example the revenue account) and have the Personenkonto as Gegenkonto',
+    );
+  }
   if (!isAmount(b.betragCents) || b.betragCents === 0) {
     error('E-BMD-AMOUNT', 'betragCents', b.betragCents, `Betrag must not be 0 and have at most ${MAX_INTEGER_DIGITS} digits before the comma, got ${describeAmount(b.betragCents)}`);
   }
   if (!isLocalDate(b.businessDate)) {
     error('E-BMD-DATE', 'businessDate', b.businessDate, `Belegdatum must be a valid date written YYYY-MM-DD, got "${b.businessDate}"`);
-  } else if (b.businessDate < options.from || b.businessDate > options.to) {
+  } else if (periodValid && (b.businessDate < options.from || b.businessDate > options.to)) {
     error('E-BMD-DATE', 'businessDate', b.businessDate, `Belegdatum ${b.businessDate} is outside the file period ${options.from} to ${options.to}`);
   }
   const symbol = new RegExp(`^[A-Z0-9]{1,${dialect.maxSymbolLength}}$`);
@@ -79,6 +107,11 @@ function accountProblem(account: string, { sachkontenlaenge, personenkontenlaeng
   if (!DIGITS.test(account)) return `must contain digits only and ${lengths}`;
   if (account.length !== sachkontenlaenge && account.length !== personenkontenlaenge) return `${lengths}; account numbers are never padded`;
   return undefined;
+}
+
+/** A Personenkonto by its length, when that length tells it apart from a Sachkonto. */
+function isPersonenkonto(account: string, { sachkontenlaenge, personenkontenlaenge }: BmdRenderOptions): boolean {
+  return personenkontenlaenge !== sachkontenlaenge && DIGITS.test(account) && account.length === personenkontenlaenge;
 }
 
 function isAmount(cents: number): boolean {

@@ -4,7 +4,7 @@ import { BmdValidationError } from './errors.js';
 import { DEFAULT_DIALECT, DIALECTS, formatAmount, formatBelegnr, formatRate, formatYyyymmdd, LINE_END, SEPARATOR, type DialectSpec } from './format.js';
 import { sanitiseExtbelegnr, sanitiseText } from './sanitise.js';
 import type { BmdBooking, BmdRenderOptions } from './types.js';
-import { validateBookings } from './validate.js';
+import { validateBookings, validatePeriod } from './validate.js';
 
 export interface RenderedBuchungsimport {
   /** The whole file with CRLF line ends, only characters Windows-1252 can encode. */
@@ -73,7 +73,7 @@ const TAG = /^[A-Za-z0-9_-]+$/;
  * `BMD_Buchungsimport_<YYYYMMDD>-<YYYYMMDD>_<tag>.csv` for the first and last day
  * of the period. `tag` is the property id, or `<id>_DEMO` for a demo file; a tag
  * with other characters than `A-Z a-z 0-9 _ -` would not match the target's file
- * pattern, so it is refused (`E-BMD-FILE-NAME`).
+ * pattern, so it is refused (`E-BMD-FILE-NAME`), and so is an invalid period (`E-BMD-PERIOD`).
  */
 export function buchungsimportFileName(options: Pick<BmdRenderOptions, 'from' | 'to' | 'propertyId'>, tag = options.propertyId): string {
   if (!TAG.test(tag)) {
@@ -81,5 +81,7 @@ export function buchungsimportFileName(options: Pick<BmdRenderOptions, 'from' | 
       { code: 'E-BMD-FILE-NAME', field: 'propertyId', value: tag, message: `The property id may only contain A-Z a-z 0-9 _ - in a file name, got "${tag}"` },
     ]);
   }
+  const period = validatePeriod(options);
+  if (period.length > 0) throw new BmdValidationError(period);
   return `BMD_Buchungsimport_${formatYyyymmdd(options.from)}-${formatYyyymmdd(options.to)}_${tag}.csv`;
 }

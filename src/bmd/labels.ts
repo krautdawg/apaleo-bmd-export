@@ -15,6 +15,8 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   kost: 'Kostenstelle',
   extbelegnr: 'Externe Belegnummer',
   belegnr: 'Belegnummer',
+  from: 'Beginn des Zeitraums',
+  to: 'Ende des Zeitraums',
 };
 
 /** The BMD name of a field, or the field name itself if none is known. */
