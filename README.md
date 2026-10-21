@@ -61,7 +61,7 @@ Es gibt noch kein npm-Paket und kein Container-Image zum Herunterladen. Du insta
    Dann die Konfiguration ausfüllen und das Secret setzen. Das Secret kommt nie in die Konfigurationsdatei.
 
    ```sh
-   cp apaleo-bmd.config.example.yaml apaleo-bmd.config.yaml   # apaleo.clientId, Beraternummer, Mandantennummer eintragen
+   cp apaleo-bmd.config.example.yaml apaleo-bmd.config.yaml   # apaleo.clientId und das Buchungssymbol der Kanzlei eintragen
    export APALEO_CLIENT_SECRET='das Secret aus apaleo'
    node dist/cli/main.js doctor
    node dist/cli/main.js properties
@@ -72,7 +72,7 @@ Es gibt noch kein npm-Paket und kein Container-Image zum Herunterladen. Du insta
 3. **Kontenzuordnung anlegen** und von deiner Kanzlei mit dem [Leitfaden zur Kontenzuordnung](docs/mapping-guide.md) prüfen lassen:
 
    ```sh
-   apaleo-bmd init-mapping --property BSP --skr 03     # schreibt mapping-BSP.csv; --skr 04 für SKR04
+   apaleo-bmd init-mapping --property BSP --template ekr   # schreibt mapping-BSP.csv aus dem Einheitskontenrahmen (EKR)
    apaleo-bmd mapping check --property BSP --from 2026-09-01 --to 2026-09-30
    ```
 
@@ -82,7 +82,7 @@ Es gibt noch kein npm-Paket und kein Container-Image zum Herunterladen. Du insta
    apaleo-bmd export --month 2026-09 --dry-run
    ```
 
-5. **Export**: eine Datei pro Hotel nach `exports/<Hotel>/<JJJJ-MM>/`. Gib sie der Kanzlei für den [DATEV-Import](docs/datev-import.md).
+5. **Export**: eine Datei pro Hotel nach `exports/<Hotel>/<JJJJ-MM>/`. Gib sie der Kanzlei für den [BMD-Import](docs/bmd-import.md).
 
    ```sh
    apaleo-bmd export --month 2026-09
@@ -153,7 +153,7 @@ Selbst betreiben heißt: Du behältst die Daten und zahlst nichts, aber du spiel
 
 **Kann es an DATEV online übertragen?** Nein. Dafür braucht es eine Freigabe von DATEV. Die Kanzlei importiert die Datei über die Stapelverarbeitung; siehe [docs/datev-import.md](docs/datev-import.md).
 
-**Festschreibung?** Standardmäßig aus (`datev.festschreibung: 0`), damit ein Stapel nach dem Import bearbeitbar bleibt. Ein festgeschriebener Stapel (`1`) lässt sich nicht löschen, eine Nachbuchung also nicht mit einer neuen Datei beheben: Die Kanzlei bucht die Differenz von Hand und importiert nie eine Datei aus `--overwrite`. Schalte sie erst ein, wenn die Kanzlei der Ausgabe vertraut, und nur mit Exporten, die den Tagesabschluss (Night Audit) abwarten (`schedule --once` oder von Hand höchstens bis vorgestern); siehe [docs/datev-import.md](docs/datev-import.md#festschreibung-0-oder-1).
+**Festschreibung?** Der BMD-Buchungsimport kennt keine Festschreibung in der Datei. Die Buchungen kommen unter dem Buchungssymbol, das die Kanzlei in BMD anlegt (`bmd.buchsymbol`); eine falsch importierte Datei storniert sie dort. Importiere nie eine Datei aus `--overwrite`, ohne dass die Kanzlei die alte Datei vorher storniert hat; siehe [docs/bmd-import.md](docs/bmd-import.md).
 
 **Mehrere Hotels?** Trag sie unter `properties` in der Konfiguration ein. Jedes bekommt eine eigene Zuordnung und eine eigene Datei, auf Wunsch unter einer eigenen Mandantennummer.
 

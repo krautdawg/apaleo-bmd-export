@@ -170,7 +170,7 @@ describe('compose and env examples', () => {
 
   it('still tracks the examples and templates next to those ignored paths', () => {
     const root = fileURLToPath(new URL('..', import.meta.url));
-    const tracked = ['apaleo-bmd.config.example.yaml', 'docker-compose.example.yml', '.env.example', 'test/fixtures/mapping/skr03-beispiel.csv'];
+    const tracked = ['apaleo-bmd.config.example.yaml', 'docker-compose.example.yml', '.env.example', 'test/fixtures/mapping/ekr-beispiel.csv', 'templates/ekr-hotel.rules.csv'];
     let ignored = '';
     try {
       ignored = execFileSync('git', ['check-ignore', '--no-index', ...tracked], { cwd: root, encoding: 'utf8' });
