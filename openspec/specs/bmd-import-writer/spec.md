@@ -1,5 +1,8 @@
-## ADDED Requirements
+# bmd-import-writer Specification
 
+## Purpose
+The BMD Buchungsimport file (BMD-Standard, Satzart 0, variable layout with header line) that a Kanzlei imports into BMD NTCS or BMD 5.5: dialects, field rules, Belegnummern, encoding, validation, sanitising, file name and golden tests.
+## Requirements
 ### Requirement: Dialect
 The writer SHALL take a dialect, `ntcs` (default) or `bmd55`, that sets the header names, the date format and the Steuercode meanings together and never mixes them: `ntcs` writes the NTCS column names, dates as `TT.MM.JJJJ`, treats Steuercode 1 as output tax and allows Buchungssymbole of 1 to 4 characters; `bmd55` writes the BMD 5.5 column names, dates as `JJJJMMTT`, treats Steuercodes 1 and 3 as output tax and allows Buchungssymbole of 1 to 2 characters.
 
@@ -118,3 +121,4 @@ The test suite SHALL compare rendered files byte by byte with golden files in `t
 #### Scenario: Unintended change
 - **WHEN** a code change alters one byte of the output
 - **THEN** `pnpm test` fails and shows the differing line
+
