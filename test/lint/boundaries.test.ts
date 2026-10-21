@@ -14,7 +14,7 @@ async function lintAs(fixture: string, filePath: string) {
 }
 
 describe('core modules do not import source adapters', () => {
-  it.each(['src/datev/writer.ts', 'src/bmd/writer.ts', 'src/core/x.ts', 'src/mapping/x.ts', 'src/posting/x.ts'])(
+  it.each(['src/bmd/writer.ts', 'src/core/x.ts', 'src/mapping/x.ts', 'src/posting/x.ts'])(
     'reports no-restricted-imports in %s',
     async (filePath) => {
       const messages = await lintAs('forbidden-source-import.ts', filePath);
@@ -38,7 +38,6 @@ describe('commands use the injected context', () => {
     'src/sources/apaleo/client.ts',
     'src/core/x.ts',
     'src/bmd/x.ts',
-    'src/datev/x.ts',
     'src/mapping/x.ts',
     'src/posting/x.ts',
   ];

@@ -22,7 +22,7 @@ export const GRMAN_COLUMNS: readonly string[] = ['apaleoaccountnumber', 'datevac
 /** `apaleo_account` of a row that matches every account of its type. */
 export const WILDCARD = '*';
 
-/** `apaleo_type` of a row that matches its account number regardless of type (the Grman layout of the DATEV tool; b04 removes it). */
+/** `apaleo_type` of a row that matches its account number regardless of type. */
 export const ANY_TYPE = '*any*';
 
 /**

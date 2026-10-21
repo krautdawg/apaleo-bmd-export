@@ -26,7 +26,7 @@ function indexOf(mapping: Mapping): Map<string, MappingRow> {
 
 /**
  * The mapping row for one side of a ledger line, in this order: (1) exact number
- * and type; (2) the number with any type (Grman rows); (3) the parent chain, from
+ * and type; (2) the number with any type (`*any*` rows); (3) the parent chain, from
  * the chart or else the account's own `parentNumber`, with the same type (or any
  * type); (4) for VAT-relevant types the wildcard row for the type and the line's
  * rate; (5) for other types the wildcard row for the type.

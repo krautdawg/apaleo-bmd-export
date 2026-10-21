@@ -101,8 +101,8 @@ describe('the docs checks', () => {
   const sh = (...lines: string[]) => ['Some text.', '', '```sh', ...lines, '```', ''].join('\n');
 
   it('names a stale flag, its command and the file', () => {
-    const problems = checkCommandLines('docs/datev-import.md', sh('apaleo-bmd export --month 2026-10 --email'), COMMANDS);
-    expect(problems).toEqual(['docs/datev-import.md: "apaleo-bmd export --month 2026-10 --email": --email is not an option of "export"']);
+    const problems = checkCommandLines('docs/bmd-import.md', sh('apaleo-bmd export --month 2026-10 --email'), COMMANDS);
+    expect(problems).toEqual(['docs/bmd-import.md: "apaleo-bmd export --month 2026-10 --email": --email is not an option of "export"']);
   });
 
   it('names a renamed command and the file', () => {

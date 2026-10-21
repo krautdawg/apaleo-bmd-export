@@ -47,7 +47,7 @@ Wie der Code aufgebaut ist und wie du eine Quelle oder ein Zielformat hinzufügs
 ## Regeln für den Code
 
 - Befehle bekommen Uhr, Netz, Dateisystem und Umgebung nur aus dem `CommandContext` (`ctx.now()`, `ctx.fetchFn`, `ctx.fs`, `ctx.env`); Lint setzt das durch. Tests nutzen `createTestContext()`.
-- `core`, `bmd`, `datev`, `mapping` und `posting` importieren nie aus `src/sources/`.
+- `core`, `bmd`, `mapping` und `posting` importieren nie aus `src/sources/`.
 - Geld sind ganze Cent. Nie Gleitkommazahlen.
 - Jede Prüfung meldet einen `Finding` mit Code. Ein neuer Code braucht eine Zeile in `docs/troubleshooting.md`.
 - Ein neuer Befehl, eine neue Option oder ein neuer Konfigurationsschlüssel wird im README oder in `docs/` beschrieben, auf Deutsch. Der Docs-Test schlägt fehl, wenn ein beschriebener Befehl, eine Option, ein Konfigurationsschlüssel oder ein Befund-Code im Code nicht existiert, wenn ein Link ins Leere zeigt oder wenn ein Text nicht deutsch ist.

@@ -15,8 +15,7 @@ src/
   demo/         export --demo: aufgezeichnete apaleo-Antworten aus examples/demo/, ohne Netz
   mapping/      die Kontenzuordnung als CSV: laden, auflösen, prüfen, die EKR-Vorlage
   posting/      Journalzeilen + Kontenzuordnung -> BMD-Buchungen, mit der USt-Prüfung
-  bmd/          der Writer für den BMD Buchungsimport: Dialekte NTCS und BMD 5.5, Belegnummern, Prüfung, Bereinigung (noch nicht im Export, ab b03)
-  datev/        der frühere Writer für den EXTF-Buchungsstapel, nicht mehr verwendet (entfällt mit b04)
+  bmd/          der Writer für den BMD Buchungsimport: Dialekte NTCS und BMD 5.5, Belegnummern, Prüfung, Bereinigung
   export/       der Ablauf: Regeln für Zeiträume, Abruf, Buchen, Plausibilitätsprüfungen, Ausgabeordner und Manifest
   schedule/     schedule --once: welche Zeiträume fällig sind, dann der Export für jeden
 ```
@@ -25,12 +24,12 @@ Die Abhängigkeiten zeigen in eine Richtung:
 
 ```text
 cli -> export / schedule -> sources/<name>     (Verdrahtung)
-                        -> mapping, posting, bmd, datev -> core
+                        -> mapping, posting, bmd -> core
 ```
 
 Zwei Lint-Regeln (in `eslint.config.js`, getestet in `test/lint/`) sorgen dafür, dass das so bleibt:
 
-- `core`, `bmd`, `datev`, `mapping` und `posting` dürfen nichts aus `src/sources/` importieren. Sie sehen nur die kanonischen Typen in `src/core/source.ts`.
+- `core`, `bmd`, `mapping` und `posting` dürfen nichts aus `src/sources/` importieren. Sie sehen nur die kanonischen Typen in `src/core/source.ts`.
 - Alles unter `src/` außer dem Einstieg der Kommandozeile erreicht die Uhr, das Netz und die Umgebung nur über den übergebenen `CommandContext` (`ctx.now()`, `ctx.fetchFn`, `ctx.env`, `ctx.fs`). Kein `new Date()`, kein `Date.now()`, kein nacktes `fetch` und kein `process.env`. Tests bauen mit `createTestContext()` in `test/helpers/context.ts` einen Kontext mit Attrappen.
 
 ## Der Vertrag SourceAdapter

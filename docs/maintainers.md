@@ -9,7 +9,7 @@ Beschreibung und Themen wurden so gesetzt:
 ```sh
 gh repo edit krautdawg/apaleo-bmd-export \
   --description "Free open-source apaleo → DATEV export (EXTF Buchungsstapel, SKR03/SKR04) for hotels. Kostenloser apaleo DATEV Export." \
-  --add-topic apaleo,datev,datev-export,buchungsstapel,extf,hotel,hospitality,pms,accounting,buchhaltung,steuerberater,skr03,skr04,typescript,cli
+  --add-topic apaleo,hotel,hospitality,pms,accounting,buchhaltung,steuerberater,typescript,cli
 gh repo view krautdawg/apaleo-bmd-export --json description,repositoryTopics,visibility
 ```
 

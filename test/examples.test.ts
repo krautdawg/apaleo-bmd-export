@@ -2,10 +2,11 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { DIALECTS } from '../src/bmd/index.js';
 import { runCli } from '../src/cli/run.js';
 import { BSP } from './helpers/apaleo.js';
 import { exportSetup } from './helpers/export.js';
-import { describeDifference } from './helpers/golden.js';
+import { describeDifference, type FieldNamer } from './helpers/golden.js';
 
 /**
  * `docs/examples/` shows a Kanzlei the output before any setup, and
@@ -18,6 +19,7 @@ const root = (path: string) => fileURLToPath(new URL(`../${path}`, import.meta.u
 const read = (path: string) => readFileSync(root(path));
 const FILE = 'BMD_Buchungsimport_20260901-20260930_BSP.csv';
 const PROTOCOL = 'BMD_Buchungsimport_20260901-20260930_BSP.protokoll.txt';
+const bmdField: FieldNamer = (_line, index) => DIALECTS.ntcs.header[index] ?? '?';
 
 function filesIn(dir: string): string[] {
   return readdirSync(root(dir), { recursive: true, withFileTypes: true })
@@ -28,7 +30,7 @@ function filesIn(dir: string): string[] {
 
 describe('docs/examples', () => {
   it('holds the current golden BMD file byte for byte', () => {
-    const difference = describeDifference(read(`test/golden/export/${FILE}`), read(`docs/examples/${FILE}`));
+    const difference = describeDifference(read(`test/golden/export/${FILE}`), read(`docs/examples/${FILE}`), bmdField);
     expect(difference, `docs/examples/${FILE} differs from the golden file:\n${difference}`).toBeUndefined();
   });
 

@@ -208,7 +208,7 @@ describe('the target boundary in src/export', () => {
     .map((name) => [name, readFileSync(join(dir, name), 'utf8')] as const);
 
   it.each(sources)('%s imports a target module only through its TargetWriter', (_name, text) => {
-    const targetImports = [...text.matchAll(/from '\.\.\/(?:datev|bmd)\/([^']+)'/g)].map((match) => match[1]);
+    const targetImports = [...text.matchAll(/from '\.\.\/bmd\/([^']+)'/g)].map((match) => match[1]);
     expect(targetImports.every((module) => module === 'target.js')).toBe(true);
   });
 
@@ -216,7 +216,6 @@ describe('the target boundary in src/export', () => {
     const output = sources.find(([name]) => name === 'output.ts')?.[1] ?? '';
     expect(output).not.toMatch(/EXTF|Buchungsstapel|\.csv/);
     expect(output).not.toMatch(/DATEV|datev\.[a-z]|\bBMD\b|bmd\.[a-z]|Festschreibung/);
-    expect(output).not.toContain('../datev');
     expect(output).not.toContain('../bmd');
   });
 });
