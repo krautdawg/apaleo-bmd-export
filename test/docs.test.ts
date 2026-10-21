@@ -332,4 +332,32 @@ describe('the compatibility claim check', () => {
     expect(checkCompatibilityClaims('docs/x.md', 'Kompatibel mit BMD NTCS und BMD-zertifiziert.', 0)).toHaveLength(2);
     expect(checkCompatibilityClaims('README.md', 'Die Datei ist getestet mit BMD NTCS.', 1)).toEqual([]);
   });
+
+  it.each([
+    'Die Datei ist mit BMD NTCS getestet.',
+    'Die Datei wurde mit\nBMD 5.5 erfolgreich getestet.',
+    'Der Export ist BMD-kompatibel.',
+    'Die Datei ist kompatibel zu BMD.',
+    'Die Datei ist mit BMD NTCS kompatibel.',
+    'Die Datei wird von BMD NTCS akzeptiert.',
+    'Zertifiziert durch BMD.',
+    'The file is tested with BMD NTCS.',
+    'A BMD-compatible import file.',
+    'The file is compatible with BMD NTCS.',
+    'BMD certified.',
+    'The file is accepted by BMD NTCS.',
+  ])('Claim in other words or in English: finds "%s"', (text) => {
+    expect(checkCompatibilityClaims('README.en.md', text, 0)).toHaveLength(1);
+  });
+
+  it('passes the pending-import wording and other uses of the words', () => {
+    for (const text of [
+      'Die Datei folgt dem dokumentierten BMD-Importformat (PR08/PR08A); ein erster Testimport mit einer Kanzlei steht noch aus.',
+      'The file follows the documented BMD import layout; a first test import with a Kanzlei is pending.',
+      'Zwei Lint-Regeln (getestet in `test/lint/`) sorgen dafür, dass das so bleibt.',
+      'Kein zertifiziertes Archiv. BMD nimmt `4,9` in `prozent` an.',
+    ]) {
+      expect(checkCompatibilityClaims('README.md', text, 0), text).toEqual([]);
+    }
+  });
 });

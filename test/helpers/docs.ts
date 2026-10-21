@@ -426,8 +426,28 @@ export function checkGermanPracticeTerms(file: string, markdown: string): string
 
 // --- Compatibility claims --------------------------------------------------------
 
-/** What the docs may say only after a recorded test import (b08 design decision 4). */
-export const COMPATIBILITY_CLAIMS = ['getestet mit BMD', 'kompatibel mit BMD', 'BMD-zertifiziert'] as const;
+/** Up to two words between "BMD" and the verb, so "mit BMD NTCS getestet" and "von BMD 5.5 akzeptiert" are caught. */
+const BMD = String.raw`BMD(?:\s+[\w.]+){0,2}`;
+
+/**
+ * What the docs may say only after a recorded test import (b08 design decision
+ * 4), case-insensitive, in German and English and in either word order:
+ * tested with, compatible with, certified by or accepted by BMD.
+ */
+export const COMPATIBILITY_CLAIMS: readonly RegExp[] = [
+  /getestet\s+(?:mit|in|gegen)\s+BMD/,
+  new RegExp(String.raw`(?:mit|in|gegen)\s+${BMD}\s+getestet`),
+  /BMD-(?:getestet|kompatibel|zertifiziert)/,
+  /kompatibel\s+(?:mit|zu)\s+BMD/,
+  new RegExp(String.raw`(?:mit|zu)\s+${BMD}\s+kompatibel`),
+  /zertifiziert\s+(?:von|durch|für)\s+BMD/,
+  new RegExp(String.raw`(?:von|durch|für)\s+${BMD}\s+(?:zertifiziert|akzeptiert|freigegeben)`),
+  /(?:akzeptiert|freigegeben)\s+(?:von|durch)\s+BMD/,
+  /tested\s+(?:with|in|against|on)\s+BMD/,
+  /BMD[- ](?:tested|compatible|certified|approved)/,
+  /compatible\s+with\s+BMD/,
+  /(?:certified|accepted|approved)\s+(?:by|for)\s+BMD/,
+].map((pattern) => new RegExp(String.raw`(?<![\p{L}\p{N}])(?:${pattern.source})`, 'giu'));
 
 /** The rows of the `## Testimporte` table in `docs/maintainers.md` that record an import (a non-empty cell). */
 export function recordedTestImports(maintainers: string): string[][] {
@@ -452,8 +472,7 @@ export function recordedTestImports(maintainers: string): string[][] {
 /** Problems where a file claims BMD compatibility while no test import is recorded. */
 export function checkCompatibilityClaims(file: string, markdown: string, recordedImports: number): string[] {
   if (recordedImports > 0) return [];
-  const text = prose(markdown).toLowerCase();
-  return COMPATIBILITY_CLAIMS.filter((claim) => text.includes(claim.toLowerCase())).map(
-    (claim) => `${file}: "${claim}" claims a tested BMD import, but docs/maintainers.md records no import under ## Testimporte`,
-  );
+  const text = prose(markdown);
+  const claims = COMPATIBILITY_CLAIMS.flatMap((pattern) => [...text.matchAll(pattern)].map((match) => match[0].replace(/\s+/g, ' ')));
+  return [...new Set(claims)].map((claim) => `${file}: "${claim}" claims a tested BMD import, but docs/maintainers.md records no import under ## Testimporte`);
 }
