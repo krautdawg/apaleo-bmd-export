@@ -1,0 +1,36 @@
+## Context
+
+After b03 every apaleo line is booked by one mechanism: the row with a Steuercode is `konto`, apaleo's net and tax are passed. Whether the booking is right then depends only on the mapping rows. The cases below are the ones where Austrian law or BMD practice differs from a plain sale and where a German-trained default (or no default) leads to a wrong UVA. Sources are in `openspec/research/bmd-target.md` (UStG § 10 and § 19, WKO notes on Stornogebühren, KFS/BW 6 groups 32 and 780-781, NTCS_BUCHEN Anhang A and C, dvo §9).
+
+## Goals / Non-Goals
+
+**Goals:**
+- Make each Austrian special case visible in the mapping and checked, with one documented default.
+- One fixture month that exercises all of them, with totals a Kanzlei can recompute by hand.
+
+**Non-Goals:**
+- Second-guessing apaleo's tax per line (for example re-taxing a no-show): the guard checks consistency between apaleo and the mapping, not the law.
+
+## Decisions
+
+1. **Anzahlungen with Steuercode 1 by default.** In BMD NTCS, Steuercode 1 is the normal Umsatzsteuer and the UVA lists "+ Anzahlungen" inside KZ 000/022/029 (NTCS_BUCHEN Anhang A p.107); Soll- or Ist-Versteuerung is set in the Firmen/FIBU master data, not per booking. So deposit rows with tax use the same output-tax code as revenue (1; 3 with `bmd.dialect: bmd55`), and no separate config key is needed. An earlier draft had a `bmd.anzahlungSteuercode` switch between "01 Ist-USt" and "03 Soll-USt plus Evidenzkonto"; those are BMD 5.5 meanings, and in NTCS code 3 is the Vorsteuer correction (KZ 062), so the switch and its `W-DEPOSIT-STEUERCODE` warning are dropped. Input-tax codes (2, 3) on Liabilities rows are already `E-STEUERCODE-INPUT-TAX` from b03. The real choice for the Kanzlei is the account setup: direct USt on the deposit account (template default: `3200`/`3201` with code 1) or BMD's Anzahlungskonten per rate (3290/3292 in NTCS_BUCHEN Anhang C) with an account for not-yet-due USt (3510). The template comment and the mapping guide name both; the first test import confirms the default.
+2. **Forderungsverlust.** apaleo posts the write-off as debit LossOfAccountsReceivable, credit receivables, with `taxes[]` when the VAT is corrected. With the bad-debt row carrying the output-tax Steuercode (NTCS 1) and the rate, the b03 direction rule yields konto = bad-debt account, amount = +net, tax = +tax: a Soll booking on the USt account that reduces the Umsatzsteuer, the sign BMD uses for an AR-Gutschrift. The reduction should appear in KZ 029/022 (or KZ 090); that is on the first-import checklist. b05 adds the template rows, the summary line "Forderungsverluste" and tests. A Vorsteuer code on the row is refused (`E-STEUERCODE-INPUT-TAX`).
+3. **Cancellation fees by template, not by heuristic in posting.** A name-pattern rule in the template (Storno, Cancellation, Stornogebühr) at 0 % proposes `4091` "Stornoerlöse (nicht steuerbar)". At a rate above 0 the template leaves the row empty with a comment ("No-Show kann steuerbar sein, Stornogebühr meist nicht; mit der Kanzlei klären"). Posting stays rule-free. The `4091` row gets `W-UNTAXED-REVENUE` from b03 until the Kanzlei confirms the account has no fixed Steuercode or enters its non-taxable code.
+4. **Ortstaxe documented per Bundesland.** A small table in `docs/mapping-guide.md`: Land, usual name (Ortstaxe, Nächtigungsabgabe, Aufenthaltsabgabe, Tourismusabgabe), owed by the guest, collected by the hotel; options (a) liability to the Gemeinde / Tourismusverband in EKR 350-359 or 370-389, (b) the Kanzlei's durchlaufender Posten; never a revenue account unless apaleo taxes it. The template comment points to the table and says the account must carry no fixed Steuercode in BMD. No pre-filled account.
+5. **VAT rates in the mapping guide.** From RIS (UStG § 10, Fassung ab 2026-07-01): 10 % Beherbergung (Abs. 2 Z 3 lit. c) including an ortsübliches Frühstück in the room price, and Speisen; 13 % for pool and Therme admission and thermal treatment (Abs. 3 Z 5), theatre, concert and museum admissions (Z 6) and sports events (Z 12); 20 % for massages, spa treatments, parking and most drinks; 4.9 % only for listed staple-food Lieferungen. The template's 13 % row (`4040`) covers the pool and Therme lines.
+6. **Fixture month.** Fabricated apaleo responses for one Austrian property (Europe/Vienna), shaped exactly like the Swagger schemas, no real guest data; totals written as constants in the test with the arithmetic in comments.
+
+## Risks / Trade-offs
+
+- [The Kanzlei uses BMD's Anzahlungskonto setup] → it maps the Liabilities rows to its own accounts and codes; any output-tax code passes, input-tax codes are refused.
+- [apaleo taxes a cancellation fee that should be untaxed] → the template does not map it; `mapping check` shows `E-UNMAPPED` until the Kanzlei decides.
+- [The USt-Berichtigung lands in another Kennzahl than expected] → first-import checklist item; the row's code is the only thing to change.
+
+## Migration Plan
+
+None; template rows only affect new or `--update` runs.
+
+## Open Questions
+
+- Direct USt on the deposit account (code 1) or BMD Anzahlungskonto with n.n.fällige USt: confirm with the first Kanzlei test import.
+- Forderungsverlust with Steuercode 1 and positive net and tax: confirm that the UVA-Vorschau shows a reduction in KZ 029/022 (or KZ 090).
