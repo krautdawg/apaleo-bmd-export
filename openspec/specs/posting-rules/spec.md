@@ -198,3 +198,32 @@ The posting module SHALL return a summary with Soll, Haben and balance per BMD a
 - **WHEN** the recorded VIE responses of 2026-10-21 are posted with the committed EKR live mapping
 - **THEN** revenue gross is 85.20 at 10 %, 410.02 at 13 %, 47.38 at 20 % and 45.00 at 0 %; revenue tax is 7.74 against apaleo 7.75 (precise 7.74545454) at 10 %, 47.17 against 47.17 at 13 % and 7.89 against 7.90 at 20 %; deposit tax is 20.25 at 13 % and 3.33 at 20 %; payments are 111.70 cash and 576.90 non-cash; deposits received 491.00, released 295.00, of it refunded 10.00; accounts receivable 95.00
 
+### Requirement: Bad debt with VAT correction
+Lines that debit a LossOfAccountsReceivable account SHALL be booked through its mapping row: with tax entries, the bad-debt row SHALL carry the output-tax Steuercode of the dialect (`ntcs`: 1) and the line's rate, so that the booking has the bad-debt account as `konto`, the positive net amount and the positive tax amount (an USt-Berichtigung that reduces the Umsatzsteuer); without tax entries the row SHALL have no Steuercode and the line is booked without tax fields. The posting summary SHALL show the total of written-off receivables per rate.
+
+#### Scenario: Write-off with VAT correction
+- **WHEN** a line debits a per-reservation LossOfAccountsReceivable account at 10 % (resolved through the wildcard to `7800`, Steuercode 1, rate 10) and credits guest receivables (`2390`) with gross 55.00, net 50.00 and taxes 5.00 at 10 %
+- **THEN** the booking has konto `7800`, gkonto `2390`, amount 50.00, tax 5.00, Steuercode 1, and the summary shows 55.00 written off at 10 %
+
+#### Scenario: Write-off without VAT
+- **WHEN** a write-off line of 30.00 has no tax entries and debits an account mapped to `7809` without Steuercode
+- **THEN** the booking has konto `7809`, gkonto `2390`, amount 30.00 and no tax fields
+
+### Requirement: Cancellation and no-show fees
+Cancellation and no-show fees SHALL be booked through their revenue mapping rows like other revenue, with the rate apaleo charged and under the VAT guard; the posting module SHALL NOT change their tax.
+
+#### Scenario: Untaxed cancellation fee
+- **WHEN** a line credits a revenue account "Stornogebühr" mapped to `4091` without Steuercode with gross 80.00 and no taxes
+- **THEN** the booking has konto `4091`, gkonto `2390`, amount −80.00 (the revenue account leads, as for every untaxed charge) and no tax fields
+
+#### Scenario: Taxed no-show on an untaxed row
+- **WHEN** a no-show line with taxes 8.00 at 10 % credits an account mapped without Steuercode
+- **THEN** `E-VAT-MISSING` is raised and names the mapping row
+
+### Requirement: Austrian fixture month
+The test suite SHALL post a fabricated Austrian fixture month, shaped like apaleo's recorded real data (eight-decimal net and tax, per-reservation accounts with `parentNumber`, `/Offset` second lines, releases as negative charges with `taxes[]`, no `PostPrepaymentVat`) (rooms at 10 %, breakfast at 10 %, drinks at 20 %, Ortstaxe, a deposit received at 10 %, released at check-out and partly refunded, a cancellation fee at 0 %, card, cash and invoice payments, an invoice on accounts receivable and a write-off with VAT correction) with the EKR fixture mapping, and SHALL compare every summary value and every booking with hand-computed values recorded in the test.
+
+#### Scenario: Totals of the Austrian month
+- **WHEN** `test/posting/fixture-month-at.test.ts` runs
+- **THEN** revenue per rate, tax per rate, Ortstaxe, deposits received and released, payments per clearing account, write-offs and the balance per BMD account equal the recorded constants, every taxed booking carries Steuercode 1, and no `E-` finding is raised
+
