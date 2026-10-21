@@ -60,6 +60,7 @@ describe('posting the fixture month', () => {
         { ratePercent: 0, netCents: 0, vatCents: 0, grossCents: 0, apaleoVat: '0' },
         { ratePercent: 10, netCents: 0, vatCents: 0, grossCents: 0, apaleoVat: '0' },
       ],
+      writeOffsByRate: [],
       cityTaxCents: 640,
       payments: [
         { account: '2700', cents: 2_400 },

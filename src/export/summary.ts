@@ -27,8 +27,8 @@ export const VAT_ROUNDING_NOTE =
 
 /**
  * The posting summary as aligned text, for the dry run and the protocol file:
- * totals per BMD account, revenue and deposit VAT per rate (bookings against
- * apaleo), city tax, payments per clearing account, deposits, accounts
+ * totals per BMD account, revenue, deposit and write-off VAT per rate (bookings
+ * against apaleo), city tax, payments per clearing account, deposits, accounts
  * receivable, skipped lines and every finding.
  */
 export function renderSummary({ propertyId, part, ledgerLines, bookings, summary, findings }: SummaryInput): string {
@@ -48,6 +48,7 @@ function postingSection(summary: PostingSummary): string[] {
 
   section('Revenue and VAT per rate:', vatLines(summary.revenueByRate));
   section('Deposits and their VAT per rate (received minus released):', vatLines(summary.depositVatByRate));
+  section('Written-off receivables (Forderungsverluste) and the VAT correction per rate:', vatLines(summary.writeOffsByRate));
   out.push(VAT_ROUNDING_NOTE, '', `City tax: ${formatCents(summary.cityTaxCents)}`, '');
 
   const payments = summary.payments.map((p) => [p.account, formatCents(p.cents)]);

@@ -1,13 +1,13 @@
 ## 1. Deposits
 
-- [ ] 1.1 Template comment for the `*;Liabilities` wildcard rows `3200`/`3202`/`3201` (10/13/20 %, from b03) naming both NTCS setups (direct USt with Steuercode 1, or the Kanzlei's Anzahlungskonto with n.n.fällige USt); template test
-- [ ] 1.2 `mapping check` tests for deposit rows: Steuercode 2 and 3 give `E-STEUERCODE-INPUT-TAX` with `ntcs`, Steuercode 1 passes
+- [x] 1.1 Template comment for the `*;Liabilities` wildcard rows `3200`/`3202`/`3201` (10/13/20 %, from b03) naming both NTCS setups (direct USt with Steuercode 1, or the Kanzlei's Anzahlungskonto with n.n.fällige USt); template test
+- [x] 1.2 `mapping check` tests for deposit rows: Steuercode 2 and 3 give `E-STEUERCODE-INPUT-TAX` with `ntcs`, Steuercode 1 passes
 
 ## 2. Bad debt and cancellation fees
 
-- [ ] 2.1 Template rules for LossOfAccountsReceivable as rate wildcards (`*;LossOfAccountsReceivable` at 10 % `7800`, 13 % `7802`, 20 % `7801` with the dialect's output-tax code, 0 % `7809` without), so b03's container rule writes no row for `6900` and `CollectiveDebitor_LossOfAccountsReceivable`; cancellation and no-show rules matching apaleo's `RevenueCancellationFees…`/`RevenueNoShow…` accounts and English or German names (`4091` at 0 %, unmapped with comment above 0 % even where the generic rate rule would match) in `templates/ekr-hotel.rules.csv`; template tests on the recorded VIE chart (`RevenueCancellationFees_Without:0.00` → `4091`, `RevenueNoShow_Reduced:13.00` empty, no row for `6900` or `CollectiveDebitor_LossOfAccountsReceivable`)
-- [ ] 2.2 Posting tests for the write-off with and without VAT on a fabricated per-reservation account (no write-off is recorded; design Context): `parentNumber` `6900` by analogy with AR's `9999`, and the same line with parent `CollectiveDebitor_LossOfAccountsReceivable`, both resolved through the rate wildcard, and for both cancellation scenarios; "Forderungsverlust" text label and the summary line for written-off receivables per rate
-- [ ] 2.3 Ortstaxe template comment pointing to the mapping guide table and the fixed-Steuercode check
+- [x] 2.1 Template rules for LossOfAccountsReceivable as rate wildcards (`*;LossOfAccountsReceivable` at 10 % `7800`, 13 % `7802`, 20 % `7801` with the dialect's output-tax code, 0 % `7809` without), so b03's container rule writes no row for `6900` and `CollectiveDebitor_LossOfAccountsReceivable`; cancellation and no-show rules matching apaleo's `RevenueCancellationFees…`/`RevenueNoShow…` accounts and English or German names (`4091` at 0 %, unmapped with comment above 0 % even where the generic rate rule would match) in `templates/ekr-hotel.rules.csv`; template tests on the recorded VIE chart (`RevenueCancellationFees_Without:0.00` → `4091`, `RevenueNoShow_Reduced:13.00` empty, no row for `6900` or `CollectiveDebitor_LossOfAccountsReceivable`)
+- [x] 2.2 Posting tests for the write-off with and without VAT on a fabricated per-reservation account (no write-off is recorded; design Context): `parentNumber` `6900` by analogy with AR's `9999`, and the same line with parent `CollectiveDebitor_LossOfAccountsReceivable`, both resolved through the rate wildcard, and for both cancellation scenarios; "Forderungsverlust" text label and the summary line for written-off receivables per rate
+- [x] 2.3 Ortstaxe template comment pointing to the mapping guide table and the fixed-Steuercode check
 
 ## 3. Austrian fixture month
 

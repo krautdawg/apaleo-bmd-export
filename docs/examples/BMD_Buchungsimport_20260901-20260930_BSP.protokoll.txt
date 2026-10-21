@@ -23,6 +23,9 @@ Deposits and their VAT per rate (received minus released):
   0 %: net 0.00, tax 0.00, gross 0.00, apaleo VAT 0.00, difference 0.00 (apaleo precise 0)
   10 %: net 0.00, tax 0.00, gross 0.00, apaleo VAT 0.00, difference 0.00 (apaleo precise 0)
 
+Written-off receivables (Forderungsverluste) and the VAT correction per rate:
+  none
+
 Each booking carries apaleo's tax of its line, rounded to the cent; apaleo's VAT is the precise sum of its lines, rounded once. A difference of a few cents is this rounding, not an error.
 
 City tax: 6.40
