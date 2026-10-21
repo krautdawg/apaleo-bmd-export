@@ -1,4 +1,4 @@
-# Golden DATEV files are Windows-1252 with CRLF line ends and are compared byte
+# Golden files (DATEV and BMD) are Windows-1252 with CRLF line ends and are compared byte
 # for byte: never convert their line ends or encoding.
 test/golden/** -text
 # The Excel round-trip fixture is Windows-1252 with CRLF, like a file Excel (DE) saves.
