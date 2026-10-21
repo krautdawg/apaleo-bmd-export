@@ -1,29 +1,31 @@
-# apaleo DATEV Export: kostenlos und Open Source
+# apaleo BMD Export – kostenlos und Open Source
 
 **English:** [README.en.md](README.en.md)
 
-Kostenloser apaleo DATEV Export: Buchungsstapel (EXTF) für DATEV Rechnungswesen, Open Source.
+Kostenloser apaleo BMD Export: Buchungsimport für BMD NTCS aus apaleo, Open Source.
 
 [![CI](https://github.com/krautdawg/apaleo-bmd-export/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/krautdawg/apaleo-bmd-export/actions/workflows/ci.yml)
 [![Lizenz: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![Node.js 24](https://img.shields.io/badge/node.js-24-339933.svg)](https://nodejs.org/)
 
-apaleo-datev-export ist ein kostenloser DATEV-Export für Hotels mit apaleo. Er liest das apaleo-Buchungsjournal eines Monats und schreibt pro Hotel einen DATEV-Buchungsstapel im DATEV-Format (EXTF), fertig für deine Kanzlei und deinen Steuerberater oder deine Steuerberaterin, mit Vorlagen für die Kontenzuordnung im SKR03 und SKR04. Das Tool ist Open Source (MIT-Lizenz) und läuft auf deinem eigenen Rechner mit deinem eigenen apaleo-Konto. Kein Abo, kein gehosteter Dienst, kein Konto bei uns.
+apaleo-bmd-export ist ein kostenloser BMD-Export für Hotels in Österreich, die mit apaleo arbeiten, und für ihre Kanzlei. Er liest das apaleo-Buchungsjournal eines Monats und schreibt pro Hotel eine Datei im BMD Buchungsimport, die deine Steuerberaterin, dein Steuerberater oder deine Buchhaltung in BMD NTCS einliest, mit einer Vorlage für die Kontenzuordnung nach dem Einheitskontenrahmen (EKR). Das Tool ist Open Source (MIT-Lizenz) und läuft auf deinem eigenen Rechner mit deinem eigenen apaleo-Konto. Kein Abo, kein gehosteter Dienst, kein Konto bei uns.
 
-> **Keine Gewähr, keine Steuerberatung.** Lass deine Kontenzuordnung von deiner Steuerberatung prüfen, ebenso die ersten DATEV-Importe. Lies den [Haftungsausschluss](DISCLAIMER.md).
+**Stand:** Die Datei folgt dem dokumentierten BMD-Importformat (PR08/PR08A); ein erster Testimport mit einer Kanzlei steht noch aus. Was die Kanzlei dabei prüft, steht in [docs/bmd-import.md](docs/bmd-import.md).
+
+> **Keine Gewähr, keine Steuerberatung.** Lass deine Kontenzuordnung von deiner Steuerberatung prüfen, ebenso die ersten Importe in BMD. Lies den [Haftungsausschluss](DISCLAIMER.md).
 
 ## Was es macht
 
 - Liest das apaleo-Buchungsjournal (`export-gross-daily`) und den Kontenplan über eine apaleo Custom App, die nur lesen darf.
-- Bucht jede Zeile auf DATEV-Konten, mit einer Kontenzuordnung (CSV) pro Hotel aus einer Hotel-Vorlage für SKR03 oder SKR04.
-- Prüft jede Zeile vor dem Schreiben: DATEV muss genau die Umsatzsteuer rechnen, die apaleo berechnet hat, jedes Konto muss zugeordnet sein, und die Summen pro Konto müssen aufgehen.
-- Schreibt pro Hotel und Monat einen EXTF-Buchungsstapel (Windows-1252, Formatversion 13) mit Protokoll und Prüfsummen und schreibt denselben Monat nie zweimal.
-- Läuft von Hand, per Cron oder in einem selbst gebauten Docker-Container (`schedule --once`).
+- Ordnet jedes apaleo-Konto einem Sachkonto oder Personenkonto in BMD zu, mit Steuercode und USt-Satz, in einer Kontenzuordnung (CSV) pro Hotel aus der EKR-Hotelvorlage.
+- Prüft jede Zeile vor dem Schreiben: BMD bekommt Nettobetrag und Steuer getrennt und bucht genau die Umsatzsteuer, die apaleo berechnet hat; jedes Konto muss zugeordnet sein, und die Summen pro Konto müssen aufgehen.
+- Bucht die österreichischen Fälle nach der Kontenzuordnung: Ortstaxe ohne Steuer, Anzahlungen mit der USt bei Erhalt, Forderungsverlust mit USt-Berichtigung, Stornogebühren und No-Shows.
+- Schreibt pro Hotel und Monat eine Datei für BMD NTCS (oder BMD 5.5) mit Protokoll und Prüfsummen, schreibt denselben Monat nie zweimal und läuft von Hand, per Cron oder in einem selbst gebauten Docker-Container (`schedule --once`).
 
 ## Für wen
 
-- Hotel-Backoffice und kleine Hotelgruppen mit apaleo, deren Buchhaltung eine Kanzlei mit DATEV macht.
-- Steuerberater und Kanzleien, die die Kontenzuordnung sehen, prüfen und selbst verantworten wollen.
+- Hotel-Backoffice und kleine Hotelgruppen in Österreich mit apaleo, deren Buchhaltung eine Kanzlei in BMD NTCS macht.
+- Steuerberaterinnen, Steuerberater und Kanzleien, die die Kontenzuordnung sehen, prüfen und selbst verantworten wollen.
 - Technische Helfer, die es für ein Hotel einrichten. Du brauchst einen Rechner mit Node.js 24 oder Docker und die Kommandozeile.
 
 ## Beispielausgabe ansehen
@@ -113,7 +115,7 @@ Die Dateien erscheinen in `./data/<Hotel>/<JJJJ-MM>/`. Cron auf dem Host, einmal
 | `live-smoke` | Liest einen Geschäftstag aus apaleo mit echten Zugangsdaten und zeigt, was zurückkam. Schreibt nichts. |
 | `init-mapping` | Schreibt eine Kontenzuordnung aus dem apaleo-Kontenplan und der EKR-Hotelvorlage (`--template ekr`); `--update` hängt neue Konten an. |
 | `mapping check` | Prüft eine Kontenzuordnung, und mit `--from`/`--to`, ob jedes im Zeitraum gebuchte Konto zugeordnet ist. |
-| `export` | Schreibt die DATEV-Dateien eines Monats oder Zeitraums nach allen Prüfungen; `--dry-run` schreibt nichts, `--demo` nimmt die Demodaten. |
+| `export` | Schreibt die BMD-Dateien (Buchungsimport) eines Monats oder Zeitraums nach allen Prüfungen; `--dry-run` schreibt nichts, `--demo` nimmt die Demodaten. |
 | `schedule` | `schedule --once` exportiert jeden fälligen Zeitraum, der noch nicht im Ausgabeordner liegt, und endet. Für Cron und Docker. |
 
 `apaleo-bmd <Befehl> --help` zeigt die Optionen. Exit-Codes: 0 Erfolg, 1 eine Prüfung oder ein Lauf ist fehlgeschlagen, 2 falscher Aufruf. Jeder Befund-Code mit Lösung: [docs/troubleshooting.md](docs/troubleshooting.md).
@@ -124,52 +126,58 @@ Eine YAML-Datei und Umgebungsvariablen für das Secret. Jeder Schlüssel mit Sta
 
 ## Was es nicht macht
 
-- Keine Übertragung an DATEV online (Buchungsdatenservice). Dafür braucht es eine Freigabe von DATEV; dieses Tool schreibt nur Dateien für den DATEV-Import.
-- Keine Debitoren-Stammdaten. Firmenrechnungen gehen auf einen Sammeldebitor.
-- Keine Buchung von Gebühren der Zahlungsdienstleister oder Provisionen der Buchungsportale. Die bucht die Kanzlei aus den Abrechnungen.
-- Keine Weboberfläche, kein gehosteter Dienst, kein E-Mail-Versand, kein GoBD-zertifiziertes Archiv.
-- Nur EUR, nur apaleo. Andere PMS oder Zielformate (Mews, BMD, lexoffice) sind als Beitrag willkommen; siehe [docs/architecture.md](docs/architecture.md).
+- Keine Übertragung an BMD und kein BMD Com: Das Tool schreibt nur Dateien, die die Kanzlei in BMD importiert.
+- Keine Personenkonten-Stammdaten. Rechnungen an Firmen gehen auf einen Sammeldebitor.
+- Keine Buchung von Gebühren der Zahlungsdienstleister, Rückbuchungen (Chargebacks) oder Provisionen der Buchungsportale. Die bucht die Kanzlei aus den Abrechnungen.
+- Keine Weboberfläche, kein gehosteter Dienst, kein E-Mail-Versand, kein zertifiziertes Archiv.
+- Nur EUR, nur apaleo und keine anderen Zielformate wie DATEV oder RZL. Ein anderes PMS ist als Beitrag willkommen; siehe [docs/architecture.md](docs/architecture.md).
 
 ## Vergleich mit kostenpflichtigen Connectoren
 
-Im apaleo Store gibt es kostenpflichtige DATEV-Connectoren. Die Tabelle vergleicht das typische Angebot mit diesem Tool, ohne Namen zu nennen.
+Im apaleo Store gibt es kostenpflichtige BMD-Connectoren. Die Tabelle vergleicht das typische Angebot mit diesem Tool, ohne Namen zu nennen.
 
-| | Kostenpflichtige Connectoren im apaleo Store | apaleo-datev-export |
+| | Kostenpflichtige Connectoren im apaleo Store | apaleo-bmd-export |
 |---|---|---|
-| Preis | etwa 24–51 € pro Hotel und Monat, laut apaleo Store, Oktober 2026 | kostenlos |
+| Preis | 18-51 EUR pro Monat (je nach Anbieter und Anzahl der Betriebe), laut apaleo Store, Oktober 2026 | kostenlos |
 | Betrieb | beim Anbieter | bei dir (Rechner, Server oder Docker) |
 | Einrichtung | Oberfläche des Anbieters | Konfigurationsdatei und Kontenzuordnung (CSV) |
-| Übertragung an DATEV online | bei manchen | nicht unterstützt, nur Dateiimport |
+| Zustellung der Dateien | per E-Mail oder in einen Cloud-Speicher | lokaler Ordner; du gibst die Datei der Kanzlei |
+| Personenkonten-Datei | bei manchen | keine in Version 1, ein Sammeldebitor |
+| Gebühren aus Abrechnungsdateien | bei manchen | nicht gebucht |
 | Support | Support des Anbieters | Community, ohne Garantie |
-| Vorlagen für die Zuordnung | unterschiedlich | Vorschläge für SKR03 und SKR04, geprüft von deiner Kanzlei |
+| Vorlagen für die Zuordnung | unterschiedlich | Vorschläge nach dem EKR, geprüft von deiner Kanzlei |
 
-Selbst betreiben heißt: Du behältst die Daten und zahlst nichts, aber du spielst Updates ein, behältst die geplanten Läufe im Blick und löst Probleme selbst oder mit einem technischen Helfer. Kann das niemand übernehmen, ist ein bezahlter Connector vielleicht die bessere Wahl.
+Selbst betreiben heißt: Du behältst die Daten und zahlst nichts, aber du spielst Updates ein, behältst die geplanten Läufe im Blick, gibst die Dateien selbst an die Kanzlei weiter und löst Probleme selbst oder mit einem technischen Helfer. Kann das niemand übernehmen, ist ein bezahlter Connector vielleicht die bessere Wahl.
 
 ## Häufige Fragen
 
 **Was kostet es?** Nichts. Es steht unter der MIT-Lizenz. Deine Kosten sind der Rechner, auf dem es läuft, und die Zeit der Kanzlei für die Prüfung der Zuordnung.
 
-**Wohin gehen meine Daten?** Nur auf deine eigene Festplatte. Das Tool liest apaleo mit deiner Custom App und schreibt Dateien in einen lokalen Ordner. Es schickt nichts an uns oder an andere. Die DATEV-Datei enthält keine Gästenamen: Buchungstexte nutzen Kontobezeichnungen, nie die Namen von Gastfolios.
+**Wohin gehen meine Daten?** Nur auf deine eigene Festplatte. Das Tool liest apaleo mit deiner Custom App und schreibt Dateien in einen lokalen Ordner. Es schickt nichts an uns oder an andere. Die BMD-Datei enthält keine Gästenamen: Buchungstexte nutzen Kontobezeichnungen, nie die Namen von Gastfolios.
 
-**Kann es an DATEV online übertragen?** Nein. Dafür braucht es eine Freigabe von DATEV. Die Kanzlei importiert die Datei über die Stapelverarbeitung; siehe [docs/bmd-import.md](docs/bmd-import.md).
+**Kann es direkt an BMD übertragen, etwa über BMD Com?** Nein. Die Kanzlei importiert die Datei in BMD NTCS; siehe [docs/bmd-import.md](docs/bmd-import.md).
 
-**Festschreibung?** Der BMD-Buchungsimport kennt keine Festschreibung in der Datei. Die Buchungen kommen unter dem Buchungssymbol, das die Kanzlei in BMD anlegt (`bmd.buchsymbol`); eine falsch importierte Datei storniert sie dort. Importiere nie eine Datei aus `--overwrite`, ohne dass die Kanzlei die alte Datei vorher storniert hat; siehe [docs/bmd-import.md](docs/bmd-import.md).
+**Hat eine Kanzlei die Datei schon importiert?** Noch nicht. Die Datei folgt den veröffentlichten Beschreibungen des BMD-Imports (PR08/PR08A, dvo); die Quellen stehen in [docs/bmd-format.md](docs/bmd-format.md). Der erste Testimport wird mit Datum, BMD-Version und Ergebnis in [docs/maintainers.md](docs/maintainers.md#testimporte) festgehalten.
 
-**Mehrere Hotels?** Trag sie unter `properties` in der Konfiguration ein. Jedes bekommt eine eigene Zuordnung und eine eigene Datei, auf Wunsch mit einem eigenen Buchungssymbol (`properties[].buchsymbol`).
+**Kann ich einen Import rückgängig machen?** Die Buchungen kommen unter dem Buchungssymbol, das die Kanzlei in BMD anlegt (`bmd.buchsymbol`); eine falsch importierte Datei löscht oder storniert die Kanzlei dort. Importiere nie eine Datei aus `--overwrite`, bevor die Kanzlei die Buchungen der alten Datei entfernt hat; siehe [docs/bmd-import.md](docs/bmd-import.md).
 
-**Ich nutze heute einen bezahlten Connector. Kann ich wechseln?** Ja. Die Kontenzuordnung eines DATEV-Connectors (Spalten `ApaleoAccountNumber;DatevAccountNumber;CostCenter;CostCenter2`) liest das Tool nicht, denn sie hat DATEV-Konten statt BMD-Konten. Leg die Zuordnung mit `init-mapping --template ekr` neu an und übertrag die Kontonummern mit deiner Kanzlei. Fang mit dem ersten Monat an, den der alte Connector nicht mehr geliefert hat, damit nichts doppelt importiert wird; siehe [docs/docker.md](docs/docker.md#der-erste-lauf).
+**Mehrere Hotels?** Trag sie unter `properties` in der Konfiguration ein. Jedes bekommt eine eigene Zuordnung und eine eigene Datei. Bucht die Kanzlei sie in einen Mandanten, bekommt jedes ein eigenes Buchungssymbol (`properties[].buchsymbol`).
 
-**Österreich (BMD)?** Noch nicht. Das Tool schreibt nur DATEV-Dateien. Ein BMD-Writer ist als Beitrag willkommen ([docs/architecture.md](docs/architecture.md)).
+**Ich nutze heute einen bezahlten Connector. Kann ich wechseln?** Ja. Die Kontenzuordnung eines anderen Connectors liest das Tool nicht. Leg die Zuordnung mit `init-mapping --template ekr` neu an und übertrag die Kontonummern mit deiner Kanzlei. Fang mit dem ersten Monat an, den der alte Connector nicht mehr geliefert hat, damit nichts doppelt importiert wird; siehe [docs/docker.md](docs/docker.md#der-erste-lauf).
+
+**Und BMD 5.5?** Mit `bmd.dialect: bmd55` schreibt das Tool die Spaltennamen, das Datumsformat und die Steuercodes von BMD 5.5; siehe [docs/bmd-format.md](docs/bmd-format.md).
+
+**Gibt es das auch für DATEV?** Dieses Tool baut auf [apaleo-datev-export](https://github.com/krautdawg/apaleo-datev-export) auf, und wer in Deutschland mit DATEV bucht, nimmt dieses Projekt.
 
 **Ist die Zuordnung Steuerberatung?** Nein. Die Vorlagen sind Vorschläge. Jede Zeile entscheidet deine Kanzlei.
 
 ## Haftungsausschluss
 
-Ohne Gewähr, keine Haftung, keine Steuerberatung. Deine Kanzlei muss die Kontenzuordnung und die ersten DATEV-Importe prüfen. Lies den vollständigen [Haftungsausschluss](DISCLAIMER.md) (verbindlich auf Deutsch, mit einer unverbindlichen englischen Übersetzung). Keine Verbindung zur apaleo GmbH oder zur DATEV eG.
+Ohne Gewähr, keine Haftung, keine Steuerberatung. Deine Kanzlei muss die Kontenzuordnung und die ersten Importe in BMD prüfen. Lies den vollständigen [Haftungsausschluss](DISCLAIMER.md) (verbindlich auf Deutsch, mit einer unverbindlichen englischen Übersetzung). Keine Verbindung zur apaleo GmbH oder zur BMD Systemhaus GesmbH.
 
 ## Mitmachen
 
-Fehlermeldungen, Korrekturen, neue Quellen und Zielformate sind willkommen. Lies zuerst [CONTRIBUTING.md](CONTRIBUTING.md): Einrichtung, OpenSpec-Ablauf und die Regel, dass Testdaten nie echte Gästedaten enthalten. Issues und Pull Requests auf Englisch sind ebenso willkommen; Code, Bezeichner und Commits sind auf Englisch. Sicherheitsprobleme: [SECURITY.md](SECURITY.md). Änderungen: [CHANGELOG.md](CHANGELOG.md).
+Fehlermeldungen, Korrekturen, Wissen über BMD und die Kontenzuordnung und neue Quellen sind willkommen. Lies zuerst [CONTRIBUTING.md](CONTRIBUTING.md): Einrichtung, OpenSpec-Ablauf und die Regel, dass Testdaten nie echte Gästedaten enthalten. Issues und Pull Requests auf Englisch sind ebenso willkommen; Code, Bezeichner und Commits sind auf Englisch. Sicherheitsprobleme: [SECURITY.md](SECURITY.md). Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
 ## Lizenz
 
