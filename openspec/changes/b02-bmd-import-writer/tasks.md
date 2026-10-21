@@ -13,7 +13,7 @@
 
 ## 3. Target and golden files
 
-- [ ] 3.1 `src/bmd/target.ts`: `bmdTarget` with file name, pattern `^BMD_Buchungsimport_(\d{8})-(\d{8})_[A-Za-z0-9_-]+\.csv$`, byte-equality `sameContent`, protocol title
+- [ ] 3.1 `src/bmd/target.ts`: `bmdTarget` with file name, pattern `^BMD_Buchungsimport_(\d{8})-(\d{8})_[A-Za-z0-9_-]+\.csv$`, byte-equality `sameContent`, protocol title, and BMD `advice` for `E-PERIOD-OVERLAP` / `E-FILE-EXISTS` (import into BMD NTCS, `bmd.*` header keys, how the Kanzlei reverses an imported Buchungsimport)
 - [ ] 3.2 Golden files in `test/golden/bmd/` for the cases listed in the spec, one set per dialect, compared byte by byte (`UPDATE_GOLDEN=1` to refresh)
 - [ ] 3.3 Belegnummer tests: two daily files and two partial files of one month share no number
 - [ ] 3.4 Run the `target.test.ts` contract from b01 against `bmdTarget`

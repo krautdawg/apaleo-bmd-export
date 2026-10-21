@@ -104,13 +104,21 @@ Re-running an export for a period whose file exists SHALL do nothing when the fi
 - **THEN** the export refuses with `E-PERIOD-OVERLAP`, names the existing file and writes nothing
 
 ### Requirement: Target writer boundary
-The export pipeline SHALL write files only through a `TargetWriter` that provides the file name for a property and period, the file-name pattern used to find existing and overlapping files of that target, the rendered bytes, the comparison that decides whether an existing file is unchanged, and the protocol title. `src/export/` SHALL NOT import a target module's internals other than its `TargetWriter`, and the output folder logic SHALL NOT contain a target-specific file pattern.
+The export pipeline SHALL write files only through a `TargetWriter` that provides the file name for a property and period, the file-name pattern used to find existing and overlapping files of that target, the rendered bytes, the comparison that decides whether an existing file is unchanged, the protocol title, and the target's advice in the `E-PERIOD-OVERLAP` and `E-FILE-EXISTS` refusals (the program the file is imported into, its config keys, how an imported file is undone). `src/export/` SHALL NOT import a target module's internals other than its `TargetWriter`, and the output folder logic SHALL NOT contain a target-specific file pattern, program name or config key. A manifest entry SHALL count as a file of the target only when its name matches the target's file pattern.
 
 #### Scenario: DATEV output unchanged behind the boundary
 - **WHEN** the golden-file tests run after the writer is wrapped as a `TargetWriter`
-- **THEN** every golden EXTF file and protocol is byte-identical to before
+- **THEN** every golden EXTF file is byte-identical to before, and the golden protocol and `manifest.json` differ only in the tool name, the tool version and the mapping SHA-256
 
 #### Scenario: Pattern and comparison come from the writer
 - **WHEN** a test runs the export with a fake `TargetWriter` whose files are named `FAKE_<from>-<to>_<propertyId>.txt` and whose comparison ignores nothing
 - **THEN** existence, overlap (`E-PERIOD-OVERLAP`), unchanged re-runs and `E-FILE-EXISTS` work for the fake files exactly as for EXTF files, and no EXTF name appears in the output folder
+
+#### Scenario: Refusal advice comes from the writer
+- **WHEN** the fake `TargetWriter` refuses a file with `E-PERIOD-OVERLAP` or `E-FILE-EXISTS`
+- **THEN** the message carries the fake target's advice and names neither DATEV nor a `datev.*` config key
+
+#### Scenario: Manifest entry of another target
+- **WHEN** `manifest.json` records a current file of the fake target for the period and no file of the default target exists
+- **THEN** the lookup for the default target (as used by `schedule --once`) finds no file for that period
 

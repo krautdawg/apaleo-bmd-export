@@ -81,7 +81,7 @@ Die Buchungsregeln erzeugen Werte vom Typ `PostedBooking` (Konto, Gegenkonto, So
 
 1. liegt in `src/<Ziel>/` (zum Beispiel `src/bmd/`), hängt nicht von `src/sources/` ab und meldet fehlerhafte Daten als Befunde mit Codes, wie `renderBuchungsstapel` (dessen `ExtfValidationError` als `FindingsError` alle Befunde auf einmal enthält);
 2. hat Golden Files in `test/golden/<Ziel>/`, die Byte für Byte verglichen werden (siehe `test/datev/golden.test.ts`);
-3. implementiert die Schnittstelle `TargetWriter` aus `src/export/target.ts`: Dateiname, Muster für vorhandene und überlappende Dateien, die gerenderten Bytes, den Vergleich „unverändert“ und den Titel des Protokolls (Beispiel: `src/datev/target.ts`). `src/export/` kennt ein Zielformat nur über diese Schnittstelle; `DEFAULT_TARGET` in `src/export/pipeline.ts` wählt das Ziel.
+3. implementiert die Schnittstelle `TargetWriter` aus `src/export/target.ts`: Dateiname, Muster für vorhandene und überlappende Dateien, die gerenderten Bytes, den Vergleich „unverändert“, den Titel des Protokolls und die Hinweise (`advice`) für die Meldungen `E-PERIOD-OVERLAP` und `E-FILE-EXISTS`: welches Programm die Datei importiert, welche Konfigurationswerte den Kopfsatz ändern und wie die Kanzlei einen importierten Stapel rückgängig macht (Beispiel: `src/datev/target.ts`). `src/export/` kennt ein Zielformat nur über diese Schnittstelle; `DEFAULT_TARGET` in `src/export/pipeline.ts` wählt das Ziel.
 
 USt-Logik, die nur ein Zielformat betrifft (BMD hat zum Beispiel keine Automatikkonten), gehört in den Buchungsschritt für dieses Ziel, nicht in den Writer.
 
