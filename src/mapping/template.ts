@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { ChartIndex } from '../core/chart.js';
 import type { Finding } from '../core/findings.js';
@@ -47,6 +48,26 @@ export function templateUrl(skr: Skr): URL {
 /** Reads the template shipped in `templates/`. */
 export async function loadTemplate(skr: Skr): Promise<Template> {
   return parseTemplate(await readFile(templateUrl(skr), 'utf8'), skr);
+}
+
+const shipped = new Map<Skr, Template>();
+
+/** The template shipped in `templates/`, read once and synchronously (for fix hints in findings). */
+export function shippedTemplate(skr: Skr): Template {
+  let template = shipped.get(skr);
+  if (!template) {
+    template = parseTemplate(readFileSync(templateUrl(skr), 'utf8'), skr);
+    shipped.set(skr, template);
+  }
+  return template;
+}
+
+/** The account the template's wildcard rule gives a type at a rate (any rate for types without one), scaled; undefined when none. */
+export function templateWildcardAccount(template: Template, type: string, rate: number | undefined, sachkontenlaenge: number): string | undefined {
+  const rule = template.rules.find(
+    (r) => r.wildcard && r.apaleoType === type && r.datevAccount !== '' && (r.apaleoVatPercent === undefined || r.apaleoVatPercent === rate),
+  );
+  return rule ? scaleAccount(rule.datevAccount, type, sachkontenlaenge) : undefined;
 }
 
 export function parseTemplate(text: string, skr: Skr): Template {
