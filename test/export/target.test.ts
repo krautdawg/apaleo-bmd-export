@@ -25,9 +25,9 @@ const fakeTarget: TargetWriter<PostedBooking> = {
     findings: [],
   }),
   sameContent: (existing, next) => Buffer.from(existing).equals(Buffer.from(next)),
+  importBlock: (bookings) => ['FAKE import:', `  ${bookings.length} lines`],
   advice: {
     overlap: 'FAKE overlap advice',
-    headerChange: 'FAKE header advice.',
     reimport: 'FAKE reimport advice.',
   },
 };
@@ -195,7 +195,11 @@ describe('the checks and the summary do not depend on the target (recorded VIE d
     expect(fake.status).toBe('written');
     expect(fake.path).toMatch(/FAKE_20261021-20261021_VIE\.txt$/);
     expect(fake.bookings).toBe(29);
-    expect(fake.summary).toBe(standard.summary);
+    // Only the import block belongs to the target.
+    const withoutImport = (summary: string) => summary.replace(/\n(FAKE import|Import into BMD)[^]*?\n\n/, '\n');
+    expect(withoutImport(fake.summary)).toBe(withoutImport(standard.summary));
+    expect(fake.summary).toContain('FAKE import:\n  29 lines\n');
+    expect(standard.summary).toContain('  Lines: 29 bookings (Satzart 0) after the header line');
     expect(fake.findings).toEqual(standard.findings);
     expect(fake.findings.map((f) => f.code)).toEqual(['W-VAT-ROUNDING']);
     expect(fake.summary).toContain('Deposits: received 491.00, released 295.00, of it refunded 10.00');

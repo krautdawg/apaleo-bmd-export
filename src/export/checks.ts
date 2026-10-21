@@ -163,9 +163,9 @@ export function checkVatByRate(lines: readonly LedgerLine[], result: PostingResu
         code: 'E-VAT-TOTAL',
         message:
           `at ${rate} % the bookings carry ${formatCents(carried)} tax, but apaleo charged ${formatCents(charged)} ` +
-          `as the sum of its per-line tax rounded to cents (difference ${formatCents(carried - charged)}, the rounding total allows ` +
+          `as the sum of its per-line tax rounded to cents (difference apaleo minus bookings ${formatCents(charged - carried)}, the rounding total allows ` +
           `${formatCents(allowance)}). apaleo's precise total is ${precise}; its per-line rounding (${lineRounding}) is no error, ` +
-          `so the difference of ${formatCents(carried - charged)} is the problem. ` +
+          `so the difference of ${formatCents(charged - carried)} is the problem. ` +
           REPORT_PROBLEM_HINT,
         value: String(rate),
       },

@@ -37,7 +37,7 @@ For each property and month the export SHALL run the mapping coverage check, the
 - **THEN** no file is written for BSP, the file for BSP2 is written, `E-UNMAPPED` is printed for BSP, and the exit code is 1
 
 ### Requirement: EUR only
-The export SHALL refuse with `E-CURRENCY`, per property-month and before writing, a property whose currency is not EUR and a month with any ledger line whose currency is not EUR, because the EXTF writer labels every amount as EUR and does not convert.
+The export SHALL refuse with `E-CURRENCY`, per property-month and before writing, a property whose currency is not EUR and a month with any ledger line whose currency is not EUR, because the BMD lines carry no currency and are booked in the Mandant's Grundwährung, and the tool does not convert.
 
 #### Scenario: Swiss property
 - **WHEN** the property's currency is CHF
@@ -79,25 +79,33 @@ The export SHALL verify that the absolute gross of all ledger lines equals the s
 - **THEN** error `E-CONSERVATION` is raised and no file is written
 
 ### Requirement: Dry run
-With `--dry-run` the export SHALL run every step except writing, SHALL print the posting summary (totals per DATEV account; revenue per rate with gross, the VAT per booking, apaleo's precise VAT and the difference; deposit VAT per rate the same way; city tax; payments per clearing account; deposits received, released and refunded; accounts receivable; skipped lines with unsigned totals; findings), and SHALL exit with code 1 if any error finding exists. The protocol file SHALL contain the same summary.
+With `--dry-run` the export SHALL run every step except writing, SHALL print the posting summary (totals per BMD account; net, tax and gross per VAT rate with apaleo's precise VAT and the difference to the tax per booking; deposit tax per rate the same way; Ortstaxe and other levies; payments per clearing account; deposits received, released and refunded; accounts receivable; write-offs; skipped lines with unsigned totals; findings) and the import block of the protocol, and SHALL exit with code 1 if any error finding exists. The protocol file SHALL contain the same summary.
 
 #### Scenario: Review before the first file
-- **WHEN** the user runs `export --month 2026-10 --property BSP --dry-run`
-- **THEN** the summary is printed and no file or folder is created
+- **WHEN** the user runs `apaleo-bmd export --month 2026-10 --property BSP --dry-run`
+- **THEN** the summary and the import block are printed and no file or folder is created
+
+#### Scenario: VAT comparison on the recorded VIE day
+- **WHEN** the recorded VIE day 2026-10-21 is exported with `--dry-run`
+- **THEN** the summary shows for revenue at 10 % the tax 7.74 of the bookings, apaleo's VAT 7.75 and the difference 0.01, with one sentence explaining that the tax is rounded per booking and apaleo's total per day
 
 #### Scenario: VAT comparison in the protocol
-- **WHEN** the recorded BER day 2026-10-21 is exported
-- **THEN** the protocol shows for revenue `7 %: gross 571.22, DATEV VAT 37.38, apaleo VAT 37.37, difference 0.01` and `19 %: gross 47.38, DATEV VAT 7.57, apaleo VAT 7.56, difference 0.01`, with one sentence explaining that the VAT is rounded per booking and apaleo's total per day
+- **WHEN** the recorded VIE day 2026-10-21 is exported
+- **THEN** the protocol shows for revenue `10 %: net 77.46, tax 7.74, gross 85.20, apaleo VAT 7.75, difference 0.01` and `20 %: net 39.49, tax 7.89, gross 47.38, apaleo VAT 7.90, difference 0.01`, with the same sentence on the rounding
 
 ### Requirement: Output layout and manifest
-The export SHALL write each file to `<output.dir>/<propertyId>/<YYYY-MM>/` with the deterministic name `EXTF_Buchungsstapel_<Berater>_<Mandant>_<from>-<to>_<propertyId>.csv`, SHALL write a protocol text file beside it, and SHALL record in `manifest.json` the file name, SHA-256 of the file, SHA-256 of the body without the header line, booking count, Soll and Haben totals, mapping file SHA-256, tool version and creation time.
+The export SHALL write each file to `<output.dir>/<propertyId>/<YYYY-MM>/` with the deterministic name `BMD_Buchungsimport_<from>-<to>_<propertyId>.csv`, SHALL write a protocol text file `<name>.protokoll.txt` beside it, and SHALL record in `manifest.json` the file name, SHA-256 of the file, booking count, Soll and Haben totals as the Kanzlei sees them in BMD after the import (not sums by the sign of the amount), tax per rate, mapping file SHA-256, tool version and creation time. The protocol SHALL contain an import block with the file name, line count, the dialect, every Buchungssymbol used, the range of Belegnummern, the `verbuchkz` and `gegenbuchkz` values, every Steuercode and rate used, and the configured Sachkonten and Personenkonten lengths.
 
 #### Scenario: Files after a run
 - **WHEN** a monthly export for BSP 2026-10 succeeds
-- **THEN** the folder `exports/BSP/2026-10/` contains the EXTF file, its protocol and a manifest entry with both hashes
+- **THEN** the folder `exports/BSP/2026-10/` contains `BMD_Buchungsimport_20261001-20261031_BSP.csv`, its protocol and a manifest entry with the file hash and the tax per rate
+
+#### Scenario: Import block
+- **WHEN** the October file for 2026-10-01 to 2026-10-31 has 812 bookings with Buchungssymbole `HO` and `HZ`, Steuercode 1 at 10 % and 20 % and Steuercode 81 at 0 %, in the `ntcs` dialect
+- **THEN** the protocol names the dialect `ntcs`, `HO` and `HZ`, Belegnummern `100100001` to `100100812`, `verbuchkz A`, `gegenbuchkz E`, Steuercode 1 with 10 % and 20 % and Steuercode 81 with 0 %
 
 ### Requirement: Idempotent re-runs
-Re-running an export for a period whose file exists SHALL do nothing when the file is unchanged apart from header field 6 (Erzeugt am), SHALL refuse with `E-FILE-EXISTS` when the bookings or any other header field (for example WJ-Beginn, Festschreibung or Sachkontenrahmen) changed, and with `--overwrite` SHALL keep the old file under a `.replaced-<timestamp>.csv` name, write the new one and record both in the manifest. The comparison SHALL read the existing file, so it works without the manifest. When the file is unchanged but its protocol or current manifest entry is missing or describes another file (a run interrupted between writing the file and its companions), the run SHALL rewrite them and report `N-COMPANIONS-REPAIRED`. Writing SHALL hold an exclusive lock file in the property-month folder and SHALL re-check the file on disk under that lock, so two concurrent runs never both write or replace the same file; the run that finds the lock or a changed file SHALL fail that property-month with `E-EXPORT` and write nothing. An export whose period overlaps another EXTF file in the same folder SHALL be refused with `E-PERIOD-OVERLAP`, because importing both would book the shared days twice.
+Re-running an export for a period whose file exists SHALL do nothing when the new file is byte-identical to the existing one, SHALL refuse with `E-FILE-EXISTS` when any byte differs, and with `--overwrite` SHALL keep the old file under a `.replaced-<timestamp>.csv` name, write the new one and record both in the manifest. The comparison SHALL read the existing file, so it works without the manifest. When the file is unchanged but its protocol or current manifest entry is missing or describes another file (a run interrupted between writing the file and its companions), the run SHALL rewrite them and report `N-COMPANIONS-REPAIRED`. Writing SHALL hold an exclusive lock file in the property-month folder and SHALL re-check the file on disk under that lock, so two concurrent runs never both write or replace the same file; the run that finds the lock or a changed file SHALL fail that property-month with `E-EXPORT` and write nothing. An export whose period overlaps another BMD file in the same folder SHALL be refused with `E-PERIOD-OVERLAP`, because importing both would book the shared days twice.
 
 #### Scenario: Unchanged re-run
 - **WHEN** the same month is exported twice with unchanged apaleo data and mapping
@@ -105,15 +113,19 @@ Re-running an export for a period whose file exists SHALL do nothing when the fi
 
 #### Scenario: Late posting changed the month
 - **WHEN** a late posting changed the month after it was exported
-- **THEN** the second run refuses with `E-FILE-EXISTS`, explains that the Kanzlei must remove the imported batch first, and suggests `--overwrite`
+- **THEN** the second run refuses with `E-FILE-EXISTS`, explains that the Kanzlei must delete the imported bookings of that file in BMD first, and suggests `--overwrite`
 
 #### Scenario: Manifest deleted
 - **WHEN** `manifest.json` was deleted and the same month is exported again with unchanged data
-- **THEN** the run reports `unchanged` by comparing the existing file without its creation time, leaves the EXTF file untouched and writes the missing manifest entry again (`N-COMPANIONS-REPAIRED`)
+- **THEN** the run reports `unchanged` by comparing the existing file, leaves the BMD file untouched and writes the missing manifest entry again (`N-COMPANIONS-REPAIRED`)
+
+#### Scenario: Config changed the content
+- **WHEN** the month was exported and `bmd.buchsymbol` was changed before the same month is exported again with unchanged data
+- **THEN** the run refuses with `E-FILE-EXISTS` and keeps the old file, and with `--overwrite` it replaces the file and the new lines carry the new Buchungssymbol
 
 #### Scenario: Config changed the header
-- **WHEN** the month was exported and `datev.wjBeginn` was changed before the same month is exported again with unchanged data
-- **THEN** the run refuses with `E-FILE-EXISTS` and keeps the old file, and with `--overwrite` it replaces the file and the new header carries the new WJ-Beginn
+- **WHEN** the month was exported and `bmd.dialect` was changed to `bmd55` before the same month is exported again with unchanged data
+- **THEN** the run refuses with `E-FILE-EXISTS` and keeps the old file, because the header line and the date in every line differ, and with `--overwrite` it replaces the file and the new header line carries the BMD 5.5 field names
 
 #### Scenario: Overlapping period
 - **WHEN** the folder holds the file for 2026-09-01 to 2026-09-30 and the user exports 2026-09-20 to 2026-09-30

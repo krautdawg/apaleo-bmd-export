@@ -216,7 +216,7 @@ describe('docs folder', () => {
     const troubleshooting = readRepoFile('docs/troubleshooting.md');
     expect(troubleshooting).toContain('`netAmount` oder `taxes[…].amount`: Du nutzt eine alte Version');
     expect(troubleshooting).toContain('`grossAmount`: Das ist auch in der aktuellen Version ein echter Fehler');
-    expect(readRepoFile('docs/export.md')).toContain('10 %: net 77.46, tax 7.74, gross 85.20, apaleo VAT 7.75, difference -0.01 (apaleo precise 7.74545454)');
+    expect(readRepoFile('docs/export.md')).toContain('10 %: net 77.46, tax 7.74, gross 85.20, apaleo VAT 7.75, difference 0.01 (apaleo precise 7.74545454)');
   });
 
   it('documents every config key and every environment variable in docs/configuration.md', () => {
@@ -265,9 +265,11 @@ describe('readme-quickstart CI job', () => {
   const workflow = parse(readRepoFile('.github/workflows/ci.yml')) as { jobs: Record<string, { steps: { run?: string }[] }> };
   const runs = workflow.jobs['readme-quickstart']?.steps.map((step) => step.run ?? '') ?? [];
 
-  it('extracts the README block after the quickstart marker, runs it, then the demo dry run', () => {
+  it('extracts the README block after the quickstart marker, runs it, then the demo dry run and checks its BMD summary', () => {
     expect(runs.join('\n')).toContain('<!-- quickstart -->');
     expect(runs).toContain('bash -euxo pipefail "$RUNNER_TEMP/quickstart.sh"');
-    expect(runs.at(-1)).toBe('node dist/cli/main.js export --month 2026-09 --demo --dry-run');
+    const demo = runs.at(-1) ?? '';
+    expect(demo.startsWith('node dist/cli/main.js export --month 2026-09 --demo --dry-run | tee "$RUNNER_TEMP/demo.txt"\n')).toBe(true);
+    for (const line of ['^Import into BMD', '^Totals per BMD account', '^DEMO Result: dry run']) expect(demo).toContain(`grep -q '${line}`);
   });
 });

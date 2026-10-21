@@ -1,5 +1,6 @@
 import { fileTag, type TargetFileMeta, type TargetWriter } from '../export/target.js';
 import { DEFAULT_DIALECT } from './format.js';
+import { importBlock } from './import-block.js';
 import type { BmdBooking, BmdDialect, BmdRenderOptions } from './types.js';
 import { buchungsimportFileName, renderBuchungsimport } from './writer.js';
 
@@ -22,9 +23,21 @@ export function settingsFromConfig({ config }: Pick<TargetFileMeta, 'config'>): 
   return { dialect, sachkontenlaenge, personenkontenlaenge };
 }
 
+/**
+ * Starts every Buchungstext of a demo file (`export --demo`), so an imported demo
+ * line is recognisable in BMD, which has no description per file. The
+ * 40-character limit of `text` applies after it.
+ */
+export const DEMO_TEXT_PREFIX = 'DEMO ';
+
+/** The bookings as a demo file writes them: every text with `DEMO_TEXT_PREFIX`. */
+export function markDemo<B extends BmdBooking>(bookings: readonly B[]): B[] {
+  return bookings.map((booking) => ({ ...booking, text: `${DEMO_TEXT_PREFIX}${booking.text ?? ''}` }));
+}
+
 /** The BMD Buchungsimport as the export's target, with the settings `settingsOf` reads for each file (default: the config). */
 export function createBmdTarget(settingsOf: (meta: TargetFileMeta) => BmdTargetSettings = settingsFromConfig): TargetWriter<BmdBooking> {
-  const optionsOf = (meta: TargetFileMeta): BmdRenderOptions => ({
+  const optionsOf = (meta: TargetFileMeta): Required<BmdRenderOptions> => ({
     ...settingsOf(meta),
     from: meta.part.from,
     to: meta.part.to,
@@ -36,23 +49,21 @@ export function createBmdTarget(settingsOf: (meta: TargetFileMeta) => BmdTargetS
     filePattern: BMD_FILE,
     fileName: (meta) => buchungsimportFileName(optionsOf(meta), fileTag(meta)),
     render(bookings, meta) {
-      const { bytes, notes } = renderBuchungsimport(bookings, optionsOf(meta));
+      const { bytes, notes } = renderBuchungsimport(meta.demo ? markDemo(bookings) : bookings, optionsOf(meta));
       return { bytes, findings: notes };
     },
+    importBlock: (bookings, meta) => importBlock(bookings, optionsOf(meta), buchungsimportFileName(optionsOf(meta), fileTag(meta))),
     // The file has no creation time: unchanged means byte-identical.
     sameContent: (existing, next) => existing.length === next.length && existing.every((byte, i) => byte === next[i]),
     advice: {
       overlap:
         'Importing both files would book those days twice in BMD NTCS. Export the same period as that file, or move it away ' +
         '(and have the Kanzlei reverse its imported bookings in BMD if it was imported) and run again',
-      // The output folder logic compares the lines after the header. A dialect change rewrites the date in every
-      // line too, so it only reaches `headerChange` for a file without bookings; `reimport` names it for the rest.
-      headerChange: 'the BMD dialect (bmd.dialect: header names and date format) changed since it was written.',
       reimport:
-        'A change of bmd.dialect also gives every line another date format, so the bookings themselves may be unchanged. ' +
-        'A BMD Buchungsimport is not idempotent, so importing both files would book those days twice. ' +
-        'If the Kanzlei has imported the old file, it must first delete or reverse those bookings in BMD NTCS ' +
-        '(they carry the Belegnummern of the old file under its Buchungssymbol).',
+        'A change of bmd.dialect or bmd.buchsymbol also changes every line, so the bookings themselves may be unchanged. ' +
+        'BMD does not recognise a file it has already imported, so importing both files would book those days twice. ' +
+        'If the Kanzlei has already imported the old file, it must first delete the imported bookings of that file in BMD NTCS ' +
+        "(the old file's protocol names their Buchungssymbol and the range of Belegnummern).",
     },
   };
 }

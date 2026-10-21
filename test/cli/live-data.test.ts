@@ -74,9 +74,9 @@ describe('export of the recorded VIE day 2026-10-21 (full pipeline, BMD target, 
   it('shows the tax of the bookings beside apaleo precise VAT, with the line rounding and no E-VAT-TOTAL', async () => {
     const { protocol } = await exportVie();
     const text = protocol();
-    expect(text).toContain('10 %: net 77.46, tax 7.74, gross 85.20, apaleo VAT 7.75, difference -0.01 (apaleo precise 7.74545454)');
+    expect(text).toContain('10 %: net 77.46, tax 7.74, gross 85.20, apaleo VAT 7.75, difference 0.01 (apaleo precise 7.74545454)');
     expect(text).toContain('13 %: net 362.85, tax 47.17, gross 410.02, apaleo VAT 47.17, difference 0.00 (apaleo precise 47.17044248)');
-    expect(text).toContain('20 %: net 39.49, tax 7.89, gross 47.38, apaleo VAT 7.90, difference -0.01 (apaleo precise 7.89666666)');
+    expect(text).toContain('20 %: net 39.49, tax 7.89, gross 47.38, apaleo VAT 7.90, difference 0.01 (apaleo precise 7.89666666)');
     expect(text).toContain('0 %: net 45.00, tax 0.00, gross 45.00, apaleo VAT 0.00, difference 0.00');
     expect(text).toContain('13 %: net 155.77, tax 20.25, gross 176.02, apaleo VAT 20.25, difference 0.00 (apaleo precise 20.2500885)');
     expect(text).toContain('20 %: net 16.65, tax 3.33, gross 19.98, apaleo VAT 3.33, difference 0.00 (apaleo precise 3.33)');
@@ -86,6 +86,22 @@ describe('export of the recorded VIE day 2026-10-21 (full pipeline, BMD target, 
     expect(text).toMatch(/^ {2}2890 +576\.90$/m);
     expect(text).toContain('VAT rounding differences: 0.01');
     expect(text).not.toContain('E-VAT-TOTAL');
+  });
+
+  it('shows the VAT comparison and the import block in a dry run and writes nothing', async () => {
+    const ctx = liveContext('checks:\n  aggregates: true\n');
+    expect(await runCli(['export', '--from', '2026-10-21', '--to', '2026-10-21', '--property', 'VIE', '--dry-run'], ctx)).toBe(0);
+    const out = ctx.out();
+    expect(out).toContain('  10 %: net 77.46, tax 7.74, gross 85.20, apaleo VAT 7.75, difference 0.01 (apaleo precise 7.74545454)');
+    expect(out).toContain(
+      "Each booking carries apaleo's tax of its line, rounded to the cent, while apaleo rounds only the precise total of its lines, " +
+        'so a difference (apaleo VAT minus tax) of a few cents is this rounding, not an error.',
+    );
+    expect(out).toContain(`  File: ${FILE}\n  Lines: 29 bookings (Satzart 0) after the header line\n`);
+    expect(out).toContain('  Belegnummern: 102100001 to 102100029\n');
+    expect(out).toMatch(/ {2}Steuercodes: 1 \(10 %, 13 %, 20 %\)/);
+    expect(out).toContain('Result: dry run, nothing written');
+    expect(readdirSync(ctx.cwd)).not.toContain('exports');
   });
 
   it('books the deposit release and the precise tax of the recorded lines as BMD expects them', async () => {

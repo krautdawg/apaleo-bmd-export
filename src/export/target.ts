@@ -41,6 +41,12 @@ export interface TargetWriter<B> {
   render(bookings: readonly B[], meta: TargetFileMeta): RenderedFile;
   /** True when `existing` and `next` differ at most in what changes on every run (such as a creation time). */
   sameContent(existing: Uint8Array, next: Uint8Array): boolean;
+  /**
+   * The import block of the protocol and the dry run: what the Kanzlei checks
+   * before importing the file (its name, number of lines, the settings of the
+   * program it is imported into). One string per line, the first a title.
+   */
+  importBlock(bookings: readonly B[], meta: TargetFileMeta): string[];
   /** The target's own words in the refusals of the output folder logic, which names no accounting program. */
   readonly advice: TargetAdvice;
 }
@@ -53,8 +59,6 @@ export interface TargetWriter<B> {
 export interface TargetAdvice {
   /** After "<file> already covers some of the days …": why not to import both, and what to do with the other file. */
   overlap: string;
-  /** Why an existing file with the same bookings can have another header line, for example which config keys changed. */
-  headerChange: string;
   /** Before the `--overwrite` hint: why not to import both files, and how to undo an imported old file first. */
   reimport: string;
   /** After the `--overwrite` hint, when the target has a case in which an imported file cannot be undone. */

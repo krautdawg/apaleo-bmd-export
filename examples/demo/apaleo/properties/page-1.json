@@ -5,14 +5,14 @@
       "code": "BSP",
       "isTemplate": false,
       "name": "Hotel Beispiel",
-      "description": "Hotel Beispiel, a fabricated 20-room hotel in Salzburg for tests",
+      "description": "Hotel Beispiel, a fabricated 20-room hotel in Wien for tests and the demo",
       "companyName": "Beispiel Hotelbetriebs GmbH",
       "commercialRegisterEntry": "FN 000000a (fictitious)",
       "taxId": "ATU00000000",
       "location": {
         "addressLine1": "Musterstraße 1",
-        "postalCode": "5020",
-        "city": "Salzburg",
+        "postalCode": "1020",
+        "city": "Wien",
         "countryCode": "AT"
       },
       "paymentTerms": {

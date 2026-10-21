@@ -30,6 +30,32 @@ export function bookingMovements(booking: Pick<BmdBooking, 'konto' | 'gkonto' | 
   ];
 }
 
+/**
+ * The Soll and Haben totals of BMD's journal after the import: BMD posts `konto`
+ * with Betrag, `gkonto` with Betrag plus Steuer and its own tax account with
+ * Steuer, so both totals are the same. Not sums by the sign of Betrag, which
+ * would leave the tax and the Gegenbuchung out.
+ */
+export function journalTotals(bookings: readonly Pick<BmdBooking, 'konto' | 'gkonto' | 'betragCents' | 'tax'>[]): { sollCents: number; habenCents: number } {
+  let sollCents = 0;
+  let habenCents = 0;
+  for (const booking of bookings) {
+    const legs = [...bookingMovements(booking).map(([, cents]) => cents), booking.tax?.steuerCents ?? 0];
+    for (const cents of legs) {
+      if (cents > 0) sollCents += cents;
+      else habenCents -= cents;
+    }
+  }
+  return { sollCents, habenCents };
+}
+
+/** The Steuer of the bookings per VAT rate, signed as owed (Haben positive), so a Forderungsverlust or an allowance reduces it. */
+export function taxByRate(bookings: readonly Pick<BmdBooking, 'tax'>[]): { ratePercent: number; taxCents: number }[] {
+  const totals = new Map<number, number>();
+  for (const { tax } of bookings) if (tax) totals.set(tax.prozent, (totals.get(tax.prozent) ?? 0) - tax.steuerCents);
+  return [...totals].sort(([a], [b]) => a - b).map(([ratePercent, taxCents]) => ({ ratePercent, taxCents }));
+}
+
 interface VatEntry {
   net: number;
   vat: number;

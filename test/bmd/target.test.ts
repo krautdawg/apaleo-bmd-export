@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BMD_DEFAULT_SETTINGS, bmdTarget, BmdValidationError, createBmdTarget, renderBuchungsimport } from '../../src/bmd/index.js';
+import { BMD_DEFAULT_SETTINGS, bmdTarget, BmdValidationError, createBmdTarget, DEMO_TEXT_PREFIX, renderBuchungsimport } from '../../src/bmd/index.js';
 import type { LocalDate } from '../../src/core/date.js';
-import { bodyOf, type TargetFileMeta } from '../../src/export/index.js';
-import { bmdBooking, bmdPayment, octoberOptions } from '../helpers/bmd.js';
+import type { TargetFileMeta } from '../../src/export/index.js';
+import { bmdBooking, bmdPayment, dataLines, octoberOptions } from '../helpers/bmd.js';
 
 /** The default target reads its settings from the config's `bmd` section; this one holds the defaults. */
 function meta(overrides: Partial<TargetFileMeta> = {}, from: LocalDate = '2026-10-01', to: LocalDate = '2026-10-31'): TargetFileMeta {
@@ -67,12 +67,12 @@ describe('bmdTarget', () => {
   });
 
   it('gives BMD advice for refusals and never mentions DATEV', () => {
-    const { overlap, headerChange, reimport, afterOverwrite } = bmdTarget.advice;
+    const { overlap, reimport, afterOverwrite } = bmdTarget.advice;
     expect(overlap).toContain('BMD');
-    expect(headerChange).toContain('bmd.dialect');
-    expect(reimport).toMatch(/BMD NTCS/);
+    expect(reimport).toContain('it must first delete the imported bookings of that file in BMD NTCS');
+    expect(reimport).toContain('bmd.dialect or bmd.buchsymbol');
     expect(afterOverwrite).toBeUndefined();
-    expect([overlap, headerChange, reimport, bmdTarget.protocolTitle].join(' ')).not.toMatch(/DATEV|datev\.|Festschreibung|EXTF/);
+    expect([overlap, reimport, bmdTarget.protocolTitle].join(' ')).not.toMatch(/DATEV|datev\.|Festschreibung|EXTF/);
     expect(bmdTarget.id).toBe('bmd');
   });
 
@@ -91,8 +91,62 @@ describe('bmdTarget', () => {
     const ntcs = target.render([bmdBooking()], meta()).bytes;
     settings.dialect = 'bmd55';
     const bmd55 = target.render([bmdBooking()], meta()).bytes;
-    // Not "same bookings, other header": the output folder logic reports other bookings and appends `reimport`.
-    expect(Buffer.from(bodyOf(ntcs)).equals(Buffer.from(bodyOf(bmd55)))).toBe(false);
+    // Every line changes, not only the header: the whole-file comparison refuses and `reimport` names the dialect.
+    expect(dataLines(new TextDecoder('windows-1252').decode(ntcs))).not.toEqual(dataLines(new TextDecoder('windows-1252').decode(bmd55)));
+    expect(target.sameContent(ntcs, bmd55)).toBe(false);
     expect(target.advice.reimport).toContain('bmd.dialect');
+  });
+});
+
+describe('a demo file', () => {
+  it('starts every Buchungstext with DEMO and keeps the 40-character limit after the prefix', () => {
+    const untitled = bmdPayment();
+    delete untitled.text;
+    const bookings = [bmdBooking(), bmdPayment({ text: 'X'.repeat(40) }), untitled];
+    const rendered = bmdTarget.render(bookings, meta({ demo: true }));
+    const texts = dataLines(new TextDecoder('windows-1252').decode(rendered.bytes)).map((line) => line.split(';')[12]);
+    expect(texts).toEqual(['DEMO Erlös Beherbergung', `DEMO ${'X'.repeat(35)}`, 'DEMO']);
+    expect(texts.every((text) => text?.startsWith(DEMO_TEXT_PREFIX.trim()))).toBe(true);
+    expect(rendered.findings.map((f) => [f.code, f.field])).toEqual([['N-BMD-TRUNCATED', 'text']]);
+    // A real file of the same bookings has no prefix.
+    expect(new TextDecoder('windows-1252').decode(bmdTarget.render(bookings, meta()).bytes)).not.toContain('DEMO');
+  });
+});
+
+describe('the import block', () => {
+  /** The spec's October file: 812 bookings under HO and HZ, Steuercode 1 at 10 % and 20 %, Steuercode 81 at 0 %. */
+  function october(): ReturnType<typeof bmdBooking>[] {
+    return Array.from({ length: 812 }, (_, i) => {
+      if (i % 4 === 0) return bmdPayment({ buchsymbol: 'HZ' });
+      if (i % 4 === 1) return bmdBooking({ tax: { steuercode: 1, prozent: 20, steuerCents: -2_000 } });
+      if (i % 4 === 2) return bmdBooking({ konto: '4090', tax: { steuercode: 81, prozent: 0, steuerCents: 0 } });
+      return bmdBooking();
+    });
+  }
+
+  it('names file, lines, dialect, Buchungssymbole, Belegnummern, verbuchkz, gegenbuchkz, Steuercodes and account lengths', () => {
+    expect(bmdTarget.importBlock(october(), meta())).toMatchInlineSnapshot(`
+      [
+        "Import into BMD (compare with the Mandant before importing, see docs/bmd-import.md):",
+        "  File: BMD_Buchungsimport_20261001-20261031_BSP.csv",
+        "  Lines: 812 bookings (Satzart 0) after the header line",
+        "  Dialect: ntcs (BMD NTCS)",
+        "  Buchungssymbole: HO, HZ",
+        "  Belegnummern: 100100001 to 100100812",
+        "  verbuchkz A, gegenbuchkz E: BMD creates the Gegenbuchung and the tax posting itself",
+        "  Steuercodes: 1 (10 %, 20 %), 81 (0 %)",
+        "  Account lengths: Sachkonten 4, Personenkonten 6",
+      ]
+    `);
+  });
+
+  it('follows the dialect, the demo file name and a file without tax', () => {
+    const target = createBmdTarget(() => ({ dialect: 'bmd55', sachkontenlaenge: 5, personenkontenlaenge: 7 }));
+    const block = target.importBlock([bmdPayment()], meta({ demo: true }, '2026-10-15', '2026-10-15'));
+    expect(block).toContain('  File: BMD_Buchungsimport_20261015-20261015_BSP_DEMO.csv');
+    expect(block).toContain('  Dialect: bmd55 (BMD 5.5)');
+    expect(block).toContain('  Belegnummern: 101500001 to 101500001');
+    expect(block).toContain('  Steuercodes: none');
+    expect(block).toContain('  Account lengths: Sachkonten 5, Personenkonten 7');
   });
 });

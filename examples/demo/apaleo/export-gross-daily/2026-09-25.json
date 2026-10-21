@@ -1,0 +1,38 @@
+{
+  "transactions": [
+    {
+      "timestamp": "2026-09-25T22:05:00Z",
+      "date": "2026-09-25",
+      "debitedAccount": {
+        "name": "Receivables for Reservation BSP-QRSTUV-1",
+        "number": "BSP-QRSTUV-1_Receivables",
+        "parentNumber": "1200",
+        "type": "Receivables"
+      },
+      "creditedAccount": {
+        "name": "Revenues Accommodation (10%)",
+        "number": "RevenueAccommodation_VeryReduced:10.00",
+        "parentNumber": "5000",
+        "type": "Revenues"
+      },
+      "command": "PostCharge",
+      "currency": "EUR",
+      "grossAmount": 55,
+      "netAmount": 50,
+      "taxes": [
+        {
+          "type": "VeryReduced",
+          "percent": 10,
+          "amount": 5
+        }
+      ],
+      "receipt": {
+        "type": "Reservation",
+        "number": "BSP-QRSTUV-1-V1"
+      },
+      "sourceEntryNumber": "BSPE0024",
+      "reference": "BSP-QRSTUV-1",
+      "referenceType": "Guest"
+    }
+  ]
+}

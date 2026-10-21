@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderBuchungsimport } from '../../src/bmd/index.js';
 import { ChartIndex } from '../../src/core/chart.js';
 import { parseMapping } from '../../src/mapping/index.js';
-import { buildBookings } from '../../src/posting/index.js';
+import { buildBookings, journalTotals, taxByRate } from '../../src/posting/index.js';
 import { AT_MONTH, loadAtMonthData } from '../helpers/apaleo.js';
 import { readMappingFixture } from '../helpers/mapping.js';
 
@@ -118,5 +118,21 @@ describe('posting the Austrian fixture month', () => {
     const rendered = renderBuchungsimport(result.bookings, { from: '2026-08-01', to: '2026-08-31', propertyId: AT_MONTH, sachkontenlaenge: 4, personenkontenlaenge: 6 });
     expect(rendered.text.split('\r\n')).toHaveLength(1 + 22 + 1);
     expect(rendered.notes).toEqual([]);
+  });
+
+  it('gives the manifest the tax per rate as owed, with the write-off correction deducted', () => {
+    // 10 %: revenue 57.41 + deposit 30 − 20 − 10 − write-off 5.00; 20 %: 2.12. The cancellation fee has no tax fields.
+    expect(taxByRate(result.bookings)).toEqual([
+      { ratePercent: 10, taxCents: 5_241 },
+      { ratePercent: 20, taxCents: 212 },
+    ]);
+  });
+
+  it('gives the journal totals BMD shows after the import: Soll equals Haben, the gross of every booking', () => {
+    const gross = result.bookings.reduce((sum, b) => sum + Math.abs(b.betragCents + (b.tax?.steuerCents ?? 0)), 0);
+    expect(journalTotals(result.bookings)).toEqual({ sollCents: gross, habenCents: gross });
+    // Not the sums by the sign of Betrag, which leave out the Gegenbuchung and the tax posting.
+    const bySign = result.bookings.filter((b) => b.betragCents > 0).reduce((sum, b) => sum + b.betragCents, 0);
+    expect(journalTotals(result.bookings).sollCents).not.toBe(bySign);
   });
 });
