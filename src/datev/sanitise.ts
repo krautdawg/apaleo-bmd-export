@@ -1,5 +1,5 @@
 import type { Finding } from '../core/findings.js';
-import { describe, toCp1252Text } from './cp1252.js';
+import { describe, toCp1252Text } from '../core/cp1252.js';
 import { labelOf } from './labels.js';
 
 /**

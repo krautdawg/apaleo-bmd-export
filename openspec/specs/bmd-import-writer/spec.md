@@ -1,5 +1,8 @@
-## ADDED Requirements
+# bmd-import-writer Specification
 
+## Purpose
+The BMD Buchungsimport file (BMD-Standard, Satzart 0, variable layout with header line) that a Kanzlei imports into BMD NTCS or BMD 5.5: dialects, field rules, Belegnummern, encoding, validation, sanitising, file name and golden tests.
+## Requirements
 ### Requirement: Dialect
 The writer SHALL take a dialect, `ntcs` (default) or `bmd55`, that sets the header names, the date format and the Steuercode meanings together and never mixes them: `ntcs` writes the NTCS column names, dates as `TT.MM.JJJJ`, treats Steuercode 1 as output tax and allows Buchungssymbole of 1 to 4 characters; `bmd55` writes the BMD 5.5 column names, dates as `JJJJMMTT`, treats Steuercodes 1 and 3 as output tax and allows Buchungssymbole of 1 to 2 characters.
 
@@ -68,7 +71,7 @@ The file SHALL be encoded in Windows-1252 without byte-order mark, every line in
 - **THEN** the bytes for `ä` and `ü` are `0xE4` and `0xFC`, and the line ends with `0x0D 0x0A`
 
 ### Requirement: Booking validation
-Before writing, the writer SHALL validate every booking and SHALL report all problems at once as findings with the booking number and field, and SHALL write nothing when any exists: `E-BMD-ACCOUNT` for an account that is not digits or whose length is neither the configured Sachkonten length nor the configured Personenkonten length, `E-BMD-AMOUNT` for an amount of 0 or with more than 13 integer digits, `E-BMD-STEUER-SIGN` for a tax amount that is not 0 and whose sign differs from the amount for an output-tax Steuercode of the dialect (`ntcs`: 1; `bmd55`: 1 or 3), `E-BMD-RATE` for a rate below 0, above 99.99 or with more than two decimals, `E-BMD-STEUERCODE` for a Steuercode outside 0-99, `E-BMD-SYMBOL` for a Buchungssymbol that is not 1 to 4 (`ntcs`) or 1 to 2 (`bmd55`) characters of `A-Z` and `0-9`, `E-BMD-KOST` for a `kost` that is not 1 to 9 digits, `E-BMD-DATE` for a business date outside the file period, and `E-BMD-BELEGNR` for more than 99,999 bookings in one file.
+Before writing, the writer SHALL validate every booking and SHALL report all problems at once as findings with the booking number and field, and SHALL write nothing when any exists: `E-BMD-ACCOUNT` for an account that is not digits or whose length is neither the configured Sachkonten length nor the configured Personenkonten length, `E-BMD-AMOUNT` for an amount of 0 or with more than 13 integer digits, `E-BMD-STEUER-SIGN` for a tax amount that is not 0 and whose sign differs from the amount for an output-tax Steuercode of the dialect (`ntcs`: 1; `bmd55`: 1 or 3), `E-BMD-RATE` for a rate below 0, above 99.99 or with more than two decimals, `E-BMD-STEUERCODE` for a Steuercode outside 0-99, `E-BMD-SYMBOL` for a Buchungssymbol that is not 1 to 4 (`ntcs`) or 1 to 2 (`bmd55`) characters of `A-Z` and `0-9`, `E-BMD-KOST` for a `kost` that is not 1 to 9 digits, `E-BMD-TAX-PERSONENKONTO` for a booking with tax whose `konto` has the Personenkonten length when that differs from the Sachkonten length (BMD reads `betrag` of a leading Personenkonto as gross and does not import `steuer` there), `E-BMD-DATE` for a business date outside the file period, `E-BMD-PERIOD` without a booking number for a file period whose first or last day is not a valid date or whose first day is after its last, and `E-BMD-BELEGNR` for more than 99,999 bookings in one file.
 
 #### Scenario: Several errors at once
 - **WHEN** booking 2 has konto `40A0` and booking 5 has amount 0
@@ -85,6 +88,14 @@ Before writing, the writer SHALL validate every booking and SHALL report all pro
 #### Scenario: Invalid Kostenstelle
 - **WHEN** a booking has `kost` `KS-10` or `1234567890`
 - **THEN** `E-BMD-KOST` names the booking and the value
+
+#### Scenario: Tax on a leading Personenkonto
+- **WHEN** Personenkonten length is 6 and a booking with Steuercode 1 has konto `201001`
+- **THEN** `E-BMD-TAX-PERSONENKONTO` names the booking and the account
+
+#### Scenario: Reversed period
+- **WHEN** the file period starts on 2026-11-01 and ends on 2026-10-31
+- **THEN** rendering fails with one `E-BMD-PERIOD` finding without a booking number, and no booking is reported with `E-BMD-DATE`
 
 #### Scenario: Symbol too long for BMD 5.5
 - **WHEN** the dialect is `bmd55` and a booking has Buchungssymbol `PMS`
@@ -118,3 +129,4 @@ The test suite SHALL compare rendered files byte by byte with golden files in `t
 #### Scenario: Unintended change
 - **WHEN** a code change alters one byte of the output
 - **THEN** `pnpm test` fails and shows the differing line
+

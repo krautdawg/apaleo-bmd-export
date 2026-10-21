@@ -1,6 +1,6 @@
 import iconv from 'iconv-lite';
 import { describe, expect, it } from 'vitest';
-import { cp1252Byte, encodeCp1252, toCp1252Text } from '../../src/datev/cp1252.js';
+import { cp1252Byte, encodeCp1252, toCp1252Text } from '../../src/core/cp1252.js';
 
 const UNDEFINED_BYTES = [0x81, 0x8d, 0x8f, 0x90, 0x9d];
 

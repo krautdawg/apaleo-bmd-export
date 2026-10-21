@@ -90,6 +90,27 @@ Einzelheiten: [export.md](export.md).
 | `N-COMPANIONS-REPAIRED` | Die Datei war unverändert, aber ihr Protokoll oder ihr Eintrag in `manifest.json` fehlte oder war falsch (ein früherer Lauf wurde unterbrochen), und wurde neu geschrieben. | Nichts. |
 | `E-EXPORT` | Ein Schritt des Exports ist fehlgeschlagen: Das Dateisystem hat das Schreiben verweigert (Rechte, volle Festplatte, schreibgeschützter Mount), ein anderer Lauf hielt die Sperre des Ordners, oder ein Problem mit der Kontenzuordnung oder mit apaleo hat den Monat gestoppt. Die Meldung sagt, was. | Folge dem Hinweis in der Meldung. Mit Docker braucht ein Ordner `./data`, der root gehört, `sudo chown -R 1000:1000 data`. Eine übrig gebliebene `.apaleo-bmd.lock` aus einem abgebrochenen Lauf darfst du löschen, wenn kein anderer Lauf aktiv ist. |
 
+## BMD-Datei (Buchungsimport)
+
+Der Writer für den BMD Buchungsimport prüft jedes Feld, bevor er eine Datei schreibt, und meldet alle Fehler auf einmal. Bis die Buchungsregeln auf BMD umgestellt sind (b03), schreibt der Export noch keine BMD-Datei; die Codes erscheinen dann im Export, im Protokoll und in `schedule --once`. Einzelheiten: [bmd-format.md](bmd-format.md).
+
+| Code | Ursache | Lösung |
+|---|---|---|
+| `E-BMD-ACCOUNT` | Ein Konto oder Gegenkonto besteht nicht nur aus Ziffern, oder seine Länge ist weder die Sachkontenlänge noch die Personenkontenlänge. Die Meldung nennt die Buchung, das Konto und beide erlaubten Längen. | Korrigiere das Konto in der Kontenzuordnung. Konten werden nie aufgefüllt: Frag deine Kanzlei nach der Stelligkeit des Kontenplans. |
+| `E-BMD-TAX-PERSONENKONTO` | Eine Buchung mit Steuercode hat ein Personenkonto als führendes Konto. Dann liest BMD den Betrag als brutto und übernimmt die Steuer nicht, die Buchung käme falsch an. | Bei Buchungen mit Steuer muss das Sachkonto (zum Beispiel das Erlöskonto) führen und das Personenkonto Gegenkonto sein. Prüf die Kontenzuordnung, sonst eröffne ein Issue. |
+| `E-BMD-AMOUNT` | Ein Betrag ist 0 oder hat mehr als 13 Stellen vor dem Komma, oder eine Steuer hat mehr als 13 Stellen. | Eröffne ein Issue: Zeilen mit Betrag 0 werden normalerweise vor dem Schreiben übersprungen. |
+| `E-BMD-STEUER-SIGN` | Bei einem Steuercode für Umsatzsteuer (NTCS: 1; BMD 5.5: 1 und 3) hat die Steuer ein anderes Vorzeichen als der Betrag. Umsatzsteuer steht im Haben mit Minus. | Eröffne ein Issue mit der Meldung (ohne Namen). |
+| `E-BMD-RATE` | Der Steuersatz ist negativ, größer als 99,99 oder hat mehr als zwei Nachkommastellen. | Korrigiere den Steuersatz in der Kontenzuordnung, zum Beispiel `10`, `20` oder `4.9`. |
+| `E-BMD-STEUERCODE` | Der Steuercode ist keine ganze Zahl von 0 bis 99. | Korrigiere den Steuercode in der Kontenzuordnung. Frag deine Kanzlei, welchen Code BMD für das Konto erwartet. |
+| `E-BMD-SYMBOL` | Das Buchungssymbol hat nicht 1 bis 4 Zeichen (NTCS) oder 1 bis 2 Zeichen (BMD 5.5) aus `A-Z` und `0-9`. | Nimm das Symbol, das die Kanzlei in BMD für den PMS-Import angelegt hat, zum Beispiel `HO`, in Großbuchstaben. |
+| `E-BMD-KOST` | Die Kostenstelle hat nicht 1 bis 9 Ziffern. BMD nimmt in `kost` nur Ziffern an. | Trag in der Kontenzuordnung eine Kostenstelle aus Ziffern ein, oder lass das Feld leer. |
+| `E-BMD-DATE` | Das Datum einer Buchung ist ungültig oder liegt außerhalb des Zeitraums der Datei. | Eröffne ein Issue: Der Export liest nur Buchungen des Zeitraums. |
+| `E-BMD-PERIOD` | Beginn oder Ende des Zeitraums ist kein gültiges Datum, oder der Zeitraum beginnt nach seinem letzten Tag. Die Meldung hat keine Buchungsnummer. | Prüf `--from` und `--to` (Format `JJJJ-MM-TT`, `--from` nicht nach `--to`). |
+| `E-BMD-BELEGNR` | Eine Datei hätte mehr als 99.999 Buchungen. Die Belegnummer hat nur fünf Stellen für den Zähler. | Exportiere kürzere Zeiträume, zum Beispiel mit `--from` und `--to` je eine Woche. |
+| `E-BMD-FILE-NAME` | Die Property-ID lässt sich nicht im Dateinamen verwenden (erlaubt sind nur Buchstaben, Ziffern, `_` und `-`). | Eröffne ein Issue mit der Property-ID (sie kommt aus apaleo). |
+| `N-BMD-CHARSET` | Ein Zeichen außerhalb von Windows-1252 im Buchungstext wurde durch `?` ersetzt, oder aus der externen Belegnummer wurden Zeichen außerhalb von `A-Z a-z 0-9 - / . _` entfernt. | Nichts, außer der ersetzte Text ist wichtig. |
+| `N-BMD-TRUNCATED` | Der Buchungstext wurde auf 40 Zeichen gekürzt oder die externe Belegnummer auf 35. | Nichts, außer der gekürzte Text ist wichtig. Über die Protokolldatei findest du die Buchung im PMS. |
+
 ## DATEV-Datei (EXTF)
 
 Der Writer prüft jedes Feld gegen das DATEV-Format, bevor er eine Datei schreibt. Einzelheiten: [datev-format.md](datev-format.md).

@@ -1,4 +1,4 @@
-import type { Finding } from '../core/findings.js';
+import type { Finding } from './findings.js';
 
 /**
  * Windows-1252 bytes 0x80–0x9F that hold printable characters. The other five

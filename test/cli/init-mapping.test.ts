@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { runCli } from '../../src/cli/run.js';
 import type { SourceAccount } from '../../src/core/source.js';
-import { encodeCp1252 } from '../../src/datev/cp1252.js';
+import { encodeCp1252 } from '../../src/core/cp1252.js';
 import { decodeCsv } from '../../src/mapping/csv.js';
 import { parseMapping } from '../../src/mapping/index.js';
 import { BSP, CLIENT_ID, FIXTURE_FILES, createApaleoContext, loadBeispielData } from '../helpers/apaleo.js';

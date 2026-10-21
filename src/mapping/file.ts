@@ -1,4 +1,4 @@
-import { encodeCp1252 } from '../datev/cp1252.js';
+import { encodeCp1252 } from '../core/cp1252.js';
 import type { SourceAccount } from '../core/source.js';
 import { concatBytes, decodeCsv, detectSeparator, encodeCsvFile, formatCsvLine, parseCsv } from './csv.js';
 import type { Template } from './template.js';

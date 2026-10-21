@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { encodeCp1252 } from '../../src/datev/cp1252.js';
+import { encodeCp1252 } from '../../src/core/cp1252.js';
 import { decodeCsv, detectSeparator, formatCsvLine, parseCsv } from '../../src/mapping/csv.js';
 import { MappingError, appendRows, parseMapping, renderMappingFile, type MappingRow, type MappingRowValues } from '../../src/mapping/index.js';
 import { EXCEL_ORIGINAL_ROWS, csvBytes, mappingRow, readMappingFixture } from '../helpers/mapping.js';
