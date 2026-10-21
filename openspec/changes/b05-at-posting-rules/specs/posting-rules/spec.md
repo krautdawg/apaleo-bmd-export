@@ -16,7 +16,7 @@ Cancellation and no-show fees SHALL be booked through their revenue mapping rows
 
 #### Scenario: Untaxed cancellation fee
 - **WHEN** a line credits a revenue account "Stornogebühr" mapped to `4091` without Steuercode with gross 80.00 and no taxes
-- **THEN** the booking has konto `2390`, gkonto `4091`, amount 80.00 and no tax fields
+- **THEN** the booking has konto `4091`, gkonto `2390`, amount −80.00 (the revenue account leads, as for every untaxed charge) and no tax fields
 
 #### Scenario: Taxed no-show on an untaxed row
 - **WHEN** a no-show line with taxes 8.00 at 10 % credits an account mapped without Steuercode

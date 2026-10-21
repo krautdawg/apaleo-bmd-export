@@ -54,6 +54,43 @@ Für ältere Daten und andere Quellen gilt: Die Auflösung (Soll auf dem Konto `
 
 Eine erhaltene oder erstattete Anzahlung ohne `taxes[]` nimmt den Satz einer `PostPrepaymentVat`-Zeile desselben Geschäftstags und derselben Referenz, die USt in ihrer Richtung bucht (Eingang) oder zurückbucht (Erstattung), mit derselben Prüfung des Betrags. Ohne eine solche Zeile bleibt es bei 0 % (ohne Rückgriff auf den Kontenplan). `mapping check --from --to` nutzt dieselbe Ermittlung.
 
+## Österreichische Sonderfälle
+
+Die Fälle, in denen österreichisches Recht oder die Praxis in BMD von einem einfachen Verkauf abweicht. Die Buchungsregeln bleiben dieselben; was sich unterscheidet, steht in der Kontenzuordnung ([mapping-guide.md](mapping-guide.md)). Die Beispielzeilen stammen aus dem erfundenen österreichischen Testmonat (`test/fixtures/apaleo/at-month/`, Hotel Beispiel Tirol, August 2026) und stehen so in `test/golden/bmd/at-month.csv` (Spalten `satzart;konto;gkonto;belegnr;belegdatum;buchdatum;buchsymbol;buchcode;prozent;steuercode;betrag;steuer;text;kost;extbelegnr;gegenbuchkz;verbuchkz`).
+
+**Anzahlung, erhalten, aufgelöst und erstattet.** Die erhaltene Anzahlung trägt die USt bei Erhalt (Mindest-Istbesteuerung) mit dem normalen Umsatzsteuer-Code; Auflösung und Erstattung buchen sie zurück, mit positivem Betrag und positiver Steuer auf dem Anzahlungskonto:
+
+```text
+0;3200;2890;080100001;03.08.2026;03.08.2026;AR;2;10;1;-300,00;-30,00;Anzahlung 10 %;;DEP-TIR-A;E;A
+0;3200;2390;080100010;12.08.2026;12.08.2026;AR;1;10;1;200,00;20,00;Auflösung Anzahlung 10 %;;TIR-ALPHA-1-V0;E;A
+0;3200;2890;080100011;12.08.2026;12.08.2026;AR;1;10;1;100,00;10,00;Erstattung Anzahlung 10 %;;REF-TIR-A;E;A
+```
+
+**Forderungsverlust mit USt-Berichtigung.** apaleo belastet den Forderungsverlust und entlastet die Gastforderung, mit der USt. Mit dem Umsatzsteuer-Code steht das Forderungsverlust-Konto vorn, Betrag und Steuer sind positiv: Die Soll-Buchung auf das USt-Konto mindert die Umsatzsteuer. Ohne `taxes[]` (Zeile `7809` ohne Steuercode) führt das Forderungsverlust-Konto mit dem Bruttobetrag, ohne Steuerfelder. Die Übersicht zeigt die abgeschriebenen Forderungen pro Satz.
+
+```text
+0;7800;2390;080100022;28.08.2026;28.08.2026;AR;1;10;1;50,00;5,00;Forderungsverlust 10 %;;TIR-FOXTROT-1-V0;E;A
+```
+
+**Stornogebühr und No-Show.** Sie laufen wie jeder Erlös durch ihre Zeile und die USt-Prüfung; das Tool ändert die USt von apaleo nie. Ohne USt führt das Erlöskonto `4091` mit dem Bruttobetrag im Haben. Hat apaleo eine Gebühr besteuert und die Zeile keinen Steuercode, stoppt der Export mit `E-VAT-MISSING`; lässt die Vorlage die Zeile leer (eine Gebühr mit USt), mit `E-UNMAPPED`.
+
+```text
+0;4091;2390;080100013;14.08.2026;14.08.2026;AR;2;;;-45,00;;Erlös Stornogebühr 0 %;;TIR-CHARLIE-1-V1;E;A
+```
+
+**Ortstaxe, Aufenthaltsabgabe, Nächtigungsabgabe.** Die Abgabe des Gastes geht ohne Steuercode auf die Verbindlichkeit oder den durchlaufenden Posten der Kanzlei; die Gastforderung ist das belastete Konto:
+
+```text
+0;2390;3580;080100004;10.08.2026;10.08.2026;AR;1;;;3,00;;Ortstaxe;;TIR-BRAVO-1-V0;E;A
+```
+
+**Steuersätze.** Jede Buchung trägt den Satz, den apaleo hat: Beherbergung und Speisen 10 %, Schwimmbad und Therme 13 %, Getränke, Massagen und Parken 20 %. Die Liste mit den Paragrafen steht im [Leitfaden zur Kontenzuordnung](mapping-guide.md#steuersätze-in-österreich).
+
+```text
+0;4000;2390;080100002;10.08.2026;10.08.2026;AR;2;10;1;-89,09;-8,91;Erlös Logis 10 %;;TIR-BRAVO-1-V0;E;A
+0;4020;2390;080100005;10.08.2026;10.08.2026;AR;2;20;1;-6,58;-1,32;Erlös Speisen und Getränke 20 %;;BAR-TIR-1;E;A
+```
+
 ## Übersprungene Zeilen
 
 | Grund | Zeilen |
@@ -68,9 +105,9 @@ Eine erhaltene oder erstattete Anzahlung ohne `taxes[]` nimmt den Satz einer `Po
 
 - **Buchungssymbol**: `bmd.buchsymbol` (oder `properties[].buchsymbol`). Eine Zeile ohne USt-Seite mit einem Zahlungskonto bekommt `bmd.buchsymbolZahlung` (oder `properties[].buchsymbolZahlung`), sonst ebenfalls das Hauptsymbol.
 - **extbelegnr**: die Belegnummer aus apaleo (Rechnung, Referenz des Zahlungsdienstleisters, …), wenn `posting.extbelegnr` auf `receipt` steht (Standard) und es eine gibt, sonst die Reservierungsreferenz. Der BMD-Writer bereinigt sie.
-- **text**: eine deutsche Bezeichnung ohne Gästenamen, gekürzt auf 40 Zeichen: `Erlös Logis 10 %` oder `Erlösminderung …` nach Seite und Vorzeichen, `Anzahlung 10 %`, `Umbuchung Anzahlung`, `Auflösung Anzahlung 13 %`, `Erstattung Anzahlung`, `Zahlung Visa` oder `Erstattung …` (englische Namen der Zahlungsarten übersetzt oder weggelassen), `Forderung an Debitor`, `Ortstaxe`. Konten vom Typ Receivables, AccountsReceivable und Liabilities außerhalb des globalen Buchungsjournals nutzen den Namen ihres globalen Elternkontos oder eine feste Bezeichnung, nie ihren eigenen Namen, denn der kann der eines Gastes sein.
+- **text**: eine deutsche Bezeichnung ohne Gästenamen, gekürzt auf 40 Zeichen: `Erlös Logis 10 %` oder `Erlösminderung …` nach Seite und Vorzeichen, `Anzahlung 10 %`, `Umbuchung Anzahlung`, `Auflösung Anzahlung 13 %`, `Erstattung Anzahlung`, `Zahlung Visa` oder `Erstattung …` (englische Namen der Zahlungsarten übersetzt oder weggelassen), `Forderung an Debitor`, `Forderungsverlust 10 %`, `Ortstaxe`. Konten vom Typ Receivables, AccountsReceivable und Liabilities außerhalb des globalen Buchungsjournals nutzen den Namen ihres globalen Elternkontos oder eine feste Bezeichnung, nie ihren eigenen Namen, denn der kann der eines Gastes sein.
 - **kost**: nur aus der Zeile von `konto`, und nur, wenn das eine Erlös- oder Forderungsverlustzeile ist. Auf Zahlungen, Personenkonten, Anzahlungen, Ortstaxe und Verrechnungskonten bleibt `kost` leer, denn auf einer Zahlung liest BMD es als Belegnummer der bezahlten Rechnung.
 
 ## Übersicht
 
-Alles in Cent: Soll, Haben und Saldo pro BMD-Konto nach dem Bewegungsmodell (`konto` mit dem Betrag, `gkonto` mit Betrag plus Steuer); Erlöse und Anzahlungen pro USt-Satz mit Netto, Steuer und Brutto, wie sie an BMD gehen, daneben die genaue USt von apaleo auf denselben Zeilen; Ortstaxe und Gästeabgaben; Zahlungen pro Konto; erhaltene, aufgelöste und erstattete Anzahlungen; die Bewegung auf dem Sammeldebitor; übersprungene Zeilen pro Grund; die Rundungssumme; Befunde pro Code.
+Alles in Cent: Soll, Haben und Saldo pro BMD-Konto nach dem Bewegungsmodell (`konto` mit dem Betrag, `gkonto` mit Betrag plus Steuer); Erlöse, Anzahlungen und abgeschriebene Forderungen (Forderungsverluste mit der USt-Berichtigung) pro USt-Satz mit Netto, Steuer und Brutto, wie sie an BMD gehen, daneben die genaue USt von apaleo auf denselben Zeilen; Ortstaxe und Gästeabgaben; Zahlungen pro Konto; erhaltene, aufgelöste und erstattete Anzahlungen; die Bewegung auf dem Sammeldebitor; übersprungene Zeilen pro Grund; die Rundungssumme; Befunde pro Code.
