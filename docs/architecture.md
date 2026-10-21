@@ -9,13 +9,14 @@ Code, Bezeichner und Commit-Nachrichten sind auf Englisch; diese Seite erklärt 
 ```text
 src/
   cli/          Einstieg, Auswertung der Argumente, CommandContext, eine Datei pro Befehl in cli/commands/
-  core/         Typen und Hilfen ohne PMS-Bezug: Konfiguration, Datum, Geld, Befunde, der Vertrag SourceAdapter
+  core/         Typen und Hilfen ohne PMS-Bezug: Konfiguration, Datum, Geld, Befunde, CP1252, der Vertrag SourceAdapter
   sources/
     apaleo/     der Adapter für apaleo: Token, HTTP mit Wiederholungen, Schemas nach der Swagger-Beschreibung, Umwandlung in die Typen aus core
   demo/         export --demo: aufgezeichnete apaleo-Antworten aus examples/demo/, ohne Netz
   mapping/      die Kontenzuordnung als CSV: laden, auflösen, prüfen, Vorlagen für SKR03 und SKR04
   posting/      Journalzeilen + Kontenzuordnung -> DATEV-Buchungen, mit der USt-Prüfung
-  datev/        der Writer für den EXTF-Buchungsstapel: Kopfzeile, 125 Spalten, Prüfung, Bereinigung, CP1252
+  bmd/          der Writer für den BMD Buchungsimport: Dialekte NTCS und BMD 5.5, Belegnummern, Prüfung, Bereinigung (noch nicht im Export, ab b03)
+  datev/        der Writer für den EXTF-Buchungsstapel: Kopfzeile, 125 Spalten, Prüfung, Bereinigung
   export/       der Ablauf: Regeln für Zeiträume, Abruf, Buchen, Plausibilitätsprüfungen, Ausgabeordner und Manifest
   schedule/     schedule --once: welche Zeiträume fällig sind, dann der Export für jeden
 ```
@@ -24,12 +25,12 @@ Die Abhängigkeiten zeigen in eine Richtung:
 
 ```text
 cli -> export / schedule -> sources/<name>     (Verdrahtung)
-                        -> mapping, posting, datev -> core
+                        -> mapping, posting, bmd, datev -> core
 ```
 
 Zwei Lint-Regeln (in `eslint.config.js`, getestet in `test/lint/`) sorgen dafür, dass das so bleibt:
 
-- `core`, `datev`, `mapping` und `posting` dürfen nichts aus `src/sources/` importieren. Sie sehen nur die kanonischen Typen in `src/core/source.ts`.
+- `core`, `bmd`, `datev`, `mapping` und `posting` dürfen nichts aus `src/sources/` importieren. Sie sehen nur die kanonischen Typen in `src/core/source.ts`.
 - Alles unter `src/` außer dem Einstieg der Kommandozeile erreicht die Uhr, das Netz und die Umgebung nur über den übergebenen `CommandContext` (`ctx.now()`, `ctx.fetchFn`, `ctx.env`, `ctx.fs`). Kein `new Date()`, kein `Date.now()`, kein nacktes `fetch` und kein `process.env`. Tests bauen mit `createTestContext()` in `test/helpers/context.ts` einen Kontext mit Attrappen.
 
 ## Der Vertrag SourceAdapter
@@ -82,6 +83,8 @@ Die Buchungsregeln erzeugen Werte vom Typ `PostedBooking` (Konto, Gegenkonto, So
 1. liegt in `src/<Ziel>/` (zum Beispiel `src/bmd/`), hängt nicht von `src/sources/` ab und meldet fehlerhafte Daten als Befunde mit Codes, wie `renderBuchungsstapel` (dessen `ExtfValidationError` als `FindingsError` alle Befunde auf einmal enthält);
 2. hat Golden Files in `test/golden/<Ziel>/`, die Byte für Byte verglichen werden (siehe `test/datev/golden.test.ts`);
 3. implementiert die Schnittstelle `TargetWriter` aus `src/export/target.ts`: Dateiname, Muster für vorhandene und überlappende Dateien, die gerenderten Bytes, den Vergleich „unverändert“, den Titel des Protokolls und die Hinweise (`advice`) für die Meldungen `E-PERIOD-OVERLAP` und `E-FILE-EXISTS`: welches Programm die Datei importiert, welche Konfigurationswerte den Kopfsatz ändern und wie die Kanzlei einen importierten Stapel rückgängig macht (Beispiel: `src/datev/target.ts`). `src/export/` kennt ein Zielformat nur über diese Schnittstelle; `DEFAULT_TARGET` in `src/export/pipeline.ts` wählt das Ziel.
+
+Der zweite Writer ist `src/bmd/` (`bmdTarget`); was er schreibt und gegen welche Quellen er geprüft wurde, steht in [bmd-format.md](bmd-format.md). Bis b03 die Buchungsregeln umstellt, wählt `DEFAULT_TARGET` noch DATEV.
 
 USt-Logik, die nur ein Zielformat betrifft (BMD hat zum Beispiel keine Automatikkonten), gehört in den Buchungsschritt für dieses Ziel, nicht in den Writer.
 

@@ -6,6 +6,10 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+
+- **Writer für den BMD Buchungsimport** (`src/bmd`, noch nicht im Export): Satzart 0 mit Kopfzeile, `;`, Windows-1252 und CRLF, in den Dialekten NTCS (Standard) und BMD 5.5, die Kopfzeile, Datumsformat und Steuercodes gemeinsam umschalten; Belegnummern aus Monat und Tag des ersten Tags plus Zähler, die sich zwischen den Dateien eines Hotels nicht wiederholen; Prüfung jedes Felds mit den Codes `E-BMD-ACCOUNT` bis `E-BMD-FILE-NAME`, Bereinigung von Buchungstext und externer Belegnummer und Golden Files für beide Dialekte. Format, Quellen und die Checkliste für den ersten Testimport: `docs/bmd-format.md`.
+
 ### Geändert
 
 - **Neuer Name apaleo-bmd-export**: Das Paket heißt `apaleo-bmd-export` (Version `0.0.0` bis zum ersten Release), die Kommandozeile `apaleo-bmd`, die Konfigurationsdatei `apaleo-bmd.config.yaml` (Vorlage `apaleo-bmd.config.example.yaml`), die Umgebungsvariablen `APALEO_BMD_CONFIG` und `APALEO_BMD_*`; `APALEO_CLIENT_ID` und `APALEO_CLIENT_SECRET` bleiben. Die alten Namen `apaleo-datev` und `APALEO_DATEV_*` liest das Tool nicht mehr: Benenne deine Konfigurationsdatei um. Docker-Image, Compose-Beispiel und `.env.example` folgen den neuen Namen.
