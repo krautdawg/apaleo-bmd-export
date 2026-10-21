@@ -82,10 +82,10 @@ describe('VAT side in Konto', () => {
     expect(booking).toMatchObject({ konto: '4090', gkonto: '2390', betragCents: -8_000, tax: { steuercode: 81, prozent: 0, steuerCents: 0 } });
   });
 
-  it('books untaxed revenue on a row without Steuercode by the debit and credit sides', () => {
+  it('books untaxed revenue on a row without Steuercode with the revenue account leading and the signed gross', () => {
     const { booking, findings } = single(ledgerLine({ credit: ACCOUNTS.accommodation0, grossCents: 4_500, netCents: 4_500, taxes: [] }));
     expect(findings).toEqual([]);
-    expect(booking).toMatchObject({ konto: '2390', gkonto: '4090', betragCents: 4_500 });
+    expect(booking).toMatchObject({ konto: '4090', gkonto: '2390', betragCents: -4_500 });
     expect(booking?.tax).toBeUndefined();
   });
 
@@ -183,6 +183,27 @@ describe('VAT consistency guard', () => {
     const { bookings, findings } = single(ledgerLine({ taxes: tax(10, -1_000) }));
     expect(bookings).toEqual([]);
     expect(codes(findings)).toEqual(['E-VAT-SIGN']);
+  });
+
+  it.each([
+    ['Receivables', '1200', ACCOUNTS.receivables, '2390'],
+    ['AccountsReceivable', '*', ACCOUNTS.accountsReceivable, '200000'],
+  ])('blocks a Steuercode on the %s side with E-STEUERCODE-NOT-ALLOWED naming the row, never USt in Soll', (apaleoType, apaleoAccount, debit, bmdAccount) => {
+    const mapping = mappingWith(
+      mappingRow({ apaleoAccount, apaleoType, bmdAccount, steuercode: '1', bmdVatPercent: '10' }),
+      mappingRow({ apaleoAccount: ACCOUNTS.accommodation10.number, apaleoType: 'Revenues', apaleoVatPercent: '10', bmdAccount: '4000' }),
+    );
+    const { bookings, findings } = single(ledgerLine({ debit }), mapping);
+    expect(bookings).toEqual([]);
+    expect(codes(findings)).toEqual(['E-STEUERCODE-NOT-ALLOWED']);
+    expect(findings[0]?.message).toContain(`${debit.number} (${apaleoType}) uses mapping line 2 (BMD ${bmdAccount}), which has the Steuercode 1`);
+  });
+
+  it('blocks a Steuercode on a payment row with E-STEUERCODE-NOT-ALLOWED', () => {
+    const mapping = mappingWith(mappingRow({ apaleoAccount: '1102', apaleoType: 'Payments', bmdAccount: '2890', steuercode: '1', bmdVatPercent: '0' }));
+    const { bookings, findings } = single(payment(), mapping);
+    expect(bookings).toEqual([]);
+    expect(codes(findings)).toEqual(['E-STEUERCODE-NOT-ALLOWED']);
   });
 
   it('blocks a row with a Steuercode but no rate with E-VAT-RATE-MISSING; E-DATEV-RATE-UNKNOWN is gone', () => {

@@ -73,7 +73,7 @@ Der Dienst ruft `schedule --once` auf, wartet eine Stunde und wiederholt das. Di
 
 Lässt du das `chown` weg, legt Docker `./data` mit root als Besitzer an, und jeder Zeitraum scheitert mit `E-EXPORT` und `EACCES: permission denied`, gefolgt von dem `chown`-Befehl, den du ausführen musst. Der Lauf macht mit den anderen Zeiträumen weiter und endet mit 1; es geht nichts verloren, der nächste Lauf nach der Korrektur exportiert sie.
 
-`config/`, `data/` und `./schedule.log` (siehe Cron auf dem Host unten) enthalten die Berater- und Mandantennummer, die Kontenzuordnung und die exportierten Buchhaltungsdaten. Sie liegen im geklonten Repository, und `.gitignore` schließt sie aus, damit ein `git add -A` sie nicht mitnimmt. Sichere sie getrennt.
+`config/`, `data/` und `./schedule.log` (siehe Cron auf dem Host unten) enthalten das Buchungssymbol, die Kontenzuordnung und die exportierten Buchhaltungsdaten. Sie liegen im geklonten Repository, und `.gitignore` schließt sie aus, damit ein `git add -A` sie nicht mitnimmt. Sichere sie getrennt.
 
 So ist der Container aufgebaut:
 

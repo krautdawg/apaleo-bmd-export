@@ -33,7 +33,7 @@ USt-Sätze darfst du mit Komma oder Punkt schreiben (`4,9` oder `4.9`). Eine Kon
 
 ### Kontonummern, Sachkontenlänge und Personenkontenlänge
 
-Ein Sachkonto hat genau die Sachkontenlänge der Kanzlei (`bmd.sachkontenlaenge`, im EKR 4 Stellen), ein Personenkonto (Debitor) genau die Personenkontenlänge (`bmd.personenkontenlaenge`, Standard 6). Nur Zeilen vom Typ AccountsReceivable dürfen ein Personenkonto nennen. Die Vorlage ist für Sachkontenlänge 4 geschrieben. Bei einer größeren Länge hängt `init-mapping` Nullen an (Hinweis `N-TEMPLATE-SCALED`): Bei Sachkontenlänge 5 wird aus 2890 also 28900; der Sammeldebitor 200000 bleibt, wie er ist. Prüfe mit der Kanzlei, dass das ihren Konten entspricht.
+Ein Sachkonto hat genau die Sachkontenlänge der Kanzlei (`bmd.sachkontenlaenge`, im EKR 4 Stellen), ein Personenkonto (Debitor) genau die Personenkontenlänge (`bmd.personenkontenlaenge`, Standard 6). Nur Zeilen vom Typ AccountsReceivable dürfen ein Personenkonto nennen. Die Vorlage ist für Sachkontenlänge 4 geschrieben. Bei einer größeren Länge hängt `init-mapping` Nullen an (Hinweis `N-TEMPLATE-SCALED`): Bei Sachkontenlänge 5 wird aus 2890 also 28900; der Sammeldebitor 200000 richtet sich nach der Personenkontenlänge: Bei 6 Stellen bleibt er 200000, bei 5 wird er 20000, bei 7 wird er 2000000. Sind Personenkontenlänge und Sachkontenlänge gleich, lässt die Vorlage den Sammeldebitor leer, weil BMD Personen- und Sachkonto dann nicht an der Länge unterscheidet; trag dann das Personenkonto der Kanzlei ein. Prüfe mit der Kanzlei, dass das ihren Konten entspricht.
 
 Excel entfernt führende Nullen: Formatiere die Spalte `bmd_account` als Text. Fehlen bei Sachkontenlänge 4 nur führende Nullen eines Kontos der Klasse 0 (650 statt 0650), ergänzt das Tool sie mit der Warnung `W-PADDED`; jede andere falsche Länge ist ein Fehler (`E-ACCOUNT-LENGTH`).
 
@@ -61,6 +61,7 @@ BMD bekommt Nettobetrag und Steuer getrennt: Das Konto mit Steuercode steht vorn
 `mapping check` prüft jede Zeile:
 
 - Ein Vorsteuer-Code auf einer Erlös-, Anzahlungs-, Abgaben- oder Forderungsverlustzeile ist ein Fehler (`E-STEUERCODE-INPUT-TAX`). Ein Steuercode, den das Tool nicht kennt (zum Beispiel `81` für nicht steuerbare Umsätze), ergibt `W-STEUERCODE-UNCHECKED`: Lass ihn von der Kanzlei bestätigen.
+- Zahlungen (Payments), Gastforderungen (Receivables) und Debitoren (AccountsReceivable) haben nie einen Steuercode (`E-STEUERCODE-NOT-ALLOWED`): Sonst bucht BMD die Steuer auf das Geld- oder Forderungskonto, und aus einem Verkauf wird eine Minderung der Umsatzsteuer.
 - Ein Steuercode braucht einen USt-Satz (`E-VAT-RATE-MISSING`), ein USt-Satz über 0 % einen Steuercode (`E-STEUERCODE-MISSING`). Ein Steuercode mit 0 % ist erlaubt.
 - Ein Satz außer 0, 4,9, 10, 13 und 20 % ergibt `W-VAT-RATE-UNUSUAL`; das fängt zum Beispiel eine aus Deutschland kopierte Zeile mit 7 % ab.
 - Der USt-Satz der Zeile muss dem Satz in apaleo entsprechen (`E-VAT-MISMATCH`), auch über eine Elternzeile: Landet ein Konto mit 10 % über `5000;Revenues;…;4030;1;20` auf 4030 mit 20 %, meldet `mapping check --from --to` `E-VAT-MISMATCH` und verlangt eine eigene Zeile.

@@ -29,6 +29,8 @@ export interface PostingOptions extends PostingConfig {
   dialect: BmdDialect;
   /** Scales the template's example accounts in the fix hints of `E-UNMAPPED`. */
   sachkontenlaenge: number;
+  /** Scales the template's Personenkonto in the fix hints of `E-UNMAPPED`. Default 6. */
+  personenkontenlaenge?: number | undefined;
   /** The property's Buchungssymbol. */
   buchsymbol: string;
   /** The Buchungssymbol of lines without VAT side that have a Payments side. */

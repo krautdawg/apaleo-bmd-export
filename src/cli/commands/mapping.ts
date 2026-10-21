@@ -47,7 +47,7 @@ export const mapping: Command = {
         source.getLedger(propertyId, period.from, nextDay(period.to)),
       ]);
       const chart = new ChartIndex(accounts);
-      const coverage = checkCoverage(loadedMapping, lines, chart, { rateOf: releaseRateOf(lines, chart), sachkontenlaenge, dialect });
+      const coverage = checkCoverage(loadedMapping, lines, chart, { rateOf: releaseRateOf(lines, chart), sachkontenlaenge, personenkontenlaenge, dialect });
       findings.push(...coverage);
       ctx.stdout.write(`Checked ${lines.length} ledger lines of ${propertyId} from ${period.from} to ${period.to}: ${coverageSummary(coverage)}.\n`);
     }

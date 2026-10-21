@@ -11,6 +11,7 @@ import { shippedTemplate, templateWildcardAccount } from './template.js';
 import {
   ANY_TYPE,
   KOST_TYPES,
+  NO_TAX_TYPES,
   OUTPUT_TAX_TYPES,
   PERSONAL_ACCOUNT_TYPE,
   VAT_ACCOUNT_TYPES,
@@ -35,10 +36,13 @@ export const AUSTRIAN_VAT_RATES: readonly number[] = [0, 4.9, 10, 13, 20];
 
 const KOST = /^\d{1,9}$/;
 
+/** `bmd.personenkontenlaenge` when a caller does not pass it. */
+const DEFAULT_PERSONENKONTENLAENGE = 6;
+
 /**
  * Offline validation of a loaded mapping (design decision 6): digits only and
- * the exact account length, Steuercode and rate together, no input-tax code on a
- * sale, deposit, levy or bad debt, Austrian rates, `kost`, untaxed revenue and
+ * the exact account length, Steuercode and rate together, no Steuercode on a
+ * payment, guest claim or Debitor, no input-tax code on a sale, deposit, levy or bad debt, Austrian rates, `kost`, untaxed revenue and
  * the row's rate against the apaleo rate. Structural problems (duplicates,
  * forbidden wildcards) already fail `loadMapping`.
  */
@@ -86,6 +90,15 @@ function checkRow(row: MappingRow, options: CheckMappingOptions): Finding[] {
   const rate = parsePercent(row.bmdVatPercent);
   if (Number.isNaN(code ?? 0)) {
     add('E-STEUERCODE-FORMAT', 'steuercode', row.steuercode, `Steuercode "${row.steuercode}" must be a whole number from 0 to 99`);
+  } else if (code !== undefined && NO_TAX_TYPES.has(row.apaleoType)) {
+    add(
+      'E-STEUERCODE-NOT-ALLOWED',
+      'steuercode',
+      row.steuercode,
+      `apaleo type ${row.apaleoType} is a payment, guest claim or Debitor and books no tax, but the row has Steuercode ${code}: ` +
+        'BMD would book the tax on this account instead of the revenue or deposit account. Leave steuercode and bmd_vat_percent empty ' +
+        'on this row, and put the Steuercode on the revenue or deposit row',
+    );
   } else if (code !== undefined) {
     if (rate === undefined) {
       add('E-VAT-RATE-MISSING', 'bmd_vat_percent', '', `Steuercode ${code} needs the VAT rate BMD books with it in bmd_vat_percent (0 for untaxed revenue)`);
@@ -156,6 +169,8 @@ export interface CoverageOptions {
   rateOf: (line: LedgerLine) => number | undefined;
   /** Scales the template's example accounts in the fix hints. */
   sachkontenlaenge: number;
+  /** Scales the template's Personenkonto in the fix hints. Default 6. */
+  personenkontenlaenge?: number | undefined;
   /** The Steuercode in the fix hints. Default `ntcs`. */
   dialect?: BmdDialect | undefined;
 }
@@ -264,7 +279,7 @@ export function checkCoverage(
     }
   }
   const hint: Hint = {
-    sachkontenlaenge: options.sachkontenlaenge,
+    lengths: { sachkontenlaenge: options.sachkontenlaenge, personenkontenlaenge: options.personenkontenlaenge ?? DEFAULT_PERSONENKONTENLAENGE },
     outputTaxCode: DIALECTS[options.dialect ?? DEFAULT_DIALECT].normalOutputTaxCode,
     wildcardRow: (type, rate) =>
       mapping.rows.find((row) => row.apaleoAccount === WILDCARD && row.apaleoType === type && parsePercent(row.apaleoVatPercent) === rate),
@@ -281,7 +296,7 @@ function bookedText({ lines, grossCents }: Pick<Booked, 'lines' | 'grossCents'>)
 }
 
 interface Hint {
-  sachkontenlaenge: number;
+  lengths: AccountLengths;
   /** The Steuercode a wildcard row for a taxed rate needs. */
   outputTaxCode: number;
   /** The mapping's wildcard row for a VAT-relevant type at a rate, if it has one. */
@@ -297,9 +312,9 @@ function emptyWildcardFix(wildcard: MappingRow, type: string, rate: number): str
 }
 
 /** The wildcard row to add for a type, as it is written in the file, with the template's account as example. */
-function wildcardHint(type: string, rate: number | undefined, { sachkontenlaenge, outputTaxCode }: Hint): string {
+function wildcardHint(type: string, rate: number | undefined, { lengths, outputTaxCode }: Hint): string {
   const rated = VAT_RELEVANT_TYPES.has(type);
-  const template = templateWildcardAccount(shippedTemplate(), type, rated ? rate : undefined, sachkontenlaenge);
+  const template = templateWildcardAccount(shippedTemplate(), type, rated ? rate : undefined, lengths);
   if (!rated) {
     const debtor = type === PERSONAL_ACCOUNT_TYPE ? ' (Sammeldebitor)' : '';
     return `the wildcard row \`*;${type};;;${template ?? '<BMD account>'}\`${debtor}`;

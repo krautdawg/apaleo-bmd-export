@@ -213,10 +213,44 @@ describe('EKR hotel template', () => {
 
   it('gives the wildcard account of a type and rate for fix hints', async () => {
     const template = await loadTemplate();
-    expect(templateWildcardAccount(template, 'Liabilities', 13, 4)).toBe('3202');
-    expect(templateWildcardAccount(template, 'Liabilities', 5, 4)).toBeUndefined();
-    expect(templateWildcardAccount(template, 'AccountsReceivable', undefined, 5)).toBe('200000');
-    expect(templateWildcardAccount(template, 'Payments', undefined, 5)).toBe('28900');
+    const lengths = (sachkontenlaenge: number, personenkontenlaenge = 6) => ({ sachkontenlaenge, personenkontenlaenge });
+    expect(templateWildcardAccount(template, 'Liabilities', 13, lengths(4))).toBe('3202');
+    expect(templateWildcardAccount(template, 'Liabilities', 5, lengths(4))).toBeUndefined();
+    expect(templateWildcardAccount(template, 'AccountsReceivable', undefined, lengths(5))).toBe('200000');
+    expect(templateWildcardAccount(template, 'AccountsReceivable', undefined, lengths(4, 5))).toBe('20000');
+    expect(templateWildcardAccount(template, 'AccountsReceivable', undefined, lengths(4, 8))).toBe('20000000');
+    expect(templateWildcardAccount(template, 'AccountsReceivable', undefined, lengths(6, 6))).toBeUndefined();
+    expect(templateWildcardAccount(template, 'Payments', undefined, lengths(5))).toBe('28900');
+  });
+
+  it.each([
+    [5, '20000'],
+    [7, '2000000'],
+    [9, '200000000'],
+  ])('scales the Personenkonto to Personenkontenlänge %i, so its own mapping check passes', async (personenkontenlaenge, expected) => {
+    const chart = [account('A', 'Accommodation', 'Revenues', rate(10)), account('CollectiveDebitor_AccountsReceivable', 'AR', 'AccountsReceivable')];
+    const s = settings({ personenkontenlaenge });
+    const { rows, findings } = suggestRows(chart, await loadTemplate(), s);
+    expect(find(rows, 'A')?.bmdAccount).toBe('4000');
+    const debtor = find(rows, 'CollectiveDebitor_AccountsReceivable');
+    expect(debtor?.bmdAccount).toBe(expected);
+    expect(debtor?.comment).toContain(`Personenkonto ${expected}`);
+    expect(debtor?.comment).not.toContain('200000 ');
+    expect(wildcard(rows, 'AccountsReceivable')?.bmdAccount).toBe(expected);
+    expect(findings).toEqual([expect.objectContaining({ code: 'N-TEMPLATE-SCALED', message: expect.stringContaining(`became ${expected}`) })]);
+    const mapping = mappingOf(rows);
+    expect(checkMapping(mapping, s).filter((f) => f.code === 'E-ACCOUNT-LENGTH')).toEqual([]);
+    expect(scaleAccount('200000', 4, personenkontenlaenge)).toBe(expected);
+  });
+
+  it('leaves the Personenkonto empty with a comment when Personenkontenlänge equals Sachkontenlänge', async () => {
+    const chart = [account('CollectiveDebitor_AccountsReceivable', 'AR', 'AccountsReceivable')];
+    const { rows, findings } = suggestRows(chart, await loadTemplate(), settings({ sachkontenlaenge: 6, personenkontenlaenge: 6 }));
+    for (const row of [find(rows, 'CollectiveDebitor_AccountsReceivable'), wildcard(rows, 'AccountsReceivable')]) {
+      expect(row).toMatchObject({ bmdAccount: '', steuercode: '', bmdVatPercent: '' });
+      expect(row?.comment).toMatch(/^Vorschlag \(ungeprüft\): bmd_account leer gelassen, weil die Personenkontenlänge 6 gleich der Sachkontenlänge/);
+    }
+    expect(findings[0]?.message).toContain('Sammeldebitor rows were left empty');
   });
 
   it('rejects a template without version or with the wrong header', () => {

@@ -16,10 +16,11 @@ BMD rechnet und bucht die Steuer nur auf dem führenden Konto (`konto`), und auf
 |---|---|---|---|---|
 | USt-Seite im Haben (Leistung, erhaltene Anzahlung) | USt-Seite | andere Seite | Brutto minus Steuer, negativ | Steuer, negativ |
 | USt-Seite im Soll (Nachlass auf Erlöse, Auflösung einer Anzahlung) | USt-Seite | andere Seite | Brutto minus Steuer, positiv | Steuer, positiv |
-| keine USt-Seite (Zahlungen, Umbuchungen zwischen Folios, Ortstaxe ohne Steuercode) | belastetes Konto | entlastetes Konto | Brutto, positiv | leer |
+| keine USt-Seite, eine Seite ist Erlös oder Forderungsverlust (Erlöse ohne Steuercode) | Erlös- oder Forderungsverlustkonto | andere Seite | Brutto, negativ im Haben, positiv im Soll | leer |
+| keine USt-Seite sonst (Zahlungen, Umbuchungen zwischen Folios, Ortstaxe ohne Steuercode) | belastetes Konto | entlastetes Konto | Brutto, positiv | leer |
 | beide Seiten mit Steuercode (Umbuchung zwischen zwei Erlöskonten) | Fehler `E-TWO-VAT-SIDES`, keine Buchung | | | |
 
-Ein negativer Bruttobetrag (eine negative Leistung, eine Erstattung) tauscht die Seiten. apaleo bucht die Auflösung einer Anzahlung als negative Belastung im Haben der Anzahlung; das Tool bucht sie deshalb mit positivem Betrag und positiver Steuer auf dem Anzahlungskonto. Mit `verbuchkz` `A` erzeugt BMD die Gegenbuchung auf `gkonto` (Betrag plus Steuer, also genau der Bruttobetrag aus apaleo) und die Steuerbuchung selbst.
+Ein Erlös ohne Steuercode führt mit dem Erlöskonto, damit die Kostenstelle (`kost`) auf der Leistung und auf ihrem Nachlass steht. Zahlungen, Gastforderungen und Debitoren haben nie einen Steuercode (`E-STEUERCODE-NOT-ALLOWED`), sonst stünde die Umsatzsteuer im Soll. Ein negativer Bruttobetrag (eine negative Leistung, eine Erstattung) tauscht die Seiten. apaleo bucht die Auflösung einer Anzahlung als negative Belastung im Haben der Anzahlung; das Tool bucht sie deshalb mit positivem Betrag und positiver Steuer auf dem Anzahlungskonto. Mit `verbuchkz` `A` erzeugt BMD die Gegenbuchung auf `gkonto` (Betrag plus Steuer, also genau der Bruttobetrag aus apaleo) und die Steuerbuchung selbst.
 
 Die Steuer ist die Steuer der apaleo-Zeile, kaufmännisch auf den Cent gerundet (bei ,5 weg von null); der Betrag ist Brutto minus diese Steuer, nie der für sich gerundete Nettobetrag von apaleo. Steuercode und Prozent kommen aus der Zeile der USt-Seite. Eine Zeile mit Steuercode und 0 % (zum Beispiel ein Code für nicht steuerbare Umsätze) ist erlaubt und bucht die Steuer 0.
 

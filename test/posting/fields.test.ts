@@ -192,10 +192,30 @@ describe('kost', () => {
     expect(booking?.kost).toBeUndefined();
   });
 
-  it('is taken only from the konto row: a revenue row as Gegenkonto (no Steuercode) gives none', () => {
-    const mapping = mappingWith(mappingRow({ apaleoAccount: ACCOUNTS.accommodation0.number, apaleoType: 'Revenues', apaleoVatPercent: '0', bmdAccount: '4090', bmdVatPercent: '0', kost: '90' }));
-    const [booking] = post([ledgerLine({ credit: ACCOUNTS.accommodation0, grossCents: 4_500, netCents: 4_500, taxes: [] })], mapping).bookings;
-    expect(booking).toMatchObject({ konto: '2390', gkonto: '4090' });
+  it('is taken only from the konto row: a payment against a receivable gives none', () => {
+    const mapping = mappingWith(mappingRow({ apaleoAccount: '*', apaleoType: 'Receivables', bmdAccount: '2390', kost: '40' }));
+    const [booking] = post([payment()], mapping).bookings;
+    expect(booking).toMatchObject({ konto: '2890', gkonto: '2390' });
     expect(booking?.kost).toBeUndefined();
+  });
+
+  const untaxedRevenue = () =>
+    mappingWith(mappingRow({ apaleoAccount: ACCOUNTS.accommodation0.number, apaleoType: 'Revenues', apaleoVatPercent: '0', bmdAccount: '4090', bmdVatPercent: '0', kost: '10' }));
+
+  it('keeps the Kostenstelle on an untaxed charge (no Steuercode): the revenue row leads with the signed gross', () => {
+    const [booking] = post([ledgerLine({ credit: ACCOUNTS.accommodation0, grossCents: 4_500, netCents: 4_500, taxes: [] })], untaxedRevenue()).bookings;
+    expect(booking).toMatchObject({ konto: '4090', gkonto: '2390', betragCents: -4_500, kost: '10' });
+    expect(booking?.tax).toBeUndefined();
+  });
+
+  it('keeps the same Kostenstelle on the allowance of that untaxed charge', () => {
+    const allowance = ledgerLine({ debit: ACCOUNTS.accommodation0, credit: ACCOUNTS.receivables, command: 'PostAllowance', grossCents: 4_500, netCents: 4_500, taxes: [] });
+    const [booking] = post([allowance], untaxedRevenue()).bookings;
+    expect(booking).toMatchObject({ konto: '4090', gkonto: '2390', betragCents: 4_500, kost: '10' });
+  });
+
+  it('keeps the Kostenstelle on a negative untaxed charge (a correction) with the sign flipped', () => {
+    const [booking] = post([ledgerLine({ credit: ACCOUNTS.accommodation0, grossCents: -4_500, netCents: -4_500, taxes: [] })], untaxedRevenue()).bookings;
+    expect(booking).toMatchObject({ konto: '4090', gkonto: '2390', betragCents: 4_500, kost: '10' });
   });
 });

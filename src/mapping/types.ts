@@ -49,6 +49,12 @@ export const PERSONAL_ACCOUNT_TYPE = 'AccountsReceivable';
 /** Types whose bookings are sales, deposits, levies or bad debt: they owe output tax, never input tax. */
 export const OUTPUT_TAX_TYPES: ReadonlySet<string> = new Set(['Revenues', 'Liabilities', 'CityTaxes', 'SecondCityTax', 'GuestLevies', 'LossOfAccountsReceivable']);
 
+/**
+ * Types that are money or a claim on a guest or Debitor (Zahlungsmittel, Verrechnung, Personenkonto): a Steuercode on their
+ * row would put the tax on the wrong side of a sale, so their rows must never carry one.
+ */
+export const NO_TAX_TYPES: ReadonlySet<string> = new Set(['Payments', 'Receivables', 'AccountsReceivable']);
+
 /** Types whose `kost` BMD reads as Kostenstelle (profit and loss); on any other booking `kost` would be a Belegnummer. */
 export const KOST_TYPES: ReadonlySet<string> = new Set(['Revenues', 'LossOfAccountsReceivable']);
 

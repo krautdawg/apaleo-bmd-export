@@ -2,9 +2,9 @@ import type { ChartIndex } from '../core/chart.js';
 import { REPORT_PROBLEM_HINT } from '../core/errors.js';
 import type { Finding } from '../core/findings.js';
 import type { AccountRef, LedgerLine } from '../core/source.js';
-import { VAT_ACCOUNT_TYPES, checkCoverage, parseSteuercode, resolve, rowRate, type Mapping, type MappingRow } from '../mapping/index.js';
+import { KOST_TYPES, NO_TAX_TYPES, VAT_ACCOUNT_TYPES, checkCoverage, parseSteuercode, resolve, rowRate, type Mapping, type MappingRow } from '../mapping/index.js';
 import { apaleoVatOf, type ApaleoVat } from './apaleo-vat.js';
-import { lineFinding, percentText, rowText } from './describe.js';
+import { accountText, lineFinding, percentText, rowText } from './describe.js';
 import { buchungstext, extbelegnr, kostOf } from './fields.js';
 import { guardVat, type PostedSide } from './guard.js';
 import { inferReleaseRates, isUntaxedRelease, resolutionRate, type ReleaseRate } from './release.js';
@@ -48,7 +48,12 @@ export function buildBookings(lines: readonly LedgerLine[], mapping: Mapping, ch
   const releases = inferReleaseRates(lines, chart);
   const context: PostingContext = { mapping, chart, options, releases };
   const rateOf = (line: LedgerLine) => resolutionRate(line, releases);
-  const findings: Finding[] = checkCoverage(mapping, lines, chart, { rateOf, sachkontenlaenge: options.sachkontenlaenge, dialect: options.dialect }).filter(
+  const findings: Finding[] = checkCoverage(mapping, lines, chart, {
+    rateOf,
+    sachkontenlaenge: options.sachkontenlaenge,
+    personenkontenlaenge: options.personenkontenlaenge,
+    dialect: options.dialect,
+  }).filter(
     (finding) => finding.code === 'E-UNMAPPED',
   );
   const bookings: PostedBooking[] = [];
@@ -106,14 +111,24 @@ function postLine(line: LedgerLine, context: PostingContext): LineOutcome {
 
   const d = postedSide(line.debit, debitRow);
   const c = postedSide(line.credit, creditRow);
-  if (!d || !c) {
-    const row = d ? creditRow : debitRow;
-    return fail(
-      'E-VAT-RATE-MISSING',
-      `${rowText(row)} has the Steuercode "${row.steuercode}" but no valid bmd_vat_percent ("${row.bmdVatPercent}"), so the rate BMD books is unknown. ` +
-        'Fill in bmd_vat_percent on that line, and run "apaleo-bmd mapping check"',
-    );
+  for (const side of [d, c]) {
+    if (side.kind === 'no-rate') {
+      return fail(
+        'E-VAT-RATE-MISSING',
+        `${rowText(side.row)} has the Steuercode "${side.row.steuercode}" but no valid bmd_vat_percent ("${side.row.bmdVatPercent}"), so the rate BMD books is unknown. ` +
+          'Fill in bmd_vat_percent on that line, and run "apaleo-bmd mapping check"',
+      );
+    }
+    if (side.kind === 'no-tax-type') {
+      return fail(
+        'E-STEUERCODE-NOT-ALLOWED',
+        `${accountText(side.ref)} uses ${rowText(side.row)}, which has the Steuercode ${side.row.steuercode}, but a ${side.ref.type} account books no tax: ` +
+          'BMD would book the tax on it instead of the revenue or deposit account. Leave steuercode and bmd_vat_percent empty on that line, ' +
+          'put the Steuercode on the revenue or deposit row, and run "apaleo-bmd mapping check"',
+      );
+    }
   }
+  if (d.kind !== 'ok' || c.kind !== 'ok') return { kind: 'failed', findings: [] };
   if (d.vat && c.vat) {
     return fail(
       'E-TWO-VAT-SIDES',
@@ -143,20 +158,29 @@ function mappedRow(account: AccountRef, rate: number | undefined, { mapping, cha
   return row && row.bmdAccount !== '' ? row : undefined;
 }
 
-/** The side with its Steuercode and rate, or undefined when a Steuercode has no known rate. */
-function postedSide(ref: AccountRef, row: MappingRow): PostedSide | undefined {
-  const rate = rowRate(row);
-  if (rate === undefined) return undefined;
+type SideOutcome = ({ kind: 'ok' } & PostedSide) | { kind: 'no-rate' | 'no-tax-type'; ref: AccountRef; row: MappingRow };
+
+/**
+ * The side with its Steuercode and rate; `no-rate` when a Steuercode has no known
+ * rate, `no-tax-type` when a payment, guest claim or Debitor row has a Steuercode.
+ */
+function postedSide(ref: AccountRef, row: MappingRow): SideOutcome {
   const code = parseSteuercode(row.steuercode);
-  return { ref, row, steuercode: code, rate, vat: code !== undefined };
+  if (code !== undefined && (NO_TAX_TYPES.has(row.apaleoType) || NO_TAX_TYPES.has(ref.type))) return { kind: 'no-tax-type', ref, row };
+  const rate = rowRate(row);
+  if (rate === undefined) return { kind: 'no-rate', ref, row };
+  return { kind: 'ok', ref, row, steuercode: code, rate, vat: code !== undefined };
 }
 
 /**
  * Direction rule (design decision 1): the VAT side leads as `konto`, because
  * BMD computes and books the tax only on the leading account; `betrag` is the
  * gross minus the tax and `steuer` the tax, both signed from `konto` (negative
- * when it is credited). Without a VAT side `konto` is the debited account and
- * `betrag` the absolute gross; a negative gross swaps the sides.
+ * when it is credited). Without a VAT side a revenue or bad-debt side (one
+ * whose `kost` BMD reads as Kostenstelle) leads with the signed gross, so an
+ * untaxed charge keeps its Kostenstelle like its reduction does. Otherwise
+ * `konto` is the debited account and `betrag` the absolute gross; a negative
+ * gross swaps the sides.
  */
 function toBooking(
   line: LedgerLine,
@@ -167,7 +191,8 @@ function toBooking(
   { chart, options }: PostingContext,
 ): PostedBooking {
   const negative = line.grossCents < 0;
-  const [konto, gkonto] = vatSide ? [vatSide, vatSide === debit ? credit : debit] : negative ? [credit, debit] : [debit, credit];
+  const leading = vatSide ?? kostSide(debit, credit);
+  const [konto, gkonto] = leading ? [leading, leading === debit ? credit : debit] : negative ? [credit, debit] : [debit, credit];
   // Soll (+) when konto is the debited account of a positive line, or the credited account of a negative one.
   const sign = (konto === debit) !== negative ? 1 : -1;
   const gross = Math.abs(line.grossCents);
@@ -187,4 +212,11 @@ function toBooking(
     extbelegnr: extbelegnr(line, options.extbelegnr),
     sourceEntryNumbers: [line.sourceEntryNumber],
   };
+}
+
+/** The one side whose row type takes a Kostenstelle (revenue, bad debt), or undefined when none or both do. */
+function kostSide(debit: PostedSide, credit: PostedSide): PostedSide | undefined {
+  const d = KOST_TYPES.has(debit.row.apaleoType);
+  const c = KOST_TYPES.has(credit.row.apaleoType);
+  return d === c ? undefined : d ? debit : credit;
 }

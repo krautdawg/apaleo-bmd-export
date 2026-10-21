@@ -111,7 +111,7 @@ Die Dateien erscheinen in `./data/<Hotel>/<JJJJ-MM>/`. Cron auf dem Host, einmal
 | `doctor` | Prüft Node.js, Konfigurationsdatei und Uhr. Ohne Netz. |
 | `properties` | Listet die apaleo-Hotels, die die Custom App lesen darf. |
 | `live-smoke` | Liest einen Geschäftstag aus apaleo mit echten Zugangsdaten und zeigt, was zurückkam. Schreibt nichts. |
-| `init-mapping` | Schreibt eine Kontenzuordnung aus dem apaleo-Kontenplan und der Vorlage SKR03 oder SKR04; `--update` hängt neue Konten an. |
+| `init-mapping` | Schreibt eine Kontenzuordnung aus dem apaleo-Kontenplan und der EKR-Hotelvorlage (`--template ekr`); `--update` hängt neue Konten an. |
 | `mapping check` | Prüft eine Kontenzuordnung, und mit `--from`/`--to`, ob jedes im Zeitraum gebuchte Konto zugeordnet ist. |
 | `export` | Schreibt die DATEV-Dateien eines Monats oder Zeitraums nach allen Prüfungen; `--dry-run` schreibt nichts, `--demo` nimmt die Demodaten. |
 | `schedule` | `schedule --once` exportiert jeden fälligen Zeitraum, der noch nicht im Ausgabeordner liegt, und endet. Für Cron und Docker. |
@@ -155,9 +155,9 @@ Selbst betreiben heißt: Du behältst die Daten und zahlst nichts, aber du spiel
 
 **Festschreibung?** Der BMD-Buchungsimport kennt keine Festschreibung in der Datei. Die Buchungen kommen unter dem Buchungssymbol, das die Kanzlei in BMD anlegt (`bmd.buchsymbol`); eine falsch importierte Datei storniert sie dort. Importiere nie eine Datei aus `--overwrite`, ohne dass die Kanzlei die alte Datei vorher storniert hat; siehe [docs/bmd-import.md](docs/bmd-import.md).
 
-**Mehrere Hotels?** Trag sie unter `properties` in der Konfiguration ein. Jedes bekommt eine eigene Zuordnung und eine eigene Datei, auf Wunsch unter einer eigenen Mandantennummer.
+**Mehrere Hotels?** Trag sie unter `properties` in der Konfiguration ein. Jedes bekommt eine eigene Zuordnung und eine eigene Datei, auf Wunsch mit einem eigenen Buchungssymbol (`properties[].buchsymbol`).
 
-**Ich nutze heute einen bezahlten Connector. Kann ich wechseln?** Ja. Dessen Export der Kontenzuordnung (Spalten `ApaleoAccountNumber;DatevAccountNumber;CostCenter;CostCenter2`) wird direkt gelesen, und `init-mapping --update` wandelt ihn um. Fang mit dem ersten Monat an, den der alte Connector nicht mehr geliefert hat, damit nichts doppelt importiert wird; siehe [docs/docker.md](docs/docker.md#der-erste-lauf).
+**Ich nutze heute einen bezahlten Connector. Kann ich wechseln?** Ja. Die Kontenzuordnung eines DATEV-Connectors (Spalten `ApaleoAccountNumber;DatevAccountNumber;CostCenter;CostCenter2`) liest das Tool nicht, denn sie hat DATEV-Konten statt BMD-Konten. Leg die Zuordnung mit `init-mapping --template ekr` neu an und übertrag die Kontonummern mit deiner Kanzlei. Fang mit dem ersten Monat an, den der alte Connector nicht mehr geliefert hat, damit nichts doppelt importiert wird; siehe [docs/docker.md](docs/docker.md#der-erste-lauf).
 
 **Österreich (BMD)?** Noch nicht. Das Tool schreibt nur DATEV-Dateien. Ein BMD-Writer ist als Beitrag willkommen ([docs/architecture.md](docs/architecture.md)).
 

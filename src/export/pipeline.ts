@@ -203,10 +203,10 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
     findings.push(...currencyFindings(inputs.property, lines));
     if (hasError(findings)) return failed();
     const { bmd, posting } = deps.loaded.config;
-    const { sachkontenlaenge, dialect } = bmd;
-    const options: PostingOptions = { ...posting, dialect, sachkontenlaenge, ...buchsymboleOf(deps.loaded.config, inputs.id) };
+    const { sachkontenlaenge, personenkontenlaenge, dialect } = bmd;
+    const options: PostingOptions = { ...posting, dialect, sachkontenlaenge, personenkontenlaenge, ...buchsymboleOf(deps.loaded.config, inputs.id) };
 
-    const coverage = checkCoverage(mapping, lines, chart, { rateOf: releaseRateOf(lines, chart), sachkontenlaenge, dialect });
+    const coverage = checkCoverage(mapping, lines, chart, { rateOf: releaseRateOf(lines, chart), sachkontenlaenge, personenkontenlaenge, dialect });
     result = (deps.post ?? buildBookings)(lines, mapping, chart, options);
     // The posting rules repeat the coverage check's E-UNMAPPED findings.
     findings.push(...coverage, ...result.findings.filter((finding) => finding.code !== 'E-UNMAPPED'));

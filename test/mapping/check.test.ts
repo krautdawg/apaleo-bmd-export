@@ -68,6 +68,16 @@ describe('checkMapping', () => {
     ]);
   });
 
+  it.each(['Payments', 'Receivables', 'AccountsReceivable'])('rejects a Steuercode on a %s row with E-STEUERCODE-NOT-ALLOWED', (apaleoType) => {
+    const findings = check([mappingRow({ apaleoAccount: '1200', apaleoType, bmdAccount: '2390', steuercode: '1', bmdVatPercent: '10' })]);
+    expect(codes(findings)).toEqual(['E-STEUERCODE-NOT-ALLOWED']);
+    expect(findings[0]?.message).toContain('line 2');
+    expect(findings[0]?.message).toContain(`apaleo type ${apaleoType} is a payment, guest claim or Debitor`);
+    expect(codes(check([mappingRow({ apaleoAccount: '1200', apaleoType, bmdAccount: '2390', steuercode: '0', bmdVatPercent: '0' })]))).toEqual([
+      'E-STEUERCODE-NOT-ALLOWED',
+    ]);
+  });
+
   it('accepts the BMD 5.5 Soll-USt code 3 with bmd.dialect bmd55, and rejects 0 there', () => {
     expect(check([revenue({ steuercode: '3' })], { dialect: 'bmd55' })).toEqual([]);
     expect(check([revenue({ steuercode: '1' })], { dialect: 'bmd55' })).toEqual([]);
@@ -182,6 +192,16 @@ describe('checkCoverage', () => {
     const [finding] = coverage(mapping, lines([{ credit: { number: '3501', name: 'City Tax (no VAT)', type: 'CityTaxes' }, taxes: [] }]));
     expect(finding).toMatchObject({ code: 'E-UNMAPPED', value: '3501' });
     expect(finding?.message).toContain('fill in bmd_account on line 3');
+  });
+
+  it('suggests the Sammeldebitor at the Personenkontenlänge for an unmapped AccountsReceivable account', () => {
+    const debit = { number: 'BSP-X-1_AccountsReceivable', name: 'AR', type: 'AccountsReceivable', parentNumber: '9999' };
+    const [six] = coverage(mappingOf([RECEIVABLES]), lines([{ debit, credit: { number: 'BSP-X-1_Receivables', name: 'R', type: 'Receivables' } }]));
+    expect(six?.message).toContain('`*;AccountsReceivable;;;200000` (Sammeldebitor)');
+    const [five] = coverage(mappingOf([RECEIVABLES]), lines([{ debit, credit: { number: 'BSP-X-1_Receivables', name: 'R', type: 'Receivables' } }]), undefined, {
+      personenkontenlaenge: 5,
+    });
+    expect(five?.message).toContain('`*;AccountsReceivable;;;20000` (Sammeldebitor)');
   });
 
   it('suggests a rate wildcard with the Steuercode for a VAT-relevant account without a row', () => {

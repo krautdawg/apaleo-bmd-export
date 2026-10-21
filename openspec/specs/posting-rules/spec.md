@@ -84,7 +84,7 @@ The posting module SHALL skip, and list with reason, count and unsigned gross to
 - **THEN** the text is `Zahlung Gastforderung` (or the global parent's name) and does not contain `Müller`
 
 ### Requirement: VAT side in Konto
-The posting module SHALL place the account whose mapping row has a Steuercode (the VAT side) in `konto` and the other account in `gkonto`, SHALL set the tax to apaleo's precise tax rounded half away from zero to cents and the amount to the gross minus that tax, both signed from the point of view of `konto` (negative when the VAT side is credited, positive when it is debited, flipped for a negative gross), and SHALL take Steuercode and rate from the VAT-side row. A line without a VAT side SHALL be booked with the debited account in `konto`, the credited account in `gkonto` and the absolute gross amount as Soll amount (sides swapped for a negative gross).
+The posting module SHALL place the account whose mapping row has a Steuercode (the VAT side) in `konto` and the other account in `gkonto`, SHALL set the tax to apaleo's precise tax rounded half away from zero to cents and the amount to the gross minus that tax, both signed from the point of view of `konto` (negative when the VAT side is credited, positive when it is debited, flipped for a negative gross), and SHALL take Steuercode and rate from the VAT-side row. A line without a VAT side whose rows give exactly one side the type Revenues or LossOfAccountsReceivable SHALL be booked with that side in `konto`, the other in `gkonto` and the gross amount signed from `konto`, so the Kostenstelle of an untaxed charge is written like that of its allowance. Any other line without a VAT side SHALL be booked with the debited account in `konto`, the credited account in `gkonto` and the absolute gross amount as Soll amount (sides swapped for a negative gross). A side whose row is of type Payments, Receivables or AccountsReceivable and has a Steuercode SHALL NOT be booked; the line SHALL fail with `E-STEUERCODE-NOT-ALLOWED` naming the account and the mapping line.
 
 #### Scenario: Accommodation charge at 10 %
 - **WHEN** a line debits a guest receivables account (`2390`) and credits the accommodation 10 % revenue account (`4000`, Steuercode 1, rate 10) with gross 110.00, net 100.00 and taxes 10.00 at 10 %
@@ -93,6 +93,14 @@ The posting module SHALL place the account whose mapping row has a Steuercode (t
 #### Scenario: Allowance on accommodation
 - **WHEN** a line debits the accommodation 10 % revenue account and credits the guest receivables account with gross 11.00, net 10.00 and taxes 1.00 at 10 %
 - **THEN** the booking has konto `4000`, gkonto `2390`, amount 10.00 and tax 1.00
+
+#### Scenario: Untaxed charge keeps its Kostenstelle
+- **WHEN** a line debits guest receivables (`2390`) and credits the 0 % revenue account mapped to `4090` without Steuercode and with `kost` `10`, gross 45.00
+- **THEN** the booking has konto `4090`, gkonto `2390`, amount −45.00, no tax and kost `10`, and its allowance has konto `4090`, amount 45.00 and kost `10`
+
+#### Scenario: Steuercode on the receivables side
+- **WHEN** the Receivables row maps to `2390` with Steuercode 1 and rate 10 and the revenue row has no Steuercode
+- **THEN** the line is not booked and fails with `E-STEUERCODE-NOT-ALLOWED` naming the account and the mapping line
 
 #### Scenario: Negative gross without VAT side
 - **WHEN** a payment line debits `2890` and credits `2390` with gross −20.00 (a refund)

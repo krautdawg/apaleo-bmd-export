@@ -5,6 +5,7 @@ import type { BmdDialect } from '../bmd/types.js';
 import { ChartIndex } from '../core/chart.js';
 import type { Finding } from '../core/findings.js';
 import { ACCOUNT_TYPES, type SourceAccount } from '../core/source.js';
+import type { AccountLengths } from './account-length.js';
 import { commentLines, detectSeparator, parseCsv } from './csv.js';
 import { WILDCARD, parsePercent, rowKey, type MappingRowValues } from './types.js';
 
@@ -24,8 +25,12 @@ export const OUTPUT_TAX_MARKER = 'USt';
 export const SUGGESTION_MARK = 'Vorschlag (ungeprüft)';
 const NO_RULE_COMMENT = `${SUGGESTION_MARK}: keine Vorlage-Regel passt, bitte mit der Steuerberatung zuordnen.`;
 const ARCHIVED = 'archiviert';
-/** Length of the template's Sachkonto base numbers; longer numbers (the Personenkonto 200000) are never scaled. */
+/** Length of the template's Sachkonto base numbers. */
 const BASE_LENGTH = 4;
+/** Length of the template's Personenkonto base number (the Sammeldebitor 200000), scaled to the Personenkontenlänge. */
+const PERSONAL_BASE_LENGTH = 6;
+/** The template's Sammeldebitor, named in its comments and in the scaling note. */
+const TEMPLATE_PERSONENKONTO = '200000';
 
 export interface TemplateRule {
   line: number;
@@ -36,7 +41,7 @@ export interface TemplateRule {
   wildcard: boolean;
   /** Undefined matches any rate. */
   apaleoVatPercent: number | undefined;
-  /** 4-digit base number (6 digits for the Personenkonto); empty leaves the account unmapped. */
+  /** 4-digit base number (6 digits for the Personenkonto), scaled by `scaleAccount`; empty leaves the account unmapped. */
   bmdAccount: string;
   /** A Steuercode, `USt` for the dialect's output-tax code, or empty. */
   steuercode: string;
@@ -51,9 +56,7 @@ export interface Template {
 }
 
 /** What the rows depend on: the Kanzlei's account lengths and the BMD dialect. */
-export interface TemplateSettings {
-  sachkontenlaenge: number;
-  personenkontenlaenge: number;
+export interface TemplateSettings extends AccountLengths {
   dialect: BmdDialect;
 }
 
@@ -71,11 +74,17 @@ export function shippedTemplate(): Template {
 }
 
 /** The account the template's wildcard rule gives a type at a rate (any rate for types without one), scaled; undefined when none. */
-export function templateWildcardAccount(template: Template, type: string, rate: number | undefined, sachkontenlaenge: number): string | undefined {
+export function templateWildcardAccount(
+  template: Template,
+  type: string,
+  rate: number | undefined,
+  { sachkontenlaenge, personenkontenlaenge }: AccountLengths,
+): string | undefined {
   const rule = template.rules.find(
     (r) => r.wildcard && r.apaleoType === type && r.bmdAccount !== '' && (r.apaleoVatPercent === undefined || r.apaleoVatPercent === rate),
   );
-  return rule ? scaleAccount(rule.bmdAccount, sachkontenlaenge) : undefined;
+  const account = rule ? scaleAccount(rule.bmdAccount, sachkontenlaenge, personenkontenlaenge) : '';
+  return account === '' ? undefined : account;
 }
 
 export function parseTemplate(text: string): Template {
@@ -114,12 +123,32 @@ export function matchRule(template: Template, account: SourceAccount, names: rea
 
 /**
  * Scales a 4-digit template number to the Sachkontenlänge by appending zeros
- * (2890 → 28900 at Sachkontenlänge 5). A longer number, the Personenkonto
- * 200000, is returned as it is.
+ * (2890 → 28900 at Sachkontenlänge 5), and the 6-digit Personenkonto to the
+ * Personenkontenlänge by appending or dropping trailing zeros (200000 → 20000
+ * at 5, 2000000 at 7). The Personenkonto is left empty when it cannot be told
+ * apart from a Sachkonto (both lengths equal) or has no zeros to drop.
  */
-export function scaleAccount(account: string, sachkontenlaenge: number): string {
-  if (account.length !== BASE_LENGTH) return account;
-  return account + '0'.repeat(Math.max(sachkontenlaenge - BASE_LENGTH, 0));
+export function scaleAccount(account: string, sachkontenlaenge: number, personenkontenlaenge = PERSONAL_BASE_LENGTH): string {
+  if (account.length === BASE_LENGTH) return account + '0'.repeat(Math.max(sachkontenlaenge - BASE_LENGTH, 0));
+  if (account.length !== PERSONAL_BASE_LENGTH) return account;
+  if (personenkontenlaenge === sachkontenlaenge) return '';
+  if (personenkontenlaenge >= PERSONAL_BASE_LENGTH) return account + '0'.repeat(personenkontenlaenge - PERSONAL_BASE_LENGTH);
+  return account.endsWith('0'.repeat(PERSONAL_BASE_LENGTH - personenkontenlaenge)) ? account.slice(0, personenkontenlaenge) : '';
+}
+
+/**
+ * The rule's comment for the Kanzlei's lengths: the template's Personenkonto
+ * 200000 is named by its scaled number, or the comment says why it was left empty.
+ */
+function ruleComment(rule: TemplateRule, { sachkontenlaenge, personenkontenlaenge }: TemplateSettings): string {
+  if (rule.bmdAccount.length !== PERSONAL_BASE_LENGTH) return rule.comment;
+  const scaled = scaleAccount(rule.bmdAccount, sachkontenlaenge, personenkontenlaenge);
+  if (scaled !== '') return rule.comment.replaceAll(rule.bmdAccount, scaled);
+  return (
+    `${SUGGESTION_MARK}: bmd_account leer gelassen, weil die Personenkontenlänge ${personenkontenlaenge} gleich der Sachkontenlänge ist ` +
+    `oder die Vorlage-Nummer ${rule.bmdAccount} nicht darauf passt. Lege den Sammeldebitor mit deiner Kanzlei als Personenkonto an und trag ihn hier ein. ` +
+    rule.comment.replace(/^Vorschlag \(ungeprüft\):\s*/u, '')
+  );
 }
 
 export interface Suggestion {
@@ -153,7 +182,7 @@ export function suggestRows(accounts: readonly SourceAccount[], template: Templa
     const rule = matchRule(template, account, [account.name, ...parentNames(chart, account)]);
     const container = account.ledger !== 'global' && account.hasChildren && wildcardTypes.has(account.type);
     if (container && !rule?.bmdAccount) continue;
-    const comment = rule?.comment ?? NO_RULE_COMMENT;
+    const comment = rule ? ruleComment(rule, settings) : NO_RULE_COMMENT;
     add({
       apaleoAccount: account.number,
       apaleoType: account.type,
@@ -170,28 +199,40 @@ export function suggestRows(accounts: readonly SourceAccount[], template: Templa
       apaleoName: '',
       apaleoVatPercent: rule.apaleoVatPercent === undefined ? '' : String(rule.apaleoVatPercent),
       ...ruleValues(rule, settings),
-      comment: rule.comment,
+      comment: ruleComment(rule, settings),
     });
   }
 
-  const findings: Finding[] = [];
-  if (settings.sachkontenlaenge !== BASE_LENGTH) {
-    findings.push({
-      code: 'N-TEMPLATE-SCALED',
-      message:
-        `template account numbers were scaled to Sachkontenlänge ${settings.sachkontenlaenge} by appending zeros ` +
-        `(for example ${scaleAccount('4000', settings.sachkontenlaenge)} and ${scaleAccount('2890', settings.sachkontenlaenge)}); ` +
-        'the Personenkonto 200000 stays as it is',
-    });
-  }
+  const scaled = scaledNote(settings);
+  const findings: Finding[] = scaled === undefined ? [] : [{ code: 'N-TEMPLATE-SCALED', message: scaled }];
   return { rows: [...rows.values()].sort(byType), findings };
 }
 
-function ruleValues(rule: TemplateRule | undefined, { sachkontenlaenge, dialect }: TemplateSettings) {
-  const mapped = rule !== undefined && rule.bmdAccount !== '';
+/** The `N-TEMPLATE-SCALED` note when the Kanzlei's lengths differ from the template's 4 and 6 digits. */
+function scaledNote({ sachkontenlaenge, personenkontenlaenge }: TemplateSettings): string | undefined {
+  if (sachkontenlaenge === BASE_LENGTH && personenkontenlaenge === PERSONAL_BASE_LENGTH) return undefined;
+  const personal = scaleAccount(TEMPLATE_PERSONENKONTO, sachkontenlaenge, personenkontenlaenge);
+  const personalText =
+    personal === ''
+      ? `the Sammeldebitor rows were left empty: Personenkontenlänge ${personenkontenlaenge} equals the Sachkontenlänge, so a Personenkonto ` +
+        'cannot be told apart from a Sachkonto; enter the Personenkonto your Kanzlei uses'
+      : personal === TEMPLATE_PERSONENKONTO
+        ? `the Personenkonto ${TEMPLATE_PERSONENKONTO} stays as it is`
+        : `the Personenkonto ${TEMPLATE_PERSONENKONTO} became ${personal} (Personenkontenlänge ${personenkontenlaenge})`;
+  const sachText =
+    sachkontenlaenge === BASE_LENGTH
+      ? 'Sachkonto numbers keep their 4 digits'
+      : `template account numbers were scaled to Sachkontenlänge ${sachkontenlaenge} by appending zeros ` +
+        `(for example ${scaleAccount('4000', sachkontenlaenge)} and ${scaleAccount('2890', sachkontenlaenge)})`;
+  return `${sachText}; ${personalText}`;
+}
+
+function ruleValues(rule: TemplateRule | undefined, { sachkontenlaenge, personenkontenlaenge, dialect }: TemplateSettings) {
+  const bmdAccount = scaleAccount(rule?.bmdAccount ?? '', sachkontenlaenge, personenkontenlaenge);
+  const mapped = rule !== undefined && bmdAccount !== '';
   const steuercode = rule?.steuercode === OUTPUT_TAX_MARKER ? String(DIALECTS[dialect].normalOutputTaxCode) : (rule?.steuercode ?? '');
   return {
-    bmdAccount: scaleAccount(rule?.bmdAccount ?? '', sachkontenlaenge),
+    bmdAccount,
     steuercode: mapped ? steuercode : '',
     bmdVatPercent: mapped ? rule.bmdVatPercent : '',
     kost: '',
