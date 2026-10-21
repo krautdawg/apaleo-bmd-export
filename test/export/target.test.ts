@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/core/config.js';
 import { FindingsError } from '../../src/core/errors.js';
 import { DEFAULT_TARGET, exportedFile, fileTag, runExport, type ExportRequest, type TargetWriter } from '../../src/export/index.js';
+import { BMD_DEFAULT_SETTINGS, createBmdTarget, type BmdBooking, type BmdTargetSettings } from '../../src/bmd/index.js';
 import type { PostedBooking } from '../../src/posting/index.js';
 import { BSP } from '../helpers/apaleo.js';
 import { exportSetup, latePosting, type ExportSetup } from '../helpers/export.js';
@@ -31,10 +32,8 @@ const fakeTarget: TargetWriter<PostedBooking> = {
 };
 
 const SEPTEMBER = { from: '2026-09-01', to: '2026-09-30' } as const;
-const FILE = 'FAKE_20260901-20260930_BSP.txt';
-const PROTOCOL = 'FAKE_20260901-20260930_BSP.protokoll.txt';
 
-async function run(setup: ExportSetup, request: Partial<ExportRequest> = {}, target = fakeTarget) {
+async function runWith(setup: ExportSetup, request: Partial<ExportRequest>, target: TargetWriter<PostedBooking>) {
   const { ctx, fake } = setup;
   const loaded = await loadConfig({ path: join(ctx.cwd, 'apaleo-bmd.config.yaml'), env: ctx.env, readFile: ctx.fs.readFile });
   const full: ExportRequest = { period: SEPTEMBER, propertyIds: [BSP], dryRun: false, overwrite: false, ...request };
@@ -46,15 +45,55 @@ async function run(setup: ExportSetup, request: Partial<ExportRequest> = {}, tar
 const folderOf = (setup: ExportSetup) => join(setup.ctx.cwd, 'exports', BSP, '2026-09');
 const errorCodes = (outcome: { findings: { code: string }[] }) => outcome.findings.filter((f) => f.code.startsWith('E-')).map((f) => f.code);
 
-describe('the export through a fake TargetWriter', () => {
+/**
+ * The BMD writer behind the same contract. The pipeline still posts DATEV
+ * bookings until b03, so the test turns each one into a BMD booking without tax
+ * (Soll positive, Haben negative). Hotel Beispiel's debtors have 5 digits.
+ */
+const bmdWith = (settings: BmdTargetSettings): TargetWriter<PostedBooking> => {
+  const target = createBmdTarget(() => settings);
+  return { ...target, render: (bookings, meta) => target.render(bookings.map(toBmd), meta) };
+};
+const toBmd = (b: PostedBooking): BmdBooking => ({
+  konto: b.konto,
+  gkonto: b.gegenkonto,
+  businessDate: b.belegdatum,
+  buchsymbol: 'HO',
+  betragCents: b.side === 'S' ? b.amountCents : -b.amountCents,
+  ...(b.buchungstext === undefined ? {} : { text: b.buchungstext }),
+  ...(b.belegfeld1 === undefined ? {} : { extbelegnr: b.belegfeld1 }),
+});
+const bmdContractTarget = bmdWith({ ...BMD_DEFAULT_SETTINGS, personenkontenlaenge: 5 });
+
+interface ContractCase {
+  target: TargetWriter<PostedBooking>;
+  /** The file name of property BSP for a period, as `YYYYMMDD`. */
+  name: (from: string, to: string) => string;
+  /** Lines before the first booking. */
+  headerLines: number;
+  protocolTitle: RegExp;
+}
+
+const CONTRACT_CASES: [string, ContractCase][] = [
+  ['the fake target', { target: fakeTarget, name: (from, to) => `FAKE_${from}-${to}_BSP.txt`, headerLines: 0, protocolTitle: /^FAKE protocol\. No warranty/ }],
+  ['the BMD target', { target: bmdContractTarget, name: (from, to) => `BMD_Buchungsimport_${from}-${to}_BSP.csv`, headerLines: 1, protocolTitle: /^apaleo-bmd export protocol\. No warranty/ }],
+];
+
+describe.each(CONTRACT_CASES)('the export through a TargetWriter: %s', (_label, { target, name, headerLines, protocolTitle }) => {
+  const FILE = name('20260901', '20260930');
+  const [stem = '', extension = ''] = FILE.split(/(?=\.[a-z]+$)/);
+  const PROTOCOL = `${stem}.protokoll.txt`;
+  const run = (setup: ExportSetup, request: Partial<ExportRequest> = {}, chosen = target) => runWith(setup, request, chosen);
+  const fileLines = (setup: ExportSetup) => readFileSync(join(folderOf(setup), FILE), 'latin1').split('\n');
+
   it('writes the file under the name of the target, with protocol and manifest, and no EXTF name', async () => {
     const setup = exportSetup();
     const outcome = await run(setup);
     expect(outcome.status).toBe('written');
     expect(outcome.path).toBe(join(folderOf(setup), FILE));
-    expect(readdirSync(folderOf(setup)).sort()).toEqual([PROTOCOL, FILE, 'manifest.json']);
-    expect(readFileSync(join(folderOf(setup), FILE), 'utf8').split('\n')).toHaveLength(22 + 1);
-    expect(readFileSync(join(folderOf(setup), PROTOCOL), 'utf8')).toMatch(/^FAKE protocol\. No warranty/);
+    expect(readdirSync(folderOf(setup)).sort()).toEqual([PROTOCOL, FILE, 'manifest.json'].sort());
+    expect(fileLines(setup)).toHaveLength(headerLines + 22 + 1);
+    expect(readFileSync(join(folderOf(setup), PROTOCOL), 'utf8')).toMatch(protocolTitle);
     expect(JSON.parse(readFileSync(join(folderOf(setup), 'manifest.json'), 'utf8'))).toMatchObject({ files: [{ file: FILE, status: 'current', ...SEPTEMBER }] });
   });
 
@@ -62,23 +101,23 @@ describe('the export through a fake TargetWriter', () => {
     const setup = exportSetup();
     await run(setup);
     const folder = folderOf(setup);
-    expect(await exportedFile(setup.ctx, folder, SEPTEMBER, fakeTarget)).toBe(FILE);
-    // The manifest records the FAKE file; another target must not take it for its own.
+    expect(await exportedFile(setup.ctx, folder, SEPTEMBER, target)).toBe(FILE);
+    // The manifest records this target's file; another target must not take it for its own.
     expect(await exportedFile(setup.ctx, folder, SEPTEMBER, DEFAULT_TARGET)).toBeUndefined();
     await setup.ctx.fs.rm(join(folder, 'manifest.json'));
-    expect(await exportedFile(setup.ctx, folder, SEPTEMBER, fakeTarget)).toBe(FILE);
+    expect(await exportedFile(setup.ctx, folder, SEPTEMBER, target)).toBe(FILE);
     expect(await exportedFile(setup.ctx, folder, SEPTEMBER, DEFAULT_TARGET)).toBeUndefined();
   });
 
   it('sees every file of the target even when its pattern has the g or y flag', async () => {
     for (const flags of ['g', 'y', 'gy']) {
-      const stateful = { ...fakeTarget, filePattern: new RegExp(fakeTarget.filePattern.source, flags) };
+      const stateful = { ...target, filePattern: new RegExp(target.filePattern.source, flags) };
       const setup = exportSetup();
       await run(setup, {}, stateful);
       const folder = folderOf(setup);
       for (let i = 0; i < 3; i++) expect(await exportedFile(setup.ctx, folder, SEPTEMBER, stateful)).toBe(FILE);
       // Sorted right after FILE: a pattern that kept its lastIndex would skip it.
-      await setup.ctx.fs.writeFile(join(folder, 'FAKE_20260915-20260920_BSP.txt'), '');
+      await setup.ctx.fs.writeFile(join(folder, name('20260915', '20260920')), '');
       const outcome = await run(setup, {}, stateful);
       expect(errorCodes(outcome)).toEqual(['E-PERIOD-OVERLAP']);
     }
@@ -89,7 +128,7 @@ describe('the export through a fake TargetWriter', () => {
     await run(setup);
     const outcome = await run(setup);
     expect(outcome.status).toBe('unchanged');
-    expect(readdirSync(folderOf(setup)).sort()).toEqual([PROTOCOL, FILE, 'manifest.json']);
+    expect(readdirSync(folderOf(setup)).sort()).toEqual([PROTOCOL, FILE, 'manifest.json'].sort());
   });
 
   it('refuses a period that overlaps another file of the target with E-PERIOD-OVERLAP', async () => {
@@ -98,8 +137,8 @@ describe('the export through a fake TargetWriter', () => {
     const outcome = await run(setup);
     expect(outcome.status).toBe('failed');
     expect(errorCodes(outcome)).toEqual(['E-PERIOD-OVERLAP']);
-    expect(outcome.findings[0]?.message).toContain('FAKE_20260901-20260915_BSP.txt already covers some of the days');
-    expect(outcome.findings[0]?.message).toMatch(/ FAKE overlap advice$/);
+    expect(outcome.findings[0]?.message).toContain(`${name('20260901', '20260915')} already covers some of the days`);
+    expect(outcome.findings[0]?.message.endsWith(` ${target.advice.overlap}`)).toBe(true);
     expect(outcome.findings[0]?.message).not.toMatch(/DATEV|datev\./);
     expect(existsSync(join(folderOf(setup), FILE))).toBe(false);
   });
@@ -111,26 +150,22 @@ describe('the export through a fake TargetWriter', () => {
     const refused = await run(setup);
     expect(refused.status).toBe('failed');
     expect(errorCodes(refused)).toEqual(['E-FILE-EXISTS']);
-    expect(refused.findings[0]?.message).toContain('FAKE reimport advice. Then run again with --overwrite');
-    expect(refused.findings[0]?.message).toMatch(/the old file is kept as <name>\.replaced-<timestamp>\.txt\.$/);
+    expect(refused.findings[0]?.message).toContain(`${target.advice.reimport} Then run again with --overwrite`);
+    expect(refused.findings[0]?.message).toMatch(new RegExp(`the old file is kept as <name>\\.replaced-<timestamp>\\${extension}\\.$`));
     expect(refused.findings[0]?.message).not.toMatch(/DATEV|datev\.|Festschreibung/);
 
     const replaced = await run(setup, { overwrite: true });
     expect(replaced.status).toBe('replaced');
-    expect(readdirSync(folderOf(setup)).sort()).toEqual([
-      PROTOCOL,
-      'FAKE_20260901-20260930_BSP.replaced-20261020T080000Z.protokoll.txt',
-      'FAKE_20260901-20260930_BSP.replaced-20261020T080000Z.txt',
-      FILE,
-      'manifest.json',
-    ]);
-    expect(readFileSync(join(folderOf(setup), FILE), 'utf8').split('\n')).toHaveLength(23 + 1);
+    expect(readdirSync(folderOf(setup)).sort()).toEqual(
+      [PROTOCOL, `${stem}.replaced-20261020T080000Z.protokoll.txt`, `${stem}.replaced-20261020T080000Z${extension}`, FILE, 'manifest.json'].sort(),
+    );
+    expect(fileLines(setup)).toHaveLength(headerLines + 23 + 1);
   });
 
   it('reports the findings of a file the target refuses to render, and writes nothing', async () => {
     const setup = exportSetup();
     const refusing: TargetWriter<PostedBooking> = {
-      ...fakeTarget,
+      ...target,
       render: () => {
         throw new FindingsError('not written', [{ code: 'E-FAKE', message: 'the fake target refuses' }]);
       },
@@ -142,6 +177,16 @@ describe('the export through a fake TargetWriter', () => {
   });
 });
 
+describe('the BMD target through the export', () => {
+  it('reports the BMD validation findings of a file it cannot write, and writes nothing', async () => {
+    const setup = exportSetup();
+    const outcome = await runWith(setup, {}, bmdWith({ ...BMD_DEFAULT_SETTINGS, sachkontenlaenge: 5, personenkontenlaenge: 6 }));
+    expect(outcome.status).toBe('failed');
+    expect(new Set(errorCodes(outcome))).toEqual(new Set(['E-BMD-ACCOUNT']));
+    expect(existsSync(join(setup.ctx.cwd, 'exports'))).toBe(false);
+  });
+});
+
 describe('the target boundary in src/export', () => {
   const dir = fileURLToPath(new URL('../../src/export/', import.meta.url));
   const sources = readdirSync(dir)
@@ -149,7 +194,7 @@ describe('the target boundary in src/export', () => {
     .map((name) => [name, readFileSync(join(dir, name), 'utf8')] as const);
 
   it.each(sources)('%s imports a target module only through its TargetWriter', (_name, text) => {
-    const targetImports = [...text.matchAll(/from '\.\.\/datev\/([^']+)'/g)].map((match) => match[1]);
+    const targetImports = [...text.matchAll(/from '\.\.\/(?:datev|bmd)\/([^']+)'/g)].map((match) => match[1]);
     expect(targetImports.every((module) => module === 'target.js')).toBe(true);
   });
 
@@ -158,5 +203,6 @@ describe('the target boundary in src/export', () => {
     expect(output).not.toMatch(/EXTF|Buchungsstapel|\.csv/);
     expect(output).not.toMatch(/DATEV|datev\.[a-z]|\bBMD\b|bmd\.[a-z]|Festschreibung/);
     expect(output).not.toContain('../datev');
+    expect(output).not.toContain('../bmd');
   });
 });
