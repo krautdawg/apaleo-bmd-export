@@ -1,9 +1,26 @@
+import type { Finding } from './findings.js';
+
 /**
  * An error the user can fix (bad config, missing file, unmapped account).
  * The CLI prints its message without a stack trace and exits with code 1.
  */
 export class UserError extends Error {
   override readonly name: string = 'UserError';
+}
+
+/**
+ * A user error that carries every finding behind it, so the caller can report
+ * them one by one (for example all problems of a file a target refused to render).
+ */
+export class FindingsError extends UserError {
+  override readonly name: string = 'FindingsError';
+
+  constructor(
+    message: string,
+    readonly findings: readonly Finding[],
+  ) {
+    super(message);
+  }
 }
 
 /**

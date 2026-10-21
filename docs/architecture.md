@@ -79,9 +79,9 @@ Die Kontotypen nutzen die Namen von apaleo (`Revenues`, `Payments`, `Liabilities
 
 Die Buchungsregeln erzeugen Werte vom Typ `PostedBooking` (Konto, Gegenkonto, Soll/Haben, Betrag, BU-Schlüssel, Belegdatum, Belegfeld 1, Buchungstext, Kostenstellen) und eine Übersicht. Nur `src/datev/` kennt das Dateiformat EXTF. Ein neuer Writer:
 
-1. liegt in `src/<Ziel>/` (zum Beispiel `src/bmd/`), hängt nicht von `src/sources/` ab und meldet fehlerhafte Daten als Befunde mit Codes, wie `renderBuchungsstapel` (dessen `ExtfValidationError` alle Befunde auf einmal enthält);
+1. liegt in `src/<Ziel>/` (zum Beispiel `src/bmd/`), hängt nicht von `src/sources/` ab und meldet fehlerhafte Daten als Befunde mit Codes, wie `renderBuchungsstapel` (dessen `ExtfValidationError` als `FindingsError` alle Befunde auf einmal enthält);
 2. hat Golden Files in `test/golden/<Ziel>/`, die Byte für Byte verglichen werden (siehe `test/datev/golden.test.ts`);
-3. wird in `src/export/pipeline.ts` ausgewählt. Heute ruft der Ablauf den DATEV-Writer direkt auf; ein zweites Zielformat ist der Moment, dort eine kleine Schnittstelle für Writer einzuführen.
+3. implementiert die Schnittstelle `TargetWriter` aus `src/export/target.ts`: Dateiname, Muster für vorhandene und überlappende Dateien, die gerenderten Bytes, den Vergleich „unverändert“ und den Titel des Protokolls (Beispiel: `src/datev/target.ts`). `src/export/` kennt ein Zielformat nur über diese Schnittstelle; `DEFAULT_TARGET` in `src/export/pipeline.ts` wählt das Ziel.
 
 USt-Logik, die nur ein Zielformat betrifft (BMD hat zum Beispiel keine Automatikkonten), gehört in den Buchungsschritt für dieses Ziel, nicht in den Writer.
 

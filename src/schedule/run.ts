@@ -6,6 +6,7 @@ import { UserError } from '../core/errors.js';
 import type { Finding } from '../core/findings.js';
 import type { SourceAdapter } from '../core/source.js';
 import {
+  DEFAULT_TARGET,
   exportedFile,
   fileSystemFinding,
   isSystemError,
@@ -77,7 +78,7 @@ export async function runSchedule({ loaded, ctx, source, onOutcome }: ScheduleDe
   const exported = async (propertyId: string, part: PeriodPart): Promise<ScheduleOutcome | undefined> => {
     const folder = monthFolder(ctx.cwd, output.dir, propertyId, part.month);
     try {
-      const file = await exportedFile(ctx, folder, part);
+      const file = await exportedFile(ctx, folder, part, DEFAULT_TARGET);
       return file ? { propertyId, part, status: 'already exported', findings: [], path: join(folder, file) } : undefined;
     } catch (error) {
       if (!isSystemError(error)) throw error;
