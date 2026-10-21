@@ -80,7 +80,7 @@ Die Kontotypen nutzen die Namen von apaleo (`Revenues`, `Payments`, `Liabilities
 
 Die Buchungsregeln erzeugen Werte vom Typ `PostedBooking` (Konto, Gegenkonto, Betrag, Steuercode, Prozent, Steuer, Buchungssymbol, Belegdatum, extbelegnr, Buchungstext, Kostenstelle) und eine Übersicht. Nur `src/bmd/` kennt das Dateiformat. Ein neuer Writer:
 
-1. liegt in `src/<Ziel>/` (zum Beispiel `src/bmd/`), hängt nicht von `src/sources/` ab und meldet fehlerhafte Daten als Befunde mit Codes, wie `renderBuchungsstapel` (dessen `ExtfValidationError` als `FindingsError` alle Befunde auf einmal enthält);
+1. liegt in `src/<Ziel>/` (zum Beispiel `src/bmd/`), hängt nicht von `src/sources/` ab und meldet fehlerhafte Daten als Befunde mit Codes, wie `renderBuchungsimport` in `src/bmd/writer.ts` (dessen `BmdValidationError` aus `src/bmd/errors.ts` als `FindingsError` alle Befunde auf einmal enthält);
 2. hat Golden Files in `test/golden/<Ziel>/`, die Byte für Byte verglichen werden (siehe `test/bmd/golden.test.ts`);
 3. implementiert die Schnittstelle `TargetWriter` aus `src/export/target.ts`: Dateiname, Muster für vorhandene und überlappende Dateien, die gerenderten Bytes, den Vergleich „unverändert“, den Titel des Protokolls und die Hinweise (`advice`) für die Meldungen `E-PERIOD-OVERLAP` und `E-FILE-EXISTS`: welches Programm die Datei importiert, welche Konfigurationswerte den Kopfsatz ändern und wie die Kanzlei einen importierten Stapel rückgängig macht (Beispiel: `src/bmd/target.ts`). `src/export/` kennt ein Zielformat nur über diese Schnittstelle; `DEFAULT_TARGET` in `src/export/pipeline.ts` wählt das Ziel.
 
