@@ -4,14 +4,14 @@
 The `schedule --once` command: which periods are due on the one configured cadence (monthly by default, or daily) in the configured time zone, catch-up of missed periods within `catchUpDays`, skipping periods whose file already exists without any apaleo call, and exiting with a status cron can act on. There is no in-process timer; cron or the compose loop calls it.
 ## Requirements
 ### Requirement: Daily and monthly cadences
-`apaleo-datev schedule --once` SHALL compute due periods for all configured properties on exactly one cadence: `monthly` (default), where a calendar month is due from `dayOfMonth` (1–5, default 3) of the following month, or `daily`, where a single day `d` is due once `d <= today − offsetDays` (offset 1–3, default 2). "Today" SHALL be the date of `ctx.now()` in `schedule.timezone`. `catchUpDays` SHALL be at least 3 with `cadence: monthly` and at least 5 with `cadence: daily`, because a run can hold a period back as not yet final until four days after its last day and the period must then still be inside the window.
+`apaleo-bmd schedule --once` SHALL compute due periods for all configured properties on exactly one cadence: `monthly` (default), where a calendar month is due from `dayOfMonth` (1–5, default 3) of the following month, or `daily`, where a single day `d` is due once `d <= today − offsetDays` (offset 1–3, default 2). "Today" SHALL be the date of `ctx.now()` in `schedule.timezone` (default `Europe/Vienna`). `catchUpDays` SHALL be at least 3 with `cadence: monthly` and at least 5 with `cadence: daily`, because a run can hold a period back as not yet final until four days after its last day and the period must then still be inside the window.
 
 #### Scenario: Monthly run
-- **WHEN** cadence is monthly, dayOfMonth 3, time zone Europe/Berlin, and `ctx.now()` is 2026-11-03T05:30:00Z (06:30 in Berlin)
+- **WHEN** cadence is monthly, dayOfMonth 3, `schedule.timezone` not set, and `ctx.now()` is 2026-11-03T05:30:00Z (06:30 in Vienna)
 - **THEN** the export for 2026-10-01 to 2026-10-31 runs for every configured property
 
 #### Scenario: Monthly not yet due
-- **WHEN** cadence is monthly, dayOfMonth 3, and `ctx.now()` is 2026-11-02 in Berlin
+- **WHEN** cadence is monthly, dayOfMonth 3, and `ctx.now()` is 2026-11-02 in Vienna
 - **THEN** October is not due, nothing is exported, and the command exits 0
 
 #### Scenario: Daily run
@@ -62,10 +62,10 @@ The `schedule --once` command: which periods are due on the one configured caden
 - **THEN** no request is sent to apaleo and the command exits 0
 
 ### Requirement: Run once and exit
-`apaleo-datev schedule --once` SHALL exit with code 0 if every due period succeeded, was already exported, had no bookings or is not yet final, and 1 if any failed, printing one line per property and period with the result and every finding code (`E-`, `W-` and `N-`, except `N-NO-BOOKINGS`, which the result already states), each finding printed indented below the line. Each line SHALL be printed as soon as its property and period are done. A file-system error in the output folder (for example `EACCES`) SHALL fail only that property and period with `E-EXPORT` and the next step (for a permission error the `chown` command for the container user), and the run SHALL go on with the others. Running `apaleo-datev schedule` without `--once` SHALL exit with code 2 and a hint to use `--once` from cron or the compose loop.
+`apaleo-bmd schedule --once` SHALL exit with code 0 if every due period succeeded, was already exported, had no bookings or is not yet final, and 1 if any failed, printing one line per property and period with the result and every finding code (`E-`, `W-` and `N-`, except `N-NO-BOOKINGS`, which the result already states), each finding printed indented below the line. Each line SHALL be printed as soon as its property and period are done. A file-system error in the output folder (for example `EACCES`) SHALL fail only that property and period with `E-EXPORT` and the next step (for a permission error the `chown` command for the container user), and the run SHALL go on with the others. Running `apaleo-bmd schedule` without `--once` SHALL exit with code 2 and a hint to use `--once` from cron or the compose loop.
 
 #### Scenario: External cron
-- **WHEN** a system cron job calls `apaleo-datev schedule --once` daily
+- **WHEN** a system cron job calls `apaleo-bmd schedule --once` daily
 - **THEN** the due period is exported and the process exits
 
 #### Scenario: Failed period
@@ -73,8 +73,8 @@ The `schedule --once` command: which periods are due on the one configured caden
 - **THEN** the output line names the property, the period and `E-UNMAPPED`, and the exit code is 1
 
 #### Scenario: Warning on a written period
-- **WHEN** a due period is written with the warning `W-UNKNOWN-COLUMN`
-- **THEN** the output line ends with `W-UNKNOWN-COLUMN`, the finding follows indented, and the exit code is 0
+- **WHEN** a due period is written with the warning `W-VAT-ROUNDING`
+- **THEN** the output line ends with `W-VAT-ROUNDING`, the finding follows indented, and the exit code is 0
 
 #### Scenario: Output folder not writable
 - **WHEN** the output folder of one property cannot be written or read (`EACCES`)
@@ -83,3 +83,4 @@ The `schedule --once` command: which periods are due on the one configured caden
 #### Scenario: Unexpected error halfway
 - **WHEN** an unexpected error stops the run after a file was written
 - **THEN** the line for that file has already been printed
+
