@@ -30,19 +30,19 @@ The `schedule --once` command: which periods are due on the one configured caden
 `schedule --once` SHALL NOT write a period that is not final yet, neither in `schedule.timezone` nor in the property's own time zone. apaleo can still post to a day D until the night audit that closes D+1, which runs after midnight on D+2, and a written file makes every later run skip the period. A period that ends on D SHALL count as final from `schedule.finalAfter` (local time `HH:MM`, "00:00" to "12:00", default "06:00") on D+2. A due period that is not final SHALL be reported as `not yet final` with the note `N-NOT-FINAL`, naming the time zone and the time from which it is final, without any apaleo ledger request, and SHALL be exported by the first run after that time. A period that is already exported SHALL be reported as `already exported` instead.
 
 #### Scenario: Monthly day 1 just after midnight
-- **WHEN** cadence is monthly, dayOfMonth 1, and `ctx.now()` is 2026-10-01 00:05 in Berlin
+- **WHEN** cadence is monthly, dayOfMonth 1, and `ctx.now()` is 2026-10-01 00:05 in Vienna
 - **THEN** the line reads `BSP 2026-09 not yet final N-NOT-FINAL`, no file is written, no request is sent to apaleo, and the command exits 0
 
 #### Scenario: Two days later, before the second night audit is done
-- **WHEN** the same schedule runs at 2026-10-02 00:05 in Berlin
+- **WHEN** the same schedule runs at 2026-10-02 00:05 in Vienna
 - **THEN** September is still reported as `not yet final` and no request is sent to apaleo
 
 #### Scenario: Late posting by the second night audit
-- **WHEN** after that run a posting dated 2026-09-30 is added and `schedule --once` runs at 2026-10-02 06:05 in Berlin
+- **WHEN** after that run a posting dated 2026-09-30 is added and `schedule --once` runs at 2026-10-02 06:05 in Vienna
 - **THEN** September is written and the file contains that posting
 
 #### Scenario: Daily D-1
-- **WHEN** cadence is daily with offsetDays 1 and `ctx.now()` is 2026-10-20 00:05 in Berlin
+- **WHEN** cadence is daily with offsetDays 1 and `ctx.now()` is 2026-10-20 00:05 in Vienna
 - **THEN** 2026-10-18 and 2026-10-19 are reported as `not yet final`, and 2026-10-19 is written by the run at 2026-10-21 06:05
 
 #### Scenario: Property time zone behind the schedule time zone
