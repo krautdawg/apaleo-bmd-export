@@ -19,7 +19,7 @@ Deposit (Liabilities) rows with a rate above 0 SHALL use an output-tax Steuercod
 The EKR hotel template SHALL additionally map LossOfAccountsReceivable accounts by VAT rate through wildcard rows (`7800` at 10 %, `7802` at 13 % and `7801` at 20 % with the output-tax Steuercode of the dialect, `7809` at 0 % without Steuercode), so that no row is written for the containers `6900` and `CollectiveDebitor_LossOfAccountsReceivable`, SHALL map revenue accounts of apaleo's groups `RevenueCancellationFees` and `RevenueNoShow` and revenue accounts whose name matches cancellation or no-show fees (Storno, Stornogebühr, Cancellation, No-Show, Noshow) at 0 % to `4091` without Steuercode and leave them unmapped with an explanatory comment at a rate above 0, also where another rate rule would match, and SHALL write the Ortstaxe comment naming the Bundesland table in `docs/mapping-guide.md` and saying that the BMD account must carry no fixed Steuercode. Every such row SHALL be marked `Vorschlag (ungeprüft)`.
 
 #### Scenario: Bad debt rows
-- **WHEN** `bmd.dialect` is `ntcs` and a write-off debits a per-reservation LossOfAccountsReceivable account under `CollectiveDebitor_LossOfAccountsReceivable` at 10 % or 20 %
+- **WHEN** `bmd.dialect` is `ntcs` and a write-off debits a per-reservation LossOfAccountsReceivable account at 10 % or 20 % whose `parentNumber` is `6900` (assumed by analogy with AR's `9999`; no write-off is recorded) or `CollectiveDebitor_LossOfAccountsReceivable`
 - **THEN** it resolves through the wildcard rows to `7800` or `7801` with Steuercode 1 and the matching rate, and the file has no row for `6900` or `CollectiveDebitor_LossOfAccountsReceivable`
 
 #### Scenario: Recorded Austrian chart

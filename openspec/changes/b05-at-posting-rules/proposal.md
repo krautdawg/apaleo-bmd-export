@@ -5,7 +5,7 @@ b03 books the common hotel lines correctly, but leaves the Austrian special case
 ## What Changes
 
 - Anzahlungen: deposit rows use the normal output-tax Steuercode (NTCS `1`, which the UVA counts as "+ Anzahlungen" in KZ 000/022/029). Template comment and mapping guide name the alternative NTCS setup (Anzahlungskonto with n.n.fällige USt, NTCS_BUCHEN Anhang C); input-tax codes 2 and 3 stay rejected.
-- Forderungsverlust: LossOfAccountsReceivable lines with tax are booked on the bad-debt account as konto with the output-tax Steuercode (NTCS `1`), net and tax positive (reducing USt); untaxed write-offs without Steuercode. EKR template rate wildcards `7800` (10 %), `7802` (13 %), `7801` (20 %), `7809` (0 %) as suggestions, because apaleo books write-offs on per-reservation accounts.
+- Forderungsverlust: LossOfAccountsReceivable lines with tax are booked on the bad-debt account as konto with the output-tax Steuercode (NTCS `1`), net and tax positive (reducing USt); untaxed write-offs without Steuercode. EKR template rate wildcards `7800` (10 %), `7802` (13 %), `7801` (20 %), `7809` (0 %) as suggestions, because apaleo is expected to book write-offs on per-reservation accounts (assumed by analogy with AR; no write-off is recorded yet).
 - Stornogebühren / No-Show: template rule for apaleo's cancellation and no-show accounts at 0 % to `4091` without Steuercode; at a rate above 0 the row stays empty with a comment, so the Kanzlei confirms that apaleo's tax is right.
 - Ortstaxe / Nächtigungsabgabe / Aufenthaltsabgabe: template comment and mapping guide table by Bundesland, both booking options, never pre-filled.
 - An Austrian fixture month in apaleo's real shapes (b02b) covering every case above, with hand-computed totals in the test.

@@ -333,6 +333,27 @@ describe('response validation', () => {
       /^apaleo property BSP, business day 2026-09-14, source entry BSPE0002: gross 10 is not net 9 plus the taxes 0\.65 \(difference 0\.35\)\./,
     );
   });
+
+  it('accepts a gross that differs from net plus the taxes by exactly half a cent (the guard limit)', async () => {
+    const data = dayFixture('2026-09-14');
+    // 10 - 9.345 - 0.65 = 0.005, in both directions.
+    Object.assign(data.transactions[1] as object, { grossAmount: 10, netAmount: 9.345, taxes: [{ type: 'Reduced', percent: 7, amount: 0.65 }] });
+    Object.assign(data.transactions[2] as object, { grossAmount: 10, netAmount: 9.355, taxes: [{ type: 'Reduced', percent: 7, amount: 0.65 }] });
+    const lines = await withDay(data).getLedger(BSP, '2026-09-14', '2026-09-15');
+    expect(lines[1]).toMatchObject({ grossCents: 1000, netPrecise: '9.345', netCents: 935 });
+    expect(lines[2]).toMatchObject({ grossCents: 1000, netPrecise: '9.355', netCents: 936 });
+  });
+
+  it.each([
+    ['above', 9.3449, '0.0051'],
+    ['below', 9.3551, '-0.0051'],
+  ])('fails when gross is %s net plus the taxes by just over half a cent', async (_direction, netAmount, difference) => {
+    const data = dayFixture('2026-09-14');
+    Object.assign(data.transactions[1] as object, { grossAmount: 10, netAmount, taxes: [{ type: 'Reduced', percent: 7, amount: 0.65 }] });
+    const error = await withDay(data).getLedger(BSP, '2026-09-14', '2026-09-15').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApaleoError);
+    expect((error as Error).message).toContain(`source entry BSPE0002: gross 10 is not net ${String(netAmount)} plus the taxes 0.65 (difference ${difference})`);
+  });
 });
 
 describe('HTTP errors', () => {
