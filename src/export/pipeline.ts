@@ -2,14 +2,14 @@ import { basename, join, resolve } from 'node:path';
 import type { CommandContext } from '../cli/context.js';
 import { VERSION } from '../cli/version.js';
 import { ChartIndex } from '../core/chart.js';
-import type { LoadedConfig } from '../core/config.js';
+import { buchsymboleOf, sharedBuchsymbolFindings, type LoadedConfig } from '../core/config.js';
 import { localDateIn, nextDay } from '../core/date.js';
 import { FindingsError, UserError } from '../core/errors.js';
 import { isErrorFinding, type Finding } from '../core/findings.js';
 import { formatCents } from '../core/money.js';
 import type { LedgerLine, SourceAdapter, SourceProperty } from '../core/source.js';
-import { datevTarget } from '../datev/target.js';
-import { checkCoverage, loadMapping, type Mapping, type Skr } from '../mapping/index.js';
+import { bmdTarget } from '../bmd/target.js';
+import { checkCoverage, loadMapping, type Mapping } from '../mapping/index.js';
 import { buildBookings, releaseRateOf, type PostedBooking, type PostingOptions, type PostingResult } from '../posting/index.js';
 import { checkAggregates, plausibilityFindings } from './checks.js';
 import { monthFolder, planOutput, repairCompanions, sha256, writeOutput, type OutputPlan, type WrittenFile } from './output.js';
@@ -30,7 +30,7 @@ export interface ExportRequest {
    * for that day until the night audit that closes the following day.
    */
   holdUntilFinal?: { finalAfter: string };
-  /** `export --demo`: the Bezeichnung and the protocol say `DEMO`, so a demo file is never taken for real data. */
+  /** `export --demo`: the file name and the protocol say `DEMO`, so a demo file is never taken for real data. */
   demo?: boolean;
 }
 
@@ -47,7 +47,13 @@ export interface ExportDeps {
 }
 
 /** The target the export writes when the caller names none. */
-export const DEFAULT_TARGET: TargetWriter<PostedBooking> = datevTarget;
+export const DEFAULT_TARGET: TargetWriter<PostedBooking> = bmdTarget;
+
+/**
+ * BMD files have no fiscal-year field, so a file only has to stay inside one
+ * calendar month: the period is split as if the fiscal year began on 1 January.
+ */
+export const CALENDAR_YEAR_START = '01-01';
 
 /**
  * - `written`, `replaced`: the file was written (a replaced file is kept beside it).
@@ -78,13 +84,14 @@ export interface PartOutcome {
  * A blocking finding stops only its own property-month; the others still run.
  */
 export async function runExport(request: ExportRequest, deps: ExportDeps): Promise<PartOutcome[]> {
-  const parts = splitPeriod(request.period, deps.loaded.config.datev.wjBeginn);
+  const parts = splitPeriod(request.period, CALENDAR_YEAR_START);
+  const shared = sharedBuchsymbolFindings(deps.loaded.config);
   const properties = await deps.source.listProperties();
   const outcomes: PartOutcome[] = [];
   for (const propertyId of request.propertyIds) {
     const inputs = new PropertyInputs(propertyId, properties.find((p) => p.id === propertyId), deps);
     for (const part of parts) {
-      const outcome = await exportPart(part, inputs, request, deps);
+      const outcome = await exportPart(part, inputs, request, deps, shared.filter((finding) => sharesSymbol(finding, propertyId, deps)));
       outcomes.push(outcome);
       deps.onOutcome?.(outcome);
     }
@@ -117,7 +124,7 @@ class PropertyInputs {
     this.mappingFile ??= (async () => {
       let bytes = new Uint8Array();
       const readFile = async (path: string) => (bytes = await this.deps.ctx.fs.readFile(path));
-      const mapping = await loadMapping(this.mappingPath, { sachkontenlaenge: this.deps.loaded.config.datev.sachkontenlaenge, readFile });
+      const mapping = await loadMapping(this.mappingPath, { sachkontenlaenge: this.deps.loaded.config.bmd.sachkontenlaenge, readFile });
       return { mapping, sha256: sha256(bytes) };
     })();
     return this.mappingFile;
@@ -142,8 +149,14 @@ export function notFinalFinding(part: DateRange, timeZone: string, finalAfter: s
   };
 }
 
-async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: ExportRequest, deps: ExportDeps): Promise<PartOutcome> {
-  const findings: Finding[] = [];
+/** A `W-BUCHSYMBOL-SHARED` finding concerns the property when the shared symbol is one of its own. */
+function sharesSymbol(finding: Finding, propertyId: string, deps: ExportDeps): boolean {
+  const { buchsymbol, buchsymbolZahlung } = buchsymboleOf(deps.loaded.config, propertyId);
+  return finding.value === buchsymbol || finding.value === buchsymbolZahlung;
+}
+
+async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: ExportRequest, deps: ExportDeps, notes: readonly Finding[]): Promise<PartOutcome> {
+  const findings: Finding[] = [...notes];
   let lines: readonly LedgerLine[] = [];
   let result: PostingResult | undefined;
   const outcome = (status: PartStatus, extra: Partial<PartOutcome> = {}): PartOutcome => ({
@@ -185,21 +198,20 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
   try {
     const { mapping, sha256: mappingSha256 } = await inputs.loadMapping();
     findings.push(...mapping.findings);
-    const skr = chartOfAccounts(deps.loaded.config.datev.skr, mapping, findings);
-    if (!skr) return failed();
     const [chart, ledger] = await Promise.all([inputs.loadChart(), deps.source.getLedger(inputs.id, part.from, nextDay(part.to))]);
     lines = ledger;
     findings.push(...currencyFindings(inputs.property, lines));
     if (hasError(findings)) return failed();
-    const { sachkontenlaenge } = deps.loaded.config.datev;
-    const options: PostingOptions = { ...deps.loaded.config.posting, sachkontenlaenge, skr };
+    const { bmd, posting } = deps.loaded.config;
+    const { sachkontenlaenge, personenkontenlaenge, dialect } = bmd;
+    const options: PostingOptions = { ...posting, dialect, sachkontenlaenge, personenkontenlaenge, ...buchsymboleOf(deps.loaded.config, inputs.id) };
 
-    const coverage = checkCoverage(mapping, lines, chart, { rateOf: releaseRateOf(lines, chart), sachkontenlaenge, skr });
+    const coverage = checkCoverage(mapping, lines, chart, { rateOf: releaseRateOf(lines, chart), sachkontenlaenge, personenkontenlaenge, dialect });
     result = (deps.post ?? buildBookings)(lines, mapping, chart, options);
     // The posting rules repeat the coverage check's E-UNMAPPED findings.
     findings.push(...coverage, ...result.findings.filter((finding) => finding.code !== 'E-UNMAPPED'));
     // The plausibility checks assume a clean posting run; with errors the part fails anyway.
-    if (!hasError(findings)) findings.push(...plausibilityFindings(lines, result, { mapping, chart, sachkontenlaenge, skr }));
+    if (!hasError(findings)) findings.push(...plausibilityFindings(lines, result, { mapping, chart }));
     if (deps.loaded.config.checks.aggregates) findings.push(...(await aggregateFindings(deps.source, inputs.id, part, lines, chart)));
     if (hasError(findings)) return failed();
     if (result.bookings.length === 0) {
@@ -208,7 +220,7 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
     }
 
     const target = deps.target ?? DEFAULT_TARGET;
-    const meta: TargetFileMeta = { config: deps.loaded.config, propertyId: inputs.id, part, skr, demo: request.demo === true, createdAt: deps.ctx.now() };
+    const meta: TargetFileMeta = { config: deps.loaded.config, propertyId: inputs.id, part, demo: request.demo === true, createdAt: deps.ctx.now() };
     const { bytes, findings: renderFindings } = target.render(result.bookings, meta);
     findings.push(...renderFindings);
     const path = join(monthFolder(deps.ctx.cwd, deps.loaded.config.output.dir, inputs.id, part.month), target.fileName(meta));
@@ -255,7 +267,7 @@ async function exportPart(part: PeriodPart, inputs: PropertyInputs, request: Exp
   }
 }
 
-/** The only currency the EXTF writer supports: the header says EUR and the bookings carry no currency of their own. */
+/** The only currency the BMD writer supports: the bookings carry no currency of their own, and BMD reads them as euros. */
 export const EXPORT_CURRENCY = 'EUR';
 
 /**
@@ -268,8 +280,8 @@ function currencyFindings(property: SourceProperty, lines: readonly LedgerLine[]
       {
         code: 'E-CURRENCY',
         message:
-          `the property ${property.id} keeps its books in ${property.currency || 'an unknown currency'}, but this tool writes DATEV files in ${EXPORT_CURRENCY} only. ` +
-          'No file was written, because DATEV would read the amounts as euros',
+          `the property ${property.id} keeps its books in ${property.currency || 'an unknown currency'}, but this tool writes BMD files in ${EXPORT_CURRENCY} only. ` +
+          'No file was written, because BMD would read the amounts as euros',
         value: property.currency,
       },
     ];
@@ -281,30 +293,11 @@ function currencyFindings(property: SourceProperty, lines: readonly LedgerLine[]
     {
       code: 'E-CURRENCY',
       message:
-        `${count} apaleo line(s) of ${property.id} are in ${others.map((c) => c || 'an unknown currency').join(', ')}, but this tool writes DATEV files in ${EXPORT_CURRENCY} only. ` +
-        'No file was written, because DATEV would read the amounts as euros',
+        `${count} apaleo line(s) of ${property.id} are in ${others.map((c) => c || 'an unknown currency').join(', ')}, but this tool writes BMD files in ${EXPORT_CURRENCY} only. ` +
+        'No file was written, because BMD would read the amounts as euros',
       value: others.join(','),
     },
   ];
-}
-
-/** `datev.skr`, else the SKR named in the mapping file; both must agree. Undefined (with an `E-` finding) when unknown. */
-function chartOfAccounts(configured: Skr | undefined, mapping: Mapping, findings: Finding[]): Skr | undefined {
-  if (configured && mapping.skr && configured !== mapping.skr) {
-    findings.push({
-      code: 'E-SKR-CONFLICT',
-      message: `datev.skr is ${configured}, but the mapping file ${mapping.path} was made from the SKR ${mapping.skr} template. Ask the Kanzlei which chart the Mandant uses and correct one of them`,
-    });
-    return undefined;
-  }
-  const skr = configured ?? mapping.skr;
-  if (!skr) {
-    findings.push({
-      code: 'E-SKR-UNKNOWN',
-      message: 'the chart of accounts of the Mandant is unknown. Set datev.skr to "03" or "04" in the config (ask the Kanzlei)',
-    });
-  }
-  return skr;
 }
 
 /**
@@ -363,14 +356,16 @@ export function fileSystemFinding(error: NodeJS.ErrnoException, dir: string, dem
   };
 }
 
+/** The gross (Betrag plus Steuer) of the bookings with `konto` in Soll and in Haben. */
 function sideTotals(bookings: readonly PostedBooking[]): { soll: number; haben: number } {
-  const sum = (side: 'S' | 'H') => bookings.filter((b) => b.side === side).reduce((total, b) => total + b.amountCents, 0);
-  return { soll: sum('S'), haben: sum('H') };
+  const gross = (b: PostedBooking) => Math.abs(b.betragCents + (b.tax?.steuerCents ?? 0));
+  const sum = (soll: boolean) => bookings.filter((b) => b.betragCents > 0 === soll).reduce((total, b) => total + gross(b), 0);
+  return { soll: sum(true), haben: sum(false) };
 }
 
 /** The first line of a demo protocol and of the demo's output (`export --demo`). */
 export const DEMO_NOTICE =
-  'DEMO: bundled sample data of the fabricated "Hotel Beispiel", not read from apaleo. Never import a demo file into a real DATEV Mandant.';
+  'DEMO: bundled sample data of the fabricated "Hotel Beispiel", not read from apaleo. Never import a demo file into a real BMD Mandant.';
 
 function protocolText(title: string, summary: string, path: string, bytes: Uint8Array, mappingSha256: string, now: Date, demo: boolean): string {
   return [

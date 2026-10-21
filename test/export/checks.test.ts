@@ -7,9 +7,9 @@ import { buildBookings, type PostingResult } from '../../src/posting/index.js';
 import { ChartIndex } from '../../src/core/chart.js';
 import { BSP, LIVE_DAY, LIVE_PROPERTIES, fixturePath, loadLiveData } from '../helpers/apaleo.js';
 import { FakeSource } from '../helpers/fake-source.js';
-import { BEISPIEL, CHART, LEDGER, SKR03_MAPPING, post } from '../helpers/posting.js';
+import { BEISPIEL, CHART, EKR_MAPPING, LEDGER, OPTIONS as POSTING_OPTIONS, post } from '../helpers/posting.js';
 
-const OPTIONS: CheckOptions = { mapping: SKR03_MAPPING, chart: CHART, sachkontenlaenge: 4, skr: '03' };
+const OPTIONS: CheckOptions = { mapping: EKR_MAPPING, chart: CHART };
 const SEPTEMBER = { from: '2026-09-01', to: '2026-09-30' } as const;
 
 function must<T>(value: T | undefined): T {
@@ -38,8 +38,8 @@ describe('conservation (E-CONSERVATION)', () => {
     const [finding, ...rest] = checkConservation(LEDGER, result);
     expect(rest).toEqual([]);
     expect(finding?.code).toBe('E-CONSERVATION');
-    expect(finding?.message).toContain('the 25 apaleo lines move 1812.22 (absolute gross), but the 21 bookings move 1587.60 and the 3 skipped lines 24.62');
-    expect(finding?.message).toContain('so 200.00 would be lost or doubled');
+    expect(finding?.message).toContain('the 29 apaleo lines move 2154.10 (absolute gross), but the 23 bookings move 1608.40 and the 5 skipped lines 325.70');
+    expect(finding?.message).toContain('so 220.00 would be lost or doubled');
   });
 
   it('is raised when a line is booked twice', () => {
@@ -48,92 +48,86 @@ describe('conservation (E-CONSERVATION)', () => {
   });
 });
 
+/** The 98.00 logis charge of 2026-09-14: Konto 4000, Betrag -89.09, Steuer -8.91, Gegenkonto 2390. */
+const logis = (r: PostingResult) => must(r.bookings.find((b) => b.businessDate === '2026-09-14' && b.konto === '4000'));
+
 describe('account movement per day (E-ACCOUNT-BALANCE)', () => {
-  it('catches a booking with side S where the apaleo line credits the Konto account', () => {
-    // Booking 2: the 100.00 logis charge of 2026-09-14, Konto 1410 (debited in apaleo) Soll, Gegenkonto 8300.
+  it('catches a booking with a positive Betrag where the apaleo line credits the Konto account', () => {
+    // The 98.00 logis charge of 2026-09-14: 4000 is credited in apaleo, so Betrag must be -89.09.
     const result = withDefect((r) => {
-      const booking = must(r.bookings.find((b) => b.belegdatum === '2026-09-14' && b.gegenkonto === '8300' && b.amountCents === 10_000));
-      [booking.konto, booking.gegenkonto] = [booking.gegenkonto, booking.konto];
+      const booking = logis(r);
+      booking.betragCents = -booking.betragCents;
+      if (booking.tax) booking.tax.steuerCents = -booking.tax.steuerCents;
     });
     const findings = checkAccountMovements(LEDGER, result, OPTIONS);
     expect(findings.map((f) => [f.code, f.value])).toEqual([
-      ['E-ACCOUNT-BALANCE', '1410'],
-      ['E-ACCOUNT-BALANCE', '8300'],
+      ['E-ACCOUNT-BALANCE', '2390'],
+      ['E-ACCOUNT-BALANCE', '4000'],
     ]);
-    expect(findings[0]?.message).toContain('on 2026-09-14 DATEV account 1410 moves -56.20 in the bookings, but the apaleo lines mapped to it move 143.80');
-    expect(findings[1]?.message).toContain('on 2026-09-14 DATEV account 8300 moves 88.00 in the bookings, but the apaleo lines mapped to it move -112.00');
+    expect(findings[0]?.message).toContain('on 2026-09-14 BMD account 2390 moves -54.00 in the bookings, but the apaleo lines mapped to it move 142.00');
+    expect(findings[1]?.message).toContain('on 2026-09-14 BMD account 4000 moves 89.09 in the bookings, but the apaleo lines mapped to it move -89.09 (Soll positive, Haben negative)');
   });
 
-  it('catches a flipped side and a booking on the wrong day', () => {
-    const flipped = withDefect((r) => {
-      const booking = must(r.bookings[0]);
-      booking.side = booking.side === 'S' ? 'H' : 'S';
+  it('catches swapped accounts, a lost tax and a booking on the wrong day', () => {
+    const swapped = withDefect((r) => {
+      const booking = logis(r);
+      [booking.konto, booking.gkonto] = [booking.gkonto, booking.konto];
     });
-    expect(checkAccountMovements(LEDGER, flipped, OPTIONS).length).toBeGreaterThan(0);
-    const moved = withDefect((r) => void (must(r.bookings[0]).belegdatum = '2026-09-15'));
+    expect(checkAccountMovements(LEDGER, swapped, OPTIONS).map((f) => f.value)).toEqual(['2390', '4000']);
+    const untaxed = withDefect((r) => void delete logis(r).tax);
+    expect(checkAccountMovements(LEDGER, untaxed, OPTIONS).map((f) => f.value)).toEqual(['2390']);
+    const moved = withDefect((r) => void (must(r.bookings[0]).businessDate = '2026-09-15'));
     expect(checkAccountMovements(LEDGER, moved, OPTIONS).map((f) => f.message.slice(0, 13))).toContain('on 2026-09-14');
   });
 });
 
-describe('VAT per rate (E-VAT-TOTAL)', () => {
-  it('compares the VAT DATEV computes from the bookings with apaleo taxes, deposit releases included', () => {
+describe('tax per rate (E-VAT-TOTAL)', () => {
+  const drinks = (r: PostingResult) => must(r.bookings.find((b) => b.konto === '4020' && b.betragCents === -2_000));
+
+  it('compares the Steuer of the bookings with apaleo\'s per-line taxes, deposits included', () => {
     expect(checkVatByRate(LEDGER, post(LEDGER), OPTIONS)).toEqual([]);
   });
 
-  it('is raised per rate when a booking lands on an account for another rate', () => {
-    const result = withDefect((r) => {
-      const logis = must(r.bookings.find((b) => b.gegenkonto === '8300' && b.amountCents === 10_000));
-      logis.gegenkonto = '8400';
-    });
+  it('is raised for 20 % when the bookings carry less tax than apaleo charged, naming both amounts and apaleo\'s precise total', () => {
+    const result = withDefect((r) => void (must(drinks(r).tax).steuerCents = -398));
     const findings = checkVatByRate(LEDGER, result, OPTIONS);
-    expect(findings.map((f) => [f.code, f.value])).toEqual([
-      ['E-VAT-TOTAL', '7'],
-      ['E-VAT-TOTAL', '19'],
-    ]);
+    expect(findings.map((f) => [f.code, f.value])).toEqual([['E-VAT-TOTAL', '20']]);
     expect(findings[0]?.message).toContain(
-      'at 7 % DATEV will compute 36.90 VAT from the bookings, but apaleo charged 43.44 as the sum of its per-line tax rounded to cents (difference -6.54',
+      'at 20 % the bookings carry 7.65 tax, but apaleo charged 7.67 as the sum of its per-line tax rounded to cents (difference -0.02, the rounding total allows 0.00)',
     );
-    // The fixture's taxes are whole cents, so the per-line rounding is 0.
-    expect(findings[0]?.message).toContain("apaleo's precise total is 43.44; its per-line rounding (0) is already allowed for, so the remaining difference of -6.54 is the problem");
-    expect(findings[1]?.message).toContain('the rounding total allows 0.00');
+    expect(findings[0]?.message).toContain("apaleo's precise total is 7.66666667; its per-line rounding (0.00333333) is no error");
+  });
+
+  it('is raised per rate when a booking carries the wrong rate', () => {
+    const result = withDefect((r) => void (must(logis(r).tax).prozent = 20));
+    expect(checkVatByRate(LEDGER, result, OPTIONS).map((f) => [f.code, f.value])).toEqual([
+      ['E-VAT-TOTAL', '10'],
+      ['E-VAT-TOTAL', '20'],
+    ]);
   });
 
   it('allows one cent per rounding difference reported at the same rate', () => {
     const offByOne = (roundings: ReadonlyMap<number, number>) =>
       withDefect((r) => {
         r.vatRoundingByRate = roundings;
-        const logis = must(r.bookings.find((b) => b.gegenkonto === '8300' && b.amountCents === 10_000));
-        logis.amountCents = 10_015; // 6.55 VAT instead of 6.54
+        must(drinks(r).tax).steuerCents = -401;
       });
-    expect(checkVatByRate(LEDGER, offByOne(new Map([[7, 1]])), OPTIONS)).toEqual([]);
+    expect(checkVatByRate(LEDGER, offByOne(new Map([[20, 1]])), OPTIONS)).toEqual([]);
     expect(checkVatByRate(LEDGER, offByOne(new Map()), OPTIONS).map((f) => f.code)).toEqual(['E-VAT-TOTAL']);
-    // Roundings at 19 % do not excuse a difference at 7 %.
-    const otherRate = checkVatByRate(LEDGER, offByOne(new Map([[19, 2]])), OPTIONS);
-    expect(otherRate.map((f) => [f.code, f.value])).toEqual([['E-VAT-TOTAL', '7']]);
+    // Roundings at 10 % do not excuse a difference at 20 %.
+    const otherRate = checkVatByRate(LEDGER, offByOne(new Map([[10, 2]])), OPTIONS);
+    expect(otherRate.map((f) => [f.code, f.value])).toEqual([['E-VAT-TOTAL', '20']]);
     expect(otherRate[0]?.message).toContain('the rounding total allows 0.00');
   });
-});
 
-describe('VAT per rate on apaleo precise taxes', () => {
-  it('Roundings at another rate: two roundings at 7 % do not excuse two cents more at 19 %', () => {
-    const result = withDefect((r) => {
-      r.vatRoundingByRate = new Map([[7, 2]]);
-      const drinks = must(r.bookings.find((b) => b.gegenkonto === '8400' && b.amountCents === 2_380));
-      drinks.amountCents = 2_393; // 2393 × 19 / 119 = 382.07 → 3.82 VAT instead of 3.80
-    });
-    const findings = checkVatByRate(LEDGER, result, OPTIONS);
-    expect(findings.map((f) => [f.code, f.value])).toEqual([['E-VAT-TOTAL', '19']]);
-    expect(findings[0]?.message).toContain('(difference 0.02, the rounding total allows 0.00)');
-  });
-
-  it('Line rounding is not an error: the recorded BER day, where DATEV computes 37.38 at 7 % and apaleo 37.3695327', async () => {
+  it('Line rounding is not an error: the recorded VIE day, where the bookings carry 7.74 at 10 % and apaleo\'s precise total is 7.74545454', async () => {
     const live = await loadLiveData();
-    const lines = (live.ledger.BER ?? []).filter((line) => line.businessDate === LIVE_DAY);
-    const chart = new ChartIndex(live.charts.BER ?? []);
-    const mapping = parseMapping(readFileSync(fixturePath('live/BER/mapping-BER.live.csv')), { path: 'mapping-BER.live.csv', sachkontenlaenge: 4 });
-    const result = buildBookings(lines, mapping, chart, { belegfeld1: 'receipt', sachkontenlaenge: 4, skr: '03' });
-    expect(result.summary.revenueByRate.find((r) => r.ratePercent === 7)).toMatchObject({ vatCents: 3_738, apaleoVat: '37.3695327' });
-    expect(plausibilityFindings(lines, result, { mapping, chart, sachkontenlaenge: 4, skr: '03' })).toEqual([]);
+    const lines = (live.ledger.VIE ?? []).filter((line) => line.businessDate === LIVE_DAY);
+    const chart = new ChartIndex(live.charts.VIE ?? []);
+    const mapping = parseMapping(readFileSync(fixturePath('live/VIE/mapping-VIE.live.csv')), { path: 'mapping-VIE.live.csv', sachkontenlaenge: 4 });
+    const result = buildBookings(lines, mapping, chart, POSTING_OPTIONS);
+    expect(result.summary.revenueByRate.find((r) => r.ratePercent === 10)).toMatchObject({ vatCents: 774, apaleoVat: '7.74545454' });
+    expect(plausibilityFindings(lines, result, { mapping, chart })).toEqual([]);
   });
 });
 
@@ -147,18 +141,18 @@ describe('aggregate check (W-AGGREGATE-DIFF)', () => {
   it('warns about an account whose balance differs, naming both balances and the basis', async () => {
     const data = structuredClone(BEISPIEL);
     const day = data.totals?.[BSP]?.find((t) => t.businessDate === '2026-09-14') as AccountTotals;
-    must(day.accounts.find((a) => a.account.number === '5011')).balance.value = '-150.00';
-    must(day.accounts.find((a) => a.account.number === '1611')).balance.value = '199.00';
+    must(day.accounts.find((a) => a.account.number === 'RevenueAccommodation_VeryReduced:10.00')).balance.value = '-150.00';
+    must(day.accounts.find((a) => a.account.number === '1102')).balance.value = '219.00';
     const findings = await checkAggregates(new FakeSource(data), BSP, SEPTEMBER, LEDGER, CHART);
     expect(findings.map((f) => [f.code, f.value])).toEqual([
-      ['W-AGGREGATE-DIFF', '1611'],
-      ['W-AGGREGATE-DIFF', '5011'],
+      ['W-AGGREGATE-DIFF', '1102'],
+      ['W-AGGREGATE-DIFF', 'RevenueAccommodation_VeryReduced:10.00'],
     ]);
     expect(findings[0]?.message).toBe(
-      "on 2026-09-14 apaleo's daily aggregate for account 1611 (Payments) has the balance 199.00, but the ledger lines of that day " +
-        'add up to 200.00 (balance debit minus credit, from the gross amounts). Compare the day in apaleo; the file is written anyway',
+      "on 2026-09-14 apaleo's daily aggregate for account 1102 (Payments) has the balance 219.00, but the ledger lines of that day " +
+        'add up to 220.00 (balance debit minus credit, from the gross amounts). Compare the day in apaleo; the file is written anyway',
     );
-    expect(findings[1]?.message).toContain('has the balance -150.00, but the ledger lines of that day add up to -93.46 (balance debit minus credit, from the precise net amounts)');
+    expect(findings[1]?.message).toContain('has the balance -150.00, but the ledger lines of that day add up to -89.09 (balance debit minus credit, from the precise net amounts)');
   });
 
   it('finds every account of the recorded BER and VIE days matching', async () => {

@@ -7,69 +7,92 @@ import { buildBookings } from '../../src/posting/index.js';
 import { LIVE_DAY, fixturePath, loadLiveData } from '../helpers/apaleo.js';
 
 /**
- * The recorded BER business day 2026-10-21 (test/fixtures/apaleo/live/README.md)
- * posted with the committed live SKR03 mapping (template skr03-hotel@2).
- * Hand-checked totals:
+ * The recorded VIE business day 2026-10-21 (test/fixtures/apaleo/live/README.md)
+ * posted with the committed live EKR mapping (init-mapping --template ekr).
+ * Hand-checked totals (BMD gets net Betrag and apaleo's tax as Steuer):
  *
- * Revenue 7 % (8300): 114 − 10 + 124 + 114.02 + 84 + 38.40 + 46.80 + 60 = 571.22;
- *   DATEV VAT per booking 7.46 − 0.65 + 8.11 + 7.46 + 5.50 + 2.51 + 3.06 + 3.93 = 37.38,
- *   apaleo's precise taxes add up to 37.3695327 (37.37).
- * Revenue 19 % (8400): 14.90 + 19.98 + 12.50 = 47.38; DATEV 2.38 + 3.19 + 2.00 = 7.57,
- *   apaleo 7.56487395 (7.56). Revenue 0 % (8200): the cancellation fee 45.00.
- * Deposits: received 124 + 228.04 + 39.96 + 84 + 104 + 10 (overpayment parked at 0 %)
- *   = 590.00; released 124 + 114.02 + 19.98 + 84 + 10 (refund to the Girocard) =
- *   352.00, of it refunded 10.00. Deposits at 7 %: 124 + 228.04 + 84 + 104 − 124 − 114.02
- *   − 84 = 218.02, DATEV VAT 8.11 + 14.92 + 5.50 + 6.80 − 8.11
- *   − 7.46 − 5.50 = 14.26 (apaleo 14.26299065); 19 %: 6.38 − 3.19 = 3.19 (3.19008404).
- * Payments: Kasse 1000 = 61.70 + 50 = 111.70; Geldtransit 1360 = Girocard 0.90 + 124
- *   − 10, Visa Debit 60, Amex 228.04 + 39.96, Visa 84 + 104, Mastercard 45 = 675.90.
- * Accounts receivable: 114.00 Soll on the collective debtor 10000.
- * Skipped: the six second lines of the payments and the AR transfer
- *   (`<folio>_Receivables → <folio>_Receivables/Offset`), 61.70 + 114 + 0.90 + 60
- *   + 50 + 45 = 331.60 unsigned, all SAME_ACCOUNT. 35 − 6 = 29 bookings.
+ * Revenue 10 % (4010): 38.40 + 46.80 = 85.20; Steuer 3.49 + 4.25 = 7.74, apaleo
+ *   precise 7.74545454 (7.75 rounded once).
+ * Revenue 13 % (4040): 65 + 95.02 + 60 (no-show) + 105 − 10 + 95 = 410.02; Steuer
+ *   7.48 + 10.93 + 6.90 + 12.08 − 1.15 + 10.93 = 47.17 (precise 47.17044248).
+ * Revenue 20 % (4020): 12.50 + 19.98 + 14.90 = 47.38; Steuer 2.08 + 3.33 + 2.48 =
+ *   7.89 (precise 7.89666666, 7.90 rounded once). Revenue 0 % (4090): 45.00.
+ * Deposits at 13 % (3202): 83 + 65 + 188.04 + 105 − 65 − 95.02 − 105 = 176.02,
+ *   Steuer 20.25; at 20 % (3201): 39.96 − 19.98 = 19.98, Steuer 3.33.
+ * Deposits received 83 + 65 + 39.96 + 188.04 + 105 + 10 (parked at 0 %) = 491.00;
+ *   released 65 + 19.98 + 95.02 + 105 + 10 (refund to Maestro) = 295.00, of it
+ *   refunded 10.00.
+ * Payments: Kassa 2700 = 50 + 61.70 = 111.70; 2890 = 83 + 45 + 65 + 39.96 + 188.04
+ *   + 60 + 0.90 + 105 − 10 = 576.90.
+ * Accounts receivable: 95.00 Soll on the Sammeldebitor 200000.
+ * Skipped: the six /Offset second lines, 45 + 50 + 60 + 0.90 + 95 + 61.70 =
+ *   312.60 unsigned. 35 − 6 = 29 bookings.
+ * One W-VAT-ROUNDING: 000000031, gross 46.80, Steuer 4.25, BMD's check 42.55 × 10 % = 4.26.
  */
 const data = await loadLiveData();
-const lines = (data.ledger.BER ?? []).filter((line) => line.businessDate === LIVE_DAY);
-const chart = new ChartIndex(data.charts.BER ?? []);
-const mapping = parseMapping(readFileSync(fixturePath('live/BER/mapping-BER.live.csv')), { path: 'mapping-BER.live.csv', sachkontenlaenge: 4 });
-const result = buildBookings(lines, mapping, chart, { belegfeld1: 'receipt', sachkontenlaenge: 4, skr: '03' });
+const lines = (data.ledger.VIE ?? []).filter((line) => line.businessDate === LIVE_DAY);
+const chart = new ChartIndex(data.charts.VIE ?? []);
+const mapping = parseMapping(readFileSync(fixturePath('live/VIE/mapping-VIE.live.csv')), { path: 'mapping-VIE.live.csv', sachkontenlaenge: 4 });
+const result = buildBookings(lines, mapping, chart, { extbelegnr: 'receipt', dialect: 'ntcs', sachkontenlaenge: 4, buchsymbol: 'HO', buchsymbolZahlung: 'HO' });
 
-describe('posting the recorded BER day 2026-10-21', () => {
-  it('books 29 of the 35 lines without a finding and skips the six /Offset second lines', () => {
+describe('posting the recorded VIE day 2026-10-21', () => {
+  it('books 29 of the 35 lines and skips the six /Offset second lines', () => {
     expect(lines).toHaveLength(35);
-    expect(result.findings).toEqual([]);
     expect(result.bookings).toHaveLength(29);
-    expect(result.summary.skipped).toEqual([{ reason: 'SAME_ACCOUNT', lines: 6, grossCents: 33_160 }]);
+    expect(result.summary.skipped).toEqual([{ reason: 'SAME_ACCOUNT', lines: 6, grossCents: 31_260 }]);
   });
 
-  it('adds up the precise 7 % taxes exactly: 37.3695327, against 37.38 rounded per line', () => {
-    const taxes = lines.filter((line) => line.credit.type === 'Revenues').flatMap((line) => line.taxes.filter((tax) => tax.percent === 7));
-    expect(taxes).toHaveLength(8);
-    expect(sumDecimals(taxes.map((tax) => tax.amountPrecise))).toBe('37.3695327');
-    expect(taxes.reduce((sum, tax) => sum + tax.amountCents, 0)).toBe(3_738);
+  it('raises exactly one W-VAT-ROUNDING, for 000000031, and nothing else', () => {
+    expect(result.findings.map((f) => [f.code, f.value])).toEqual([['W-VAT-ROUNDING', '000000031']]);
+    expect(result.findings[0]?.message).toContain('10 % of the Betrag 42.55, which is 4.26, but the booking carries apaleo\'s tax 4.25');
+    const booking = result.bookings.find((b) => b.sourceEntryNumbers[0] === '000000031');
+    expect(booking).toMatchObject({ konto: '4010', gkonto: '2390', betragCents: -4_255, tax: { steuercode: 1, prozent: 10, steuerCents: -425 } });
+  });
+
+  it('adds up the precise 10 % taxes exactly: 7.74545454, against 7.74 rounded per line', () => {
+    const taxes = lines.filter((line) => line.credit.type === 'Revenues').flatMap((line) => line.taxes.filter((tax) => tax.percent === 10));
+    expect(sumDecimals(taxes.map((tax) => tax.amountPrecise))).toBe('7.74545454');
+    expect(taxes.reduce((sum, tax) => sum + tax.amountCents, 0)).toBe(774);
   });
 
   it('matches the hand-checked summary', () => {
     const { summary } = result;
     expect(summary.revenueByRate).toEqual([
-      { ratePercent: 0, grossCents: 4_500, vatCents: 0, apaleoVat: '0' },
-      { ratePercent: 7, grossCents: 57_122, vatCents: 3_738, apaleoVat: '37.3695327' },
-      { ratePercent: 19, grossCents: 4_738, vatCents: 757, apaleoVat: '7.56487395' },
+      { ratePercent: 0, netCents: 4_500, vatCents: 0, grossCents: 4_500, apaleoVat: '0' },
+      { ratePercent: 10, netCents: 7_746, vatCents: 774, grossCents: 8_520, apaleoVat: '7.74545454' },
+      { ratePercent: 13, netCents: 36_285, vatCents: 4_717, grossCents: 41_002, apaleoVat: '47.17044248' },
+      { ratePercent: 20, netCents: 3_949, vatCents: 789, grossCents: 4_738, apaleoVat: '7.89666666' },
     ]);
     expect(summary.depositVatByRate).toEqual([
-      { ratePercent: 0, grossCents: 0, vatCents: 0, apaleoVat: '0' },
-      { ratePercent: 7, grossCents: 21_802, vatCents: 1_426, apaleoVat: '14.26299065' },
-      { ratePercent: 19, grossCents: 1_998, vatCents: 319, apaleoVat: '3.19008404' },
+      { ratePercent: 0, netCents: 0, vatCents: 0, grossCents: 0, apaleoVat: '0' },
+      { ratePercent: 13, netCents: 15_577, vatCents: 2_025, grossCents: 17_602, apaleoVat: '20.2500885' },
+      { ratePercent: 20, netCents: 1_665, vatCents: 333, grossCents: 1_998, apaleoVat: '3.33' },
     ]);
     expect(summary.payments).toEqual([
-      { account: '1000', cents: 11_170 },
-      { account: '1360', cents: 67_590 },
+      { account: '2700', cents: 11_170 },
+      { account: '2890', cents: 57_690 },
     ]);
-    expect(summary.deposits).toEqual({ receivedCents: 59_000, releasedCents: 35_200, refundedCents: 1_000 });
-    expect(summary.accountsReceivableCents).toBe(11_400);
-    expect(summary.accounts.find((account) => account.account === '10000')).toEqual({ account: '10000', sollCents: 11_400, habenCents: 0, balanceCents: 11_400 });
-    expect(summary.roundingCents).toBe(0);
-    expect(summary.findings).toEqual([]);
+    expect(summary.deposits).toEqual({ receivedCents: 49_100, releasedCents: 29_500, refundedCents: 1_000 });
+    expect(summary.accountsReceivableCents).toBe(9_500);
+    expect(summary.accounts.find((account) => account.account === '200000')).toEqual({ account: '200000', sollCents: 9_500, habenCents: 0, balanceCents: 9_500 });
+    expect(summary.roundingCents).toBe(1);
   });
 
+  it('writes no text with an English apaleo name or a guest name', () => {
+    const texts = result.bookings.map((b) => b.text ?? '');
+    expect(texts).not.toContain('');
+    for (const word of ['Revenues', 'Payment', 'Liabilities', 'Receivables', 'Credit Card']) {
+      expect(texts.filter((text) => text.includes(word)), word).toEqual([]);
+    }
+    expect(texts).toEqual(expect.arrayContaining(['Erlös Logis 13 %', 'Auflösung Anzahlung 13 %', 'Erstattung Anzahlung 0 %', 'Zahlung Visa Debit', 'Forderung an Debitor', 'Anzahlung 20 %']));
+  });
+
+  it('books the release 000000025 as a positive Betrag and Steuer on the 13 % deposit account', () => {
+    expect(result.bookings.find((b) => b.sourceEntryNumbers[0] === '000000025')).toMatchObject({
+      konto: '3202',
+      gkonto: '2390',
+      betragCents: 9_292,
+      tax: { steuercode: 1, prozent: 13, steuerCents: 1_208 },
+    });
+  });
 });

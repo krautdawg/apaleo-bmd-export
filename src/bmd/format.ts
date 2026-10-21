@@ -25,6 +25,10 @@ export interface DialectSpec {
   readonly formatDate: (date: LocalDate) => string;
   /** Steuercodes that mean output tax (Umsatzsteuer): their `steuer` must carry the sign of `betrag`. */
   readonly outputTaxCodes: readonly number[];
+  /** The output-tax code the EKR template writes on revenue and deposit rows. */
+  readonly normalOutputTaxCode: number;
+  /** Input-tax codes with their BMD meaning: never on a sale, deposit, levy or bad debt. */
+  readonly inputTaxCodes: ReadonlyMap<number, string>;
   readonly maxSymbolLength: number;
 }
 
@@ -37,6 +41,11 @@ export const DIALECTS: Readonly<Record<BmdDialect, DialectSpec>> = {
     header: ['satzart', 'konto', 'gkonto', 'belegnr', 'belegdatum', 'buchdatum', 'buchsymbol', 'buchcode', 'prozent', 'steuercode', ...COMMON_TAIL],
     formatDate: formatDdMmYyyy,
     outputTaxCodes: [1],
+    normalOutputTaxCode: 1,
+    inputTaxCodes: new Map([
+      [2, 'Vorsteuer'],
+      [3, 'Vorsteuer-Berichtigung'],
+    ]),
     maxSymbolLength: 4,
   },
   // PR08 5.B4 p.10-11: 03 Soll-USt, 01 Ist-USt, 00 Vorsteuer.
@@ -44,6 +53,8 @@ export const DIALECTS: Readonly<Record<BmdDialect, DialectSpec>> = {
     header: ['satzart', 'konto', 'gkto', 'belegnr', 'belegdat', 'buchdat', 'symbol', 'bucod', 'mwst', 'steucod', ...COMMON_TAIL],
     formatDate: formatYyyymmdd,
     outputTaxCodes: [1, 3],
+    normalOutputTaxCode: 3,
+    inputTaxCodes: new Map([[0, 'Vorsteuer']]),
     maxSymbolLength: 2,
   },
 };

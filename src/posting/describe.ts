@@ -20,9 +20,9 @@ export function lineText(line: LedgerLine): string {
   );
 }
 
-/** `mapping line 4 (DATEV 8300)`. */
+/** `mapping line 4 (BMD 4000)`. */
 export function rowText(row: MappingRow): string {
-  return `mapping line ${row.line} (DATEV ${row.datevAccount})`;
+  return `mapping line ${row.line} (BMD ${row.bmdAccount})`;
 }
 
 export function percentText(rate: number): string {

@@ -5,21 +5,28 @@ import { REPORT_PROBLEM_HINT } from '../core/errors.js';
 import type { Finding } from '../core/findings.js';
 import { formatCents, negateDecimal, sumDecimals } from '../core/money.js';
 import type { LedgerLine, SourceAdapter } from '../core/source.js';
-import { datevVatRate, impliedVatRate, resolve, type Mapping, type Skr } from '../mapping/index.js';
-import { apaleoVatOf, datevVat, inferReleaseRates, resolutionRate, type PostingResult } from '../posting/index.js';
+import { parseSteuercode, resolve, type Mapping, type MappingRow } from '../mapping/index.js';
+import {
+  apaleoVatOf,
+  bookingMovements,
+  inferReleaseRates,
+  inferredTaxCents,
+  normaliseTaxes,
+  resolutionRate,
+  type PostingResult,
+  type ReleaseRate,
+} from '../posting/index.js';
 import type { DateRange } from './period.js';
 
 /**
  * Plausibility checks on a posting result before its file is written (design
- * decision 4). They re-derive what the bookings must add up to from the apaleo
- * lines, so a defect in the posting rules cannot reach DATEV unnoticed.
+ * decision 10). They re-derive what the bookings must add up to from the apaleo
+ * lines, so a defect in the posting rules cannot reach BMD unnoticed.
  */
 
 export interface CheckOptions {
   mapping: Mapping;
   chart: ChartIndex;
-  sachkontenlaenge: number;
-  skr: Skr;
 }
 
 /** Adds `cents` to the entry for `key`. */
@@ -32,7 +39,8 @@ const absoluteGross = (lines: readonly LedgerLine[]) => lines.reduce((sum, line)
 /** Every ledger line is booked or skipped, by count and by absolute gross amount (`E-CONSERVATION`). */
 export function checkConservation(lines: readonly LedgerLine[], result: PostingResult): Finding[] {
   const ledger = absoluteGross(lines);
-  const booked = result.bookings.reduce((sum, booking) => sum + booking.amountCents, 0);
+  // A booking moves apaleo's gross: Betrag plus Steuer.
+  const booked = result.bookings.reduce((sum, booking) => sum + Math.abs(booking.betragCents + (booking.tax?.steuerCents ?? 0)), 0);
   const skipped = absoluteGross(result.skipped.map((entry) => entry.line));
   const count = result.bookings.length + result.skipped.length;
   if (ledger === booked + skipped && lines.length === count) return [];
@@ -50,10 +58,12 @@ export function checkConservation(lines: readonly LedgerLine[], result: PostingR
 const dayKey = (day: LocalDate, account: string) => `${day} ${account}`;
 
 /**
- * Per business day and DATEV account, the signed movement in the bookings (Soll
- * positive) equals the signed movement of the booked apaleo lines mapped to that
- * account (debit positive, credit negative, as signed as the gross amount).
- * Catches side, sign and account bugs (`E-ACCOUNT-BALANCE`).
+ * Per business day and BMD account, the signed movement in the bookings (the
+ * movement model: `konto` by `betrag`, `gkonto` by minus `betrag` plus
+ * `steuer`) equals the signed movement of the booked apaleo lines mapped to
+ * that account: debit positive, credit negative, and on the side whose row has
+ * a Steuercode the gross minus apaleo's tax (BMD books the tax on its own tax
+ * account). Catches side, sign and account bugs (`E-ACCOUNT-BALANCE`).
  */
 export function checkAccountMovements(lines: readonly LedgerLine[], result: PostingResult, { mapping, chart }: CheckOptions): Finding[] {
   const skipped = new Set(result.skipped.map((entry) => entry.line));
@@ -62,18 +72,18 @@ export function checkAccountMovements(lines: readonly LedgerLine[], result: Post
   for (const line of lines) {
     if (skipped.has(line)) continue;
     const rate = resolutionRate(line, releases);
-    const debit = resolve(mapping, line.debit, { rate, chart })?.datevAccount;
-    const credit = resolve(mapping, line.credit, { rate, chart })?.datevAccount;
+    const debit = resolve(mapping, line.debit, { rate, chart });
+    const credit = resolve(mapping, line.credit, { rate, chart });
     // An unmapped side is reported by the coverage check.
-    if (!debit || !credit) continue;
-    add(expected, dayKey(line.businessDate, debit), line.grossCents);
-    add(expected, dayKey(line.businessDate, credit), -line.grossCents);
+    if (!debit?.bmdAccount || !credit?.bmdAccount) continue;
+    const tax = Math.sign(line.grossCents) * lineTaxCents(line, releases.get(line));
+    const taxOn = (row: MappingRow) => (parseSteuercode(row.steuercode) === undefined ? 0 : tax);
+    add(expected, dayKey(line.businessDate, debit.bmdAccount), line.grossCents - taxOn(debit));
+    add(expected, dayKey(line.businessDate, credit.bmdAccount), -(line.grossCents - taxOn(credit)));
   }
   const actual = new Map<string, number>();
   for (const booking of result.bookings) {
-    const soll = booking.side === 'S' ? booking.amountCents : -booking.amountCents;
-    add(actual, dayKey(booking.belegdatum, booking.konto), soll);
-    add(actual, dayKey(booking.belegdatum, booking.gegenkonto), -soll);
+    for (const [account, cents] of bookingMovements(booking)) add(actual, dayKey(booking.businessDate, account), cents);
   }
   const keys = [...new Set([...expected.keys(), ...actual.keys()])].sort();
   return keys.flatMap((key) => {
@@ -85,12 +95,19 @@ export function checkAccountMovements(lines: readonly LedgerLine[], result: Post
       {
         code: 'E-ACCOUNT-BALANCE',
         message:
-          `on ${day} DATEV account ${account} moves ${formatCents(got)} in the bookings, but the apaleo lines mapped to it ` +
+          `on ${day} BMD account ${account} moves ${formatCents(got)} in the bookings, but the apaleo lines mapped to it ` +
           `move ${formatCents(want)} (Soll positive, Haben negative). ${REPORT_PROBLEM_HINT}`,
         value: account,
       },
     ];
   });
+}
+
+/** apaleo's tax of a line in cents, unsigned: its taxes rounded per line, or the inferred tax of an untaxed deposit line. */
+function lineTaxCents(line: LedgerLine, release: ReleaseRate | undefined): number {
+  const taxes = normaliseTaxes(line.taxes);
+  if (taxes.length > 0) return Math.abs(taxes.reduce((sum, tax) => sum + tax.amountCents, 0));
+  return release && release.kind !== 'unknown' ? inferredTaxCents(line, release) : 0;
 }
 
 /** apaleo's VAT per rate: the per-line taxes rounded to cents (for the check) and their precise sum (for the message). */
@@ -116,58 +133,39 @@ function apaleoVatByRate(lines: readonly LedgerLine[], result: PostingResult, ch
   return vat;
 }
 
-/** VAT owed per rate as DATEV will compute it from the bookings: Automatikkonten, BU keys and the mapping's DATEV rates. */
-function datevVatByRate(result: PostingResult, { mapping, sachkontenlaenge, skr }: CheckOptions): Map<number, number> {
-  const rowRates = new Map<string, Set<number | undefined>>();
-  for (const row of mapping.rows) {
-    if (row.datevAccount === '') continue;
-    const key = `${row.datevAccount} ${row.buKey}`;
-    rowRates.set(key, (rowRates.get(key) ?? new Set()).add(datevVatRate(row, sachkontenlaenge, skr)));
-  }
-  const rateOf = (datevAccount: string, buKey: string): number => {
-    const implied = impliedVatRate({ datevAccount, buKey }, sachkontenlaenge, skr);
-    if (implied) return implied.rate;
-    const rates = [...(rowRates.get(`${datevAccount} ${buKey}`) ?? [])];
-    return rates.length === 1 ? (rates[0] ?? 0) : 0;
-  };
+/** Tax owed per rate in the bookings: `steuer` on a credited `konto` (negative) is owed (+). */
+function bookedVatByRate(result: PostingResult): Map<number, number> {
   const vat = new Map<number, number>();
-  for (const booking of result.bookings) {
-    // Soll on Konto means Haben on Gegenkonto: VAT on a credited account is owed (+).
-    const gegenkontoCredited = booking.side === 'S' ? 1 : -1;
-    const onGegenkonto = rateOf(booking.gegenkonto, booking.buKey ?? '');
-    const onKonto = rateOf(booking.konto, '');
-    if (onGegenkonto > 0) add(vat, onGegenkonto, gegenkontoCredited * datevVat(booking.amountCents, onGegenkonto));
-    if (onKonto > 0) add(vat, onKonto, -gegenkontoCredited * datevVat(booking.amountCents, onKonto));
-  }
+  for (const { tax } of result.bookings) if (tax && tax.steuerCents !== 0) add(vat, tax.prozent, -tax.steuerCents);
   return vat;
 }
 
 /**
- * Per VAT rate, the VAT DATEV will compute from the bookings equals the VAT
- * apaleo charged, within the rounding total of that rate: one cent per
- * `W-VAT-ROUNDING` finding the posting run reported at that rate
- * (`E-VAT-TOTAL` above it). Roundings at one rate never excuse a difference at
- * another.
+ * Per VAT rate, the tax the bookings carry (Σ `steuer`) equals the sum of
+ * apaleo's per-line tax rounded to cents of the booked lines of that rate,
+ * within one cent per `W-VAT-ROUNDING` the posting run reported on a computed
+ * deposit tax at that rate (`E-VAT-TOTAL` above it). The difference to apaleo's
+ * precise total is line rounding and never an error by itself.
  */
 export function checkVatByRate(lines: readonly LedgerLine[], result: PostingResult, options: CheckOptions): Finding[] {
   const apaleo = apaleoVatByRate(lines, result, options.chart);
-  const datev = datevVatByRate(result, options);
-  const rates = [...new Set([...apaleo.keys(), ...datev.keys()])].sort((a, b) => a - b);
+  const booked = bookedVatByRate(result);
+  const rates = [...new Set([...apaleo.keys(), ...booked.keys()])].sort((a, b) => a - b);
   return rates.flatMap((rate) => {
     const allowance = result.vatRoundingByRate.get(rate) ?? 0;
     const charged = apaleo.get(rate)?.cents ?? 0;
     const precise = sumDecimals(apaleo.get(rate)?.precise ?? []);
-    const computed = datev.get(rate) ?? 0;
-    if (Math.abs(computed - charged) <= allowance) return [];
+    const carried = booked.get(rate) ?? 0;
+    if (Math.abs(carried - charged) <= allowance) return [];
     const lineRounding = sumDecimals([formatCents(charged), negateDecimal(precise)]);
     return [
       {
         code: 'E-VAT-TOTAL',
         message:
-          `at ${rate} % DATEV will compute ${formatCents(computed)} VAT from the bookings, but apaleo charged ${formatCents(charged)} ` +
-          `as the sum of its per-line tax rounded to cents (difference ${formatCents(computed - charged)}, the rounding total allows ` +
-          `${formatCents(allowance)}). apaleo's precise total is ${precise}; its per-line rounding (${lineRounding}) is already allowed for, ` +
-          `so the remaining difference of ${formatCents(computed - charged)} is the problem. ` +
+          `at ${rate} % the bookings carry ${formatCents(carried)} tax, but apaleo charged ${formatCents(charged)} ` +
+          `as the sum of its per-line tax rounded to cents (difference ${formatCents(carried - charged)}, the rounding total allows ` +
+          `${formatCents(allowance)}). apaleo's precise total is ${precise}; its per-line rounding (${lineRounding}) is no error, ` +
+          `so the difference of ${formatCents(carried - charged)} is the problem. ` +
           REPORT_PROBLEM_HINT,
         value: String(rate),
       },

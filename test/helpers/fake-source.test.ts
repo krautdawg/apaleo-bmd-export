@@ -31,7 +31,7 @@ describe('FakeSource', () => {
     const lines = await source.getLedger(BSP, '2026-09-14', '2026-09-16');
     expect(lines.map((l) => l.sourceEntryNumber)).toEqual(['C', 'B']);
     Object.assign(lines[0] ?? {}, { grossCents: 1 });
-    expect((await source.getLedger(BSP, '2026-09-14', '2026-09-15'))[0]?.grossCents).toBe(10000);
+    expect((await source.getLedger(BSP, '2026-09-14', '2026-09-15'))[0]?.grossCents).toBe(11000);
     expect(await source.getAccountTotals(BSP, '2026-09-14')).toMatchObject({ accounts: [] });
     expect(await source.getChartOfAccounts('XXX')).toEqual([]);
   });

@@ -12,4 +12,4 @@ const name = buchungsstapelFileName(header, 'MUC');
 
 Format decisions and the sources they were checked against: [docs/datev-format.md](../../docs/datev-format.md).
 
-`target.ts` wraps the writer as `datevTarget`, the export's `TargetWriter` (file name, `EXTF_Buchungsstapel_...` pattern, and `sameContent`, which ignores header field 6, Erzeugt am).
+No longer used: since b03 the export writes BMD files (`src/bmd`), and nothing in `src/export`, `src/cli`, `src/mapping` or `src/posting` imports this folder. b04 deletes it.

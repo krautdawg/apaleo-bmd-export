@@ -4,7 +4,7 @@ import { DEFAULT_TARGET, exportedFile, monthFolder } from '../../src/export/inde
 import { createTestContext } from '../helpers/context.js';
 
 const SEPTEMBER = { from: '2026-09-01', to: '2026-09-30' } as const;
-const FILE = 'EXTF_Buchungsstapel_1234567_42_20260901-20260930_BSP.csv';
+const FILE = 'BMD_Buchungsimport_20260901-20260930_BSP.csv';
 const folder = 'exports/BSP/2026-09';
 
 function manifest(...files: object[]): string {
@@ -25,8 +25,8 @@ describe('exportedFile', () => {
   it('ignores replaced files, other periods, a missing folder and an unreadable manifest', async () => {
     const ctx = createTestContext({
       files: {
-        [`${folder}/EXTF_Buchungsstapel_1234567_42_20260901-20260930_BSP.replaced-20261020T080000Z.csv`]: 'old',
-        [`${folder}/EXTF_Buchungsstapel_1234567_42_20260901-20260915_BSP.csv`]: 'part',
+        [`${folder}/BMD_Buchungsimport_20260901-20260930_BSP.replaced-20261020T080000Z.csv`]: 'old',
+        [`${folder}/BMD_Buchungsimport_20260901-20260915_BSP.csv`]: 'part',
         [`${folder}/manifest.json`]: 'not json',
       },
     });

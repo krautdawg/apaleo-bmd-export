@@ -2,10 +2,10 @@ import type { ChartIndex } from '../core/chart.js';
 import { REPORT_PROBLEM_HINT } from '../core/errors.js';
 import type { Finding } from '../core/findings.js';
 import type { AccountRef, LedgerLine } from '../core/source.js';
-import { VAT_ACCOUNT_TYPES, checkCoverage, datevVatRate, resolve, type Mapping, type MappingRow } from '../mapping/index.js';
+import { KOST_TYPES, NO_TAX_TYPES, VAT_ACCOUNT_TYPES, checkCoverage, parseSteuercode, resolve, rowRate, type Mapping, type MappingRow } from '../mapping/index.js';
 import { apaleoVatOf, type ApaleoVat } from './apaleo-vat.js';
-import { lineFinding, percentText, rowText } from './describe.js';
-import { belegfeld1, buchungstext, costCentres } from './fields.js';
+import { accountText, lineFinding, percentText, rowText } from './describe.js';
+import { buchungstext, extbelegnr, kostOf } from './fields.js';
 import { guardVat, type PostedSide } from './guard.js';
 import { inferReleaseRates, isUntaxedRelease, resolutionRate, type ReleaseRate } from './release.js';
 import { SummaryBuilder } from './summary.js';
@@ -23,7 +23,9 @@ type LineOutcome =
       credit: PostedSide;
       findings: Finding[];
       roundingCents: number;
-      /** The VAT rate of the booking (0 without VAT). */
+      /** The booked tax differs by one cent from the VAT apaleo moved for the line. */
+      apaleoRounding: boolean;
+      /** The VAT rate of the booking (0 without tax). */
       rate: number;
       apaleoVat: ApaleoVat[];
     };
@@ -36,7 +38,7 @@ interface PostingContext {
 }
 
 /**
- * Turns ledger lines into DATEV bookings, one booking per line (no aggregation).
+ * Turns ledger lines into BMD bookings, one booking per line (no aggregation).
  * Pure and deterministic: the same lines and mapping always give the same result.
  * Every line is either booked, listed in `skipped` with its reason, or named in
  * an `E-` finding that blocks the export. Unmapped accounts are reported once
@@ -49,8 +51,11 @@ export function buildBookings(lines: readonly LedgerLine[], mapping: Mapping, ch
   const findings: Finding[] = checkCoverage(mapping, lines, chart, {
     rateOf,
     sachkontenlaenge: options.sachkontenlaenge,
-    skr: options.skr,
-  }).filter((finding) => finding.code === 'E-UNMAPPED');
+    personenkontenlaenge: options.personenkontenlaenge,
+    dialect: options.dialect,
+  }).filter(
+    (finding) => finding.code === 'E-UNMAPPED',
+  );
   const bookings: PostedBooking[] = [];
   const skipped: SkippedLine[] = [];
   const summary = new SummaryBuilder();
@@ -67,8 +72,7 @@ export function buildBookings(lines: readonly LedgerLine[], mapping: Mapping, ch
       bookings.push(outcome.booking);
       findings.push(...outcome.findings);
       summary.addBooking(line, outcome.booking, outcome.debit, outcome.credit, outcome.roundingCents, outcome.apaleoVat);
-      const roundings = outcome.findings.filter((finding) => finding.code === 'W-VAT-ROUNDING').length;
-      if (roundings > 0) vatRoundingByRate.set(outcome.rate, (vatRoundingByRate.get(outcome.rate) ?? 0) + roundings);
+      if (outcome.apaleoRounding) vatRoundingByRate.set(outcome.rate, (vatRoundingByRate.get(outcome.rate) ?? 0) + 1);
     }
   }
   return { bookings, skipped, findings, summary: summary.build(findings), vatRoundingByRate };
@@ -86,7 +90,7 @@ function postLine(line: LedgerLine, context: PostingContext): LineOutcome {
   if (percents.length > 1) {
     return fail(
       'E-VAT-MIXED',
-      `it carries more than one VAT rate (${percents.map(percentText).join(', ')}), but a DATEV booking has one. ${REPORT_PROBLEM_HINT}`,
+      `it carries more than one VAT rate (${percents.map(percentText).join(', ')}), but a BMD booking has one. ${REPORT_PROBLEM_HINT}`,
     );
   }
   const release = context.releases.get(line);
@@ -103,81 +107,116 @@ function postLine(line: LedgerLine, context: PostingContext): LineOutcome {
   const creditRow = mappedRow(line.credit, rate, context);
   // checkCoverage resolves with the same rate and reports the account once as E-UNMAPPED.
   if (!debitRow || !creditRow) return { kind: 'unmapped' };
-  if (debitRow.datevAccount === creditRow.datevAccount) return { kind: 'skip', reason: 'SAME_ACCOUNT' };
+  if (debitRow.bmdAccount === creditRow.bmdAccount) return { kind: 'skip', reason: 'SAME_ACCOUNT' };
 
-  const d = postedSide(line.debit, debitRow, context);
-  const c = postedSide(line.credit, creditRow, context);
-  if (!d || !c) {
-    const row = d ? creditRow : debitRow;
-    return fail(
-      'E-DATEV-RATE-UNKNOWN',
-      `the VAT rate DATEV applies on ${rowText(row)} is unknown (BU key "${row.buKey}", datev_vat_percent "${row.datevVatPercent}"). ` +
-        'Fill in datev_vat_percent on that line with the rate DATEV books, and run "apaleo-bmd mapping check"',
-    );
+  const d = postedSide(line.debit, debitRow);
+  const c = postedSide(line.credit, creditRow);
+  for (const side of [d, c]) {
+    if (side.kind === 'no-rate') {
+      return fail(
+        'E-VAT-RATE-MISSING',
+        `${rowText(side.row)} has the Steuercode "${side.row.steuercode}" but no valid bmd_vat_percent ("${side.row.bmdVatPercent}"), so the rate BMD books is unknown. ` +
+          'Fill in bmd_vat_percent on that line, and run "apaleo-bmd mapping check"',
+      );
+    }
+    if (side.kind === 'no-tax-type') {
+      return fail(
+        'E-STEUERCODE-NOT-ALLOWED',
+        `${accountText(side.ref)} uses ${rowText(side.row)}, which has the Steuercode ${side.row.steuercode}, but a ${side.ref.type} account books no tax: ` +
+          'BMD would book the tax on it instead of the revenue or deposit account. Leave steuercode and bmd_vat_percent empty on that line, ' +
+          'put the Steuercode on the revenue or deposit row, and run "apaleo-bmd mapping check"',
+      );
+    }
   }
+  if (d.kind !== 'ok' || c.kind !== 'ok') return { kind: 'failed', findings: [] };
   if (d.vat && c.vat) {
     return fail(
       'E-TWO-VAT-SIDES',
-      `DATEV would apply VAT on both accounts (debit ${d.ref.number} on ${rowText(d.row)} at ${percentText(d.rate)}, ` +
-        `credit ${c.ref.number} on ${rowText(c.row)} at ${percentText(c.rate)}), but a booking can carry VAT on one side only. ` +
-        'Ask your Steuerberater how to book such moves, for example through a transit account',
+      `both accounts have a Steuercode (debit ${d.ref.number} on ${rowText(d.row)}, credit ${c.ref.number} on ${rowText(c.row)}), ` +
+        'but BMD computes the tax on the leading account only. Ask your Steuerberatung how to book such moves, for example through a transit account',
     );
   }
   const vatSide = d.vat ? d : c.vat ? c : undefined;
   const guard = guardVat({ line, taxes, release, debit: d, credit: c, vatSide });
   if (guard.failed) return { kind: 'failed', findings: guard.findings };
-  const booking = toBooking(line, d, c, vatSide, context);
   return {
     kind: 'booked',
-    booking,
+    booking: toBooking(line, d, c, vatSide, guard.steuerCents, context),
     debit: d,
     credit: c,
     findings: guard.findings,
     roundingCents: guard.roundingCents,
+    apaleoRounding: guard.apaleoRounding,
     rate: vatSide?.rate ?? 0,
     apaleoVat: apaleoVatOf(line, release),
   };
 }
 
-/** The row for one side, or undefined when it is missing or has no DATEV account (reported as `E-UNMAPPED`). */
+/** The row for one side, or undefined when it is missing or has no BMD account (reported as `E-UNMAPPED`). */
 function mappedRow(account: AccountRef, rate: number | undefined, { mapping, chart }: PostingContext): MappingRow | undefined {
   const row = resolve(mapping, account, { rate, chart });
-  return row && row.datevAccount !== '' ? row : undefined;
+  return row && row.bmdAccount !== '' ? row : undefined;
 }
 
-/** The side with the VAT rate DATEV applies on its row, or undefined when that rate cannot be known. */
-function postedSide(ref: AccountRef, row: MappingRow, { options }: PostingContext): PostedSide | undefined {
-  const rate = datevVatRate(row, options.sachkontenlaenge, options.skr);
-  return rate === undefined ? undefined : { ref, row, rate, vat: rate > 0 || row.buKey !== '' };
+type SideOutcome = ({ kind: 'ok' } & PostedSide) | { kind: 'no-rate' | 'no-tax-type'; ref: AccountRef; row: MappingRow };
+
+/**
+ * The side with its Steuercode and rate; `no-rate` when a Steuercode has no known
+ * rate, `no-tax-type` when a payment, guest claim or Debitor row has a Steuercode.
+ */
+function postedSide(ref: AccountRef, row: MappingRow): SideOutcome {
+  const code = parseSteuercode(row.steuercode);
+  if (code !== undefined && (NO_TAX_TYPES.has(row.apaleoType) || NO_TAX_TYPES.has(ref.type))) return { kind: 'no-tax-type', ref, row };
+  const rate = rowRate(row);
+  if (rate === undefined) return { kind: 'no-rate', ref, row };
+  return { kind: 'ok', ref, row, steuercode: code, rate, vat: code !== undefined };
 }
 
 /**
- * Direction rule (design decision 2): the VAT side goes into Gegenkonto, where
- * DATEV applies the BU key or Automatik; without one, Konto is the debited
- * account. The side is `S` when Konto is the debited account; a negative gross
- * amount books its absolute value with the side flipped.
+ * Direction rule (design decision 1): the VAT side leads as `konto`, because
+ * BMD computes and books the tax only on the leading account; `betrag` is the
+ * gross minus the tax and `steuer` the tax, both signed from `konto` (negative
+ * when it is credited). Without a VAT side a revenue or bad-debt side (one
+ * whose `kost` BMD reads as Kostenstelle) leads with the signed gross, so an
+ * untaxed charge keeps its Kostenstelle like its reduction does. Otherwise
+ * `konto` is the debited account and `betrag` the absolute gross; a negative
+ * gross swaps the sides.
  */
 function toBooking(
   line: LedgerLine,
   debit: PostedSide,
   credit: PostedSide,
   vatSide: PostedSide | undefined,
+  steuerCents: number,
   { chart, options }: PostingContext,
 ): PostedBooking {
-  const [konto, gegenkonto] = vatSide === debit ? [credit, debit] : [debit, credit];
-  const kontoDebited = konto === debit;
-  const side = kontoDebited === line.grossCents > 0 ? 'S' : 'H';
+  const negative = line.grossCents < 0;
+  const leading = vatSide ?? kostSide(debit, credit);
+  const [konto, gkonto] = leading ? [leading, leading === debit ? credit : debit] : negative ? [credit, debit] : [debit, credit];
+  // Soll (+) when konto is the debited account of a positive line, or the credited account of a negative one.
+  const sign = (konto === debit) !== negative ? 1 : -1;
+  const gross = Math.abs(line.grossCents);
+  const betragCents = sign * (gross - (vatSide ? steuerCents : 0));
   const labelled = vatSide ?? credit;
+  const kost = kostOf(konto.row);
+  const text = buchungstext(line, labelled.ref, chart, vatSide?.rate ?? 0);
   return {
-    amountCents: Math.abs(line.grossCents),
-    side,
-    konto: konto.row.datevAccount,
-    gegenkonto: gegenkonto.row.datevAccount,
-    ...(vatSide && vatSide.row.buKey !== '' ? { buKey: vatSide.row.buKey } : {}),
-    belegdatum: line.businessDate,
-    belegfeld1: belegfeld1(line, options.belegfeld1),
-    buchungstext: buchungstext(line, labelled.ref, chart),
-    ...costCentres([...(vatSide ? [vatSide.row] : []), konto.row, gegenkonto.row]),
+    konto: konto.row.bmdAccount,
+    gkonto: gkonto.row.bmdAccount,
+    businessDate: line.businessDate,
+    buchsymbol: !vatSide && (line.debit.type === 'Payments' || line.credit.type === 'Payments') ? options.buchsymbolZahlung : options.buchsymbol,
+    betragCents,
+    ...(vatSide ? { tax: { steuercode: vatSide.steuercode ?? 0, prozent: vatSide.rate, steuerCents: steuerCents === 0 ? 0 : sign * steuerCents } } : {}),
+    ...(text === '' ? {} : { text }),
+    ...(kost === undefined ? {} : { kost }),
+    extbelegnr: extbelegnr(line, options.extbelegnr),
     sourceEntryNumbers: [line.sourceEntryNumber],
   };
+}
+
+/** The one side whose row type takes a Kostenstelle (revenue, bad debt), or undefined when none or both do. */
+function kostSide(debit: PostedSide, credit: PostedSide): PostedSide | undefined {
+  const d = KOST_TYPES.has(debit.row.apaleoType);
+  const c = KOST_TYPES.has(credit.row.apaleoType);
+  return d === c ? undefined : d ? debit : credit;
 }

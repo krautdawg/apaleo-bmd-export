@@ -146,7 +146,7 @@ describe('injected context', () => {
 
   it('reads ./apaleo-bmd.config.yaml and ignores the old APALEO_DATEV_CONFIG', async () => {
     const ctx = createTestContext({
-      files: { 'apaleo-bmd.config.yaml': 'datev:\n  beraternummer: 1234567\n  mandantennummer: 42\n' },
+      files: { 'apaleo-bmd.config.yaml': 'bmd:\n  buchsymbol: HO\n' },
       env: { APALEO_DATEV_CONFIG: '/x/old.yaml' },
     });
     expect(await runCli(['doctor'], ctx)).toBe(0);
@@ -168,7 +168,7 @@ describe('injected context', () => {
 
   it('doctor reports a valid config and whether the secret is set', async () => {
     const ctx = createTestContext({
-      files: { 'conf/my.yaml': 'datev:\n  beraternummer: 1234567\n  mandantennummer: 42\n' },
+      files: { 'conf/my.yaml': 'bmd:\n  buchsymbol: HO\n' },
       env: { APALEO_CLIENT_SECRET: 's3cr3t' },
     });
     expect(await runCli(['doctor', '--config', 'conf/my.yaml'], ctx)).toBe(0);
@@ -179,20 +179,33 @@ describe('injected context', () => {
     expect(ctx.out()).not.toContain('s3cr3t');
   });
 
-  it('doctor rejects the unedited example config instead of reporting it valid', async () => {
+  it('doctor reports the example config valid with its Buchungssymbol HO', async () => {
     const example = readFileSync(new URL('../../apaleo-bmd.config.example.yaml', import.meta.url), 'utf8');
     const ctx = createTestContext({ files: { 'apaleo-bmd.config.yaml': example } });
-    expect(await runCli(['doctor'], ctx)).toBe(1);
-    expect(ctx.out()).not.toContain('Config:        valid');
-    expect(ctx.err()).toContain('datev.beraternummer: is required');
-    expect(ctx.err()).toContain('datev.mandantennummer: is required');
+    expect(await runCli(['doctor'], ctx)).toBe(0);
+    expect(ctx.out()).toContain('Config:        valid');
+    expect(ctx.out()).toContain('BMD:           ntcs, Buchungssymbol HO');
   });
 
-  it('doctor exits 1 for an invalid config', async () => {
-    const ctx = createTestContext({
-      files: { 'apaleo-bmd.config.yaml': 'datev:\n  beraternummer: 12\n  mandantennummer: 42\n' },
-    });
+  it('doctor warns W-BUCHSYMBOL-SHARED when two properties share the Buchungssymbol, naming both and the symbol', async () => {
+    const config = 'bmd:\n  buchsymbol: HO\nproperties:\n  - id: BSP\n  - id: BS2\n';
+    const ctx = createTestContext({ files: { 'apaleo-bmd.config.yaml': config } });
+    expect(await runCli(['doctor'], ctx)).toBe(0);
+    expect(ctx.out()).toContain('W-BUCHSYMBOL-SHARED');
+    expect(ctx.out()).toContain('the properties BSP, BS2 all book under the Buchungssymbol HO');
+    expect(ctx.out()).toContain('into one BMD Mandant, their Belegnummern would repeat');
+    const own = createTestContext({ files: { 'apaleo-bmd.config.yaml': `${config}    buchsymbol: HO2\n` } });
+    expect(await runCli(['doctor'], own)).toBe(0);
+    expect(own.out()).not.toContain('W-BUCHSYMBOL-SHARED');
+  });
+
+  it('doctor exits 1 for an invalid config, and for an old DATEV config naming the bmd section', async () => {
+    const ctx = createTestContext({ files: { 'apaleo-bmd.config.yaml': 'bmd:\n  buchsymbol: HO\n  sachkontenlaenge: 3\n' } });
     expect(await runCli(['doctor'], ctx)).toBe(1);
-    expect(ctx.err()).toContain('datev.beraternummer');
+    expect(ctx.err()).toContain('bmd.sachkontenlaenge');
+    const datev = createTestContext({ files: { 'apaleo-bmd.config.yaml': 'datev:\n  beraternummer: 1234567\n  mandantennummer: 42\n' } });
+    expect(await runCli(['doctor'], datev)).toBe(1);
+    expect(datev.err()).toContain('datev is not a section of apaleo-bmd');
+    expect(datev.err()).toContain('bmd section');
   });
 });

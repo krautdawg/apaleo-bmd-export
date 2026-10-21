@@ -28,7 +28,7 @@ There is no npm package or container image release yet. You install from source.
 4. Copy `apaleo-bmd.config.example.yaml` to `apaleo-bmd.config.yaml`, fill it in, and set the secret in the environment (`APALEO_CLIENT_SECRET`), never in the file. Then create the mapping, have your Steuerberater check it, and export:
 
    ```sh
-   apaleo-bmd init-mapping --property BSP --skr 03
+   apaleo-bmd init-mapping --property BSP --template ekr
    apaleo-bmd export --month 2026-09 --dry-run
    apaleo-bmd export --month 2026-09
    ```

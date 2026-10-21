@@ -1,0 +1,50 @@
+apaleo-bmd export protocol. No warranty, not tax advice: have your Steuerberater check the bookings.
+
+Property BSP, 2026-09-01 to 2026-09-30: 29 apaleo lines, 24 BMD bookings
+
+Totals per BMD account (Konto with Betrag, Gegenkonto with Betrag plus Steuer):
+  account    Soll   Haben  balance
+  2390     716.70  716.70     0.00
+  2700      24.00    0.00    24.00
+  2890     566.70   10.00   556.70
+  3200     350.00  350.00     0.00
+  3209      10.00   10.00     0.00
+  3580       0.00    6.40    -6.40
+  4000      10.00  528.18  -518.18
+  4010       0.00   66.64   -66.64
+  4020       0.00   38.33   -38.33
+  200000   115.00    0.00   115.00
+
+Revenue and VAT per rate:
+  10 %: net 584.82, tax 58.48, gross 643.30, apaleo VAT 58.48, difference 0.00 (apaleo precise 58.48181818)
+  20 %: net 38.33, tax 7.67, gross 46.00, apaleo VAT 7.67, difference 0.00 (apaleo precise 7.66666667)
+
+Deposits and their VAT per rate (received minus released):
+  0 %: net 0.00, tax 0.00, gross 0.00, apaleo VAT 0.00, difference 0.00 (apaleo precise 0)
+  10 %: net 0.00, tax 0.00, gross 0.00, apaleo VAT 0.00, difference 0.00 (apaleo precise 0)
+
+Each booking carries apaleo's tax of its line, rounded to the cent; apaleo's VAT is the precise sum of its lines, rounded once. A difference of a few cents is this rounding, not an error.
+
+City tax: 6.40
+
+Payments per clearing account:
+  account  amount
+  2700      24.00
+  2890     556.70
+
+Deposits: received 395.00, released 395.00, of it refunded 10.00
+Accounts receivable (Sammeldebitor, Soll positive): 115.00
+VAT rounding differences: 0.00
+
+Skipped lines:
+  reason                              lines  gross (unsigned)
+  both sides on the same BMD account      5            325.70
+
+Findings:
+  none
+
+File: BMD_Buchungsimport_20260901-20260930_BSP.csv
+SHA-256: e0a73a60ceab66bb700fef3783a46798e0144d028d2bd06395f93fa701f213a9
+Mapping SHA-256: 4a2f5d95e639f99dd5ce25fd7e2ff67ce2bf07d3c4b5d1e2fb5f4148c4e13efc
+Tool: apaleo-bmd 0.0.0
+Created: 2026-10-20T08:00:00.000Z

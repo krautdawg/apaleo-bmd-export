@@ -7,21 +7,20 @@ import { parseRangeFlags } from '../../export/period.js';
 import { releaseRateOf } from '../../posting/index.js';
 import { CONFIG_OPTION, EXIT_FAILURE, EXIT_OK, stringOption, type Command } from '../command.js';
 import type { CommandContext } from '../context.js';
-import { SKR_OPTION, defaultProperty, mappingPath, parseSkr } from '../mapping-file.js';
+import { defaultProperty, mappingPath } from '../mapping-file.js';
 import { createSource, loadCommandConfig } from '../source.js';
 import { formatTable } from '../table.js';
 
 export const mapping: Command = {
   name: 'mapping',
   summary: 'Check a mapping CSV ("mapping check"), and with --from/--to that every account booked in the period is mapped',
-  usage: 'check [--property <id>] [--mapping <file>] [--from YYYY-MM-DD --to YYYY-MM-DD] [--skr 03|04] [--config <path>]',
+  usage: 'check [--property <id>] [--mapping <file>] [--from YYYY-MM-DD --to YYYY-MM-DD] [--config <path>]',
   allowPositionals: true,
   options: {
     property: { type: 'string', valueName: '<id>', description: 'apaleo property id (default: the only one in the config)' },
     mapping: { type: 'string', valueName: '<file>', description: 'Mapping file (default: properties[].mapping or ./mapping-<id>.csv)' },
     from: { type: 'string', valueName: '<YYYY-MM-DD>', description: 'First business day of the period to check against apaleo' },
     to: { type: 'string', valueName: '<YYYY-MM-DD>', description: 'Last business day of the period (inclusive)' },
-    ...SKR_OPTION,
     ...CONFIG_OPTION,
   },
   async run(args, ctx) {
@@ -30,16 +29,15 @@ export const mapping: Command = {
       throw new UsageError(`Usage: apaleo-bmd mapping ${mapping.usage}`);
     }
     const period = parseRangeFlags(stringOption(args.values, 'from'), stringOption(args.values, 'to'));
-    const skr = parseSkr(stringOption(args.values, 'skr'));
     const loaded = await loadCommandConfig(args.values, ctx);
-    const sachkontenlaenge = loaded.config.datev.sachkontenlaenge;
+    const { sachkontenlaenge, personenkontenlaenge, dialect } = loaded.config.bmd;
     const propertyId = defaultProperty(loaded, stringOption(args.values, 'property'));
     if (period && !propertyId) throw new UsageError('Checking a period needs --property <id>.');
     const path = mappingPath(loaded, propertyId, stringOption(args.values, 'mapping'), ctx.cwd);
 
     const loadedMapping = await loadMapping(path, { sachkontenlaenge, readFile: (p) => ctx.fs.readFile(p) });
-    const findings: Finding[] = [...loadedMapping.findings, ...checkMapping(loadedMapping, { sachkontenlaenge, skr })];
-    ctx.stdout.write(`Mapping file: ${path} (${describeMapping(loadedMapping, skr)})\n`);
+    const findings: Finding[] = [...loadedMapping.findings, ...checkMapping(loadedMapping, { sachkontenlaenge, personenkontenlaenge, dialect })];
+    ctx.stdout.write(`Mapping file: ${path} (${loadedMapping.rows.length} rows, Sachkontenlänge ${sachkontenlaenge}, Personenkontenlänge ${personenkontenlaenge}, bmd.dialect ${dialect})\n`);
     ctx.stdout.write(summaryByType(loadedMapping));
 
     if (period && propertyId) {
@@ -49,7 +47,7 @@ export const mapping: Command = {
         source.getLedger(propertyId, period.from, nextDay(period.to)),
       ]);
       const chart = new ChartIndex(accounts);
-      const coverage = checkCoverage(loadedMapping, lines, chart, { rateOf: releaseRateOf(lines, chart), sachkontenlaenge, skr });
+      const coverage = checkCoverage(loadedMapping, lines, chart, { rateOf: releaseRateOf(lines, chart), sachkontenlaenge, personenkontenlaenge, dialect });
       findings.push(...coverage);
       ctx.stdout.write(`Checked ${lines.length} ledger lines of ${propertyId} from ${period.from} to ${period.to}: ${coverageSummary(coverage)}.\n`);
     }
@@ -67,18 +65,12 @@ function coverageSummary(coverage: readonly Finding[]): string {
   return parts.join(', ');
 }
 
-function describeMapping(mapping: Mapping, skr: string | undefined): string {
-  const layout = mapping.layout === 'grman' ? 'Grman export layout' : 'apaleo-bmd layout';
-  const chart = skr ?? mapping.skr;
-  return `${layout}, ${mapping.rows.length} rows${chart ? `, SKR ${chart}` : ''}`;
-}
-
 function summaryByType(mapping: Mapping): string {
   const byType = new Map<string, { rows: number; mapped: number }>();
   for (const row of mapping.rows) {
     const entry = byType.get(row.apaleoType) ?? { rows: 0, mapped: 0 };
     entry.rows += 1;
-    if (row.datevAccount !== '') entry.mapped += 1;
+    if (row.bmdAccount !== '') entry.mapped += 1;
     byType.set(row.apaleoType, entry);
   }
   const rows = [...byType].map(([type, { rows: count, mapped }]) => [

@@ -7,22 +7,22 @@ export function tax(vatType: string, percent: number, amountCents: number, amoun
 }
 
 /**
- * A valid ledger line (a 7 % accommodation charge) with the given fields
+ * A valid ledger line (a 10 % accommodation charge of 110.00) with the given fields
  * replaced. Unless given, `netPrecise` is the whole cents of `netCents`.
  */
 export function ledgerLine(overrides: Partial<LedgerLine> = {}): LedgerLine {
-  const netCents = overrides.netCents ?? 9346;
+  const netCents = overrides.netCents ?? 10_000;
   return {
     businessDate: '2026-09-14',
     postedAt: '2026-09-14T15:40:00Z',
-    debit: { number: 'BSP-ABCDEF-1_Receivables', name: 'Receivables for Reservation BSP-ABCDEF-1', type: 'Receivables' },
-    credit: { number: '5011', name: 'Accommodation 7%', type: 'Revenues', parentNumber: '5010' },
+    debit: { number: 'BSP-ABCDEF-1_Receivables', name: 'Receivables for Reservation BSP-ABCDEF-1', type: 'Receivables', parentNumber: '1200' },
+    credit: { number: 'RevenueAccommodation_VeryReduced:10.00', name: 'Revenues Accommodation (10%)', type: 'Revenues', parentNumber: '5000' },
     command: 'PostCharge',
     currency: 'EUR',
-    grossCents: 10000,
+    grossCents: 11_000,
     netPrecise: formatCents(netCents),
     netCents,
-    taxes: [tax('Reduced', 7, 654)],
+    taxes: [tax('VeryReduced', 10, 1_000)],
     receipt: { type: 'Reservation', number: 'BSP-ABCDEF-1-V1' },
     reference: 'BSP-ABCDEF-1',
     referenceType: 'Guest',

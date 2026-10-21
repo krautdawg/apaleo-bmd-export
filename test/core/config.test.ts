@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
   ConfigNotFoundError,
   ENV_OVERRIDES,
+  buchsymboleOf,
   loadConfig,
   resolveConfigPath,
+  sharedBuchsymbolFindings,
   type Env,
 } from '../../src/core/config.js';
 import { UserError } from '../../src/core/errors.js';
@@ -13,7 +15,8 @@ import { runCli } from '../../src/cli/run.js';
 import { EXIT_OK, type Command } from '../../src/cli/command.js';
 import { createTestContext } from '../helpers/context.js';
 
-const VALID = 'datev:\n  beraternummer: 1234567\n  mandantennummer: 42\n';
+const VALID = 'bmd:\n  buchsymbol: HO\n';
+const BMD_DEFAULTS = { dialect: 'ntcs', sachkontenlaenge: 4, personenkontenlaenge: 6, buchsymbol: 'HO' };
 const APALEO_DEFAULTS = { baseUrl: 'https://api.apaleo.com', identityUrl: 'https://identity.apaleo.com' };
 
 async function load(content: string, env: Env = {}, fileName = 'apaleo-bmd.config.yaml') {
@@ -43,8 +46,8 @@ describe('loading', () => {
     expect(config).toEqual({
       apaleo: APALEO_DEFAULTS,
       output: { dir: './exports' },
-      datev: { beraternummer: 1234567, mandantennummer: 42, sachkontenlaenge: 4, wjBeginn: '01-01', festschreibung: 0 },
-      posting: { belegfeld1: 'receipt' },
+      bmd: BMD_DEFAULTS,
+      posting: { extbelegnr: 'receipt' },
       properties: [],
       checks: { aggregates: false },
       schedule: { timezone: 'Europe/Berlin', cadence: 'monthly', daily: { offsetDays: 2 }, monthly: { dayOfMonth: 3 }, finalAfter: '06:00', catchUpDays: 40 },
@@ -52,43 +55,64 @@ describe('loading', () => {
     expect(secrets.apaleoClientSecret).toBeUndefined();
   });
 
-  it('reads the export settings of the datev section', async () => {
-    const { config } = await load(`datev:\n  beraternummer: 1234567\n  mandantennummer: 42\n  wjBeginn: "07-01"\n  skr: 03\n  festschreibung: 1\n`);
-    expect(config.datev).toMatchObject({ wjBeginn: '07-01', skr: '03', festschreibung: 1 });
-    for (const written of ['"04"', 'SKR04', '4']) {
-      expect((await load(`${VALID}  skr: ${written}\n`)).config.datev.skr).toBe('04');
+  it('reads the bmd section: dialect, account lengths and both Buchungssymbole', async () => {
+    const { config } = await load('bmd:\n  dialect: bmd55\n  sachkontenlaenge: 5\n  personenkontenlaenge: 7\n  buchsymbol: HO\n  buchsymbolZahlung: HZ\n');
+    expect(config.bmd).toEqual({ dialect: 'bmd55', sachkontenlaenge: 5, personenkontenlaenge: 7, buchsymbol: 'HO', buchsymbolZahlung: 'HZ' });
+  });
+
+  it('rejects an unknown dialect and account lengths outside their ranges', async () => {
+    const error = await loadError(`${VALID}  dialect: bmd60\n  sachkontenlaenge: 3\n  personenkontenlaenge: 10\n`);
+    expect(error.message).toContain('bmd.dialect: must be "ntcs" or "bmd55" (got "bmd60")');
+    expect(error.message).toContain('bmd.sachkontenlaenge: must be a whole number between 4 and 9 (got 3)');
+    expect(error.message).toContain('bmd.personenkontenlaenge: must be a whole number between 5 and 9 (got 10)');
+  });
+
+  it('requires bmd.buchsymbol and points to docs/bmd-import.md for creating it in BMD', async () => {
+    const error = await loadError('bmd:\n  sachkontenlaenge: 4\n');
+    expect(error.message).toContain('bmd.buchsymbol: is required');
+    expect(error.message).toContain('docs/bmd-import.md');
+    expect((await loadError('output:\n  dir: ./x\n')).message).toMatch(/bmd: is required: .*bmd\.buchsymbol.*docs\/bmd-import\.md/);
+  });
+
+  it('accepts 1 to 4 characters of A-Z and 0-9 as Buchungssymbol, at most 2 with bmd55', async () => {
+    for (const symbol of ['H', 'HO', 'HO26']) expect((await load(`bmd:\n  buchsymbol: ${symbol}\n`)).config.bmd.buchsymbol).toBe(symbol);
+    for (const symbol of ['ho', 'HOTEL', 'H-O', '""']) {
+      expect((await loadError(`bmd:\n  buchsymbol: ${symbol}\n`)).message).toMatch(/bmd\.buchsymbol: (must be 1 to 4 characters of A-Z and 0-9|is required)/);
     }
+    const error = await loadError('bmd:\n  dialect: bmd55\n  buchsymbol: PMS\n  buchsymbolZahlung: HZ\n');
+    expect(error.message).toContain('bmd.buchsymbol: must have at most 2 characters with bmd.dialect bmd55');
+    expect(error.message).not.toContain('bmd.buchsymbolZahlung');
   });
 
-  it('rejects an invalid fiscal-year start, SKR or Festschreibung', async () => {
-    const error = await loadError(`${VALID}  wjBeginn: "02-29"\n  skr: "05"\n  festschreibung: 2\n`);
-    expect(error.message).toContain('datev.wjBeginn: must be a month and day written MM-DD');
-    expect(error.message).toContain('datev.skr: must be "03" (SKR03) or "04" (SKR04) (got "05")');
-    expect(error.message).toContain('datev.festschreibung: must be 0 or 1 (got 2)');
-    expect((await loadError(`${VALID}  wjBeginn: "13-01"\n`)).message).toContain('datev.wjBeginn');
+  it('rejects a datev section and names the bmd section', async () => {
+    const error = await loadError('datev:\n  beraternummer: 1234567\n  mandantennummer: 42\n');
+    expect(error.message).toContain('datev is not a section of apaleo-bmd');
+    expect(error.message).toContain('bmd section');
+    expect(error.message).toContain('bmd.buchsymbol');
   });
 
-  it('reads a Mandantennummer per property and checks.aggregates', async () => {
-    const { config } = await load(`${VALID}properties:\n  - id: BSP\n    mandantennummer: 43\nchecks:\n  aggregates: true\n`);
-    expect(config.properties).toEqual([{ id: 'BSP', mandantennummer: 43 }]);
+  it('reads a Buchungssymbol per property and checks.aggregates', async () => {
+    const { config } = await load(`${VALID}properties:\n  - id: BSP\n    buchsymbol: HO2\n    buchsymbolZahlung: HZ2\nchecks:\n  aggregates: true\n`);
+    expect(config.properties).toEqual([{ id: 'BSP', buchsymbol: 'HO2', buchsymbolZahlung: 'HZ2' }]);
     expect(config.checks).toEqual({ aggregates: true });
-    const error = await loadError(`${VALID}properties:\n  - id: BSP\n    mandantennummer: 0\nchecks:\n  aggregates: yes please\n`);
-    expect(error.message).toContain('properties.0.mandantennummer: must be a whole number between 1 and 99999');
+    const error = await loadError(`bmd:\n  dialect: bmd55\n  buchsymbol: HO\nproperties:\n  - id: BSP\n    buchsymbol: HO2X\n    mandantennummer: 43\nchecks:\n  aggregates: yes please\n`);
+    expect(error.message).toContain('properties.0.mandantennummer: unknown key');
     expect(error.message).toContain('checks.aggregates: must be true or false');
   });
 
-  it('reads posting.belegfeld1 and rejects other values', async () => {
-    const { config } = await load(`${VALID}posting:\n  belegfeld1: reference\n`);
-    expect(config.posting).toEqual({ belegfeld1: 'reference' });
-    await expect(load(`${VALID}posting:\n  belegfeld1: invoice\n`)).rejects.toThrow(
-      'posting.belegfeld1: must be "receipt" or "reference" (got "invoice")',
+  it('reads posting.extbelegnr and rejects other values and the old belegfeld1', async () => {
+    const { config } = await load(`${VALID}posting:\n  extbelegnr: reference\n`);
+    expect(config.posting).toEqual({ extbelegnr: 'reference' });
+    await expect(load(`${VALID}posting:\n  extbelegnr: invoice\n`)).rejects.toThrow(
+      'posting.extbelegnr: must be "receipt" or "reference" (got "invoice")',
     );
+    await expect(load(`${VALID}posting:\n  belegfeld1: receipt\n`)).rejects.toThrow('posting.belegfeld1: unknown key');
   });
 
   it('loads JSON by extension', async () => {
-    const json = JSON.stringify({ datev: { beraternummer: 1001, mandantennummer: 1, sachkontenlaenge: 6 } });
+    const json = JSON.stringify({ bmd: { buchsymbol: 'HO', sachkontenlaenge: 6 } });
     const { config } = await load(json, {}, 'config.json');
-    expect(config.datev.sachkontenlaenge).toBe(6);
+    expect(config.bmd.sachkontenlaenge).toBe(6);
   });
 
   it('reads the client secret from the environment only', async () => {
@@ -98,20 +122,13 @@ describe('loading', () => {
 
   const example = readFileSync(new URL('../../apaleo-bmd.config.example.yaml', import.meta.url), 'utf8');
 
-  it('rejects the unedited example config until the Kanzlei numbers are filled in', async () => {
-    const error = await loadError(example);
-    expect(error.message).toContain('datev.beraternummer: is required');
-    expect(error.message).toContain('datev.mandantennummer: is required');
-  });
-
-  it('accepts the example config once the Kanzlei numbers are filled in', async () => {
-    const filled = example
-      .replace(/beraternummer:\s*$/m, 'beraternummer: 1234567')
-      .replace(/mandantennummer:\s*$/m, 'mandantennummer: 42');
-    const { config } = await load(filled, { APALEO_CLIENT_ID: 'client-1' });
+  it('accepts the example config, which names the Buchungssymbol HO with the note that it must exist in BMD', async () => {
+    expect(example).toMatch(/BMD zuerst anlegen[\s\S]*buchsymbol: HO/);
+    const { config } = await load(example, { APALEO_CLIENT_ID: 'client-1' });
     expect(config.output.dir).toBe('./exports');
     expect(config.apaleo.clientId).toBe('client-1');
-    expect(config.datev).toEqual({ beraternummer: 1234567, mandantennummer: 42, sachkontenlaenge: 4, wjBeginn: '01-01', festschreibung: 0 });
+    expect(config.bmd).toEqual(BMD_DEFAULTS);
+    expect(config.posting).toEqual({ extbelegnr: 'receipt' });
     expect(config.checks).toEqual({ aggregates: false });
     expect(config.schedule).toEqual({ timezone: 'Europe/Berlin', cadence: 'monthly', daily: { offsetDays: 2 }, monthly: { dayOfMonth: 3 }, finalAfter: '06:00', catchUpDays: 40 });
   });
@@ -126,9 +143,10 @@ describe('loading', () => {
   });
 
   it('reports an empty required value as required', async () => {
-    const error = await loadError('datev:\n  beraternummer:\n  mandantennummer: 42\n');
-    expect(error.message).toContain('datev.beraternummer: is required');
-    expect(await loadError('datev:\n').then((e) => e.message)).toContain('datev: is required');
+    const error = await loadError('bmd:\n  buchsymbol:\n  sachkontenlaenge: 4\n');
+    expect(error.message).toContain('bmd.buchsymbol: is required');
+    expect(await loadError('bmd:\n').then((e) => e.message)).toContain('bmd: is required');
+    expect(await loadError('bmd:\n  buchsymbol:\n', { APALEO_CLIENT_ID: 'x' }).then((e) => e.message)).toContain('bmd.buchsymbol: is required');
   });
 });
 
@@ -167,38 +185,33 @@ describe('apaleo section', () => {
 });
 
 describe('validation errors name the key path', () => {
-  it('rejects datev.beraternummer: 12 with the allowed range', async () => {
-    const error = await loadError('datev:\n  beraternummer: 12\n  mandantennummer: 42\n');
-    expect(error.message).toContain('datev.beraternummer: must be a whole number between 1001 and 9999999 (got 12)');
+  it('rejects bmd.sachkontenlaenge: 3 with the allowed range', async () => {
+    const error = await loadError(`${VALID}  sachkontenlaenge: 3\n`);
+    expect(error.message).toContain('bmd.sachkontenlaenge: must be a whole number between 4 and 9 (got 3)');
   });
 
   it.each([
-    ['mandantennummer: 0', 'datev.mandantennummer'],
-    ['mandantennummer: 1.5', 'datev.mandantennummer'],
-    ['mandantennummer: "42"', 'datev.mandantennummer'],
+    ['personenkontenlaenge: 4', 'bmd.personenkontenlaenge'],
+    ['personenkontenlaenge: 6.5', 'bmd.personenkontenlaenge'],
+    ['personenkontenlaenge: "6"', 'bmd.personenkontenlaenge'],
   ])('rejects %s', async (line, key) => {
-    const error = await loadError(`datev:\n  beraternummer: 1001\n  ${line}\n`);
-    expect(error.message).toContain(`${key}: must be a whole number between 1 and 99999`);
-  });
-
-  it('rejects sachkontenlaenge outside 4-8', async () => {
-    const error = await loadError(`${VALID}  sachkontenlaenge: 9\n`);
-    expect(error.message).toContain('datev.sachkontenlaenge: must be a whole number between 4 and 8');
+    const error = await loadError(`${VALID}  ${line}\n`);
+    expect(error.message).toContain(`${key}: must be a whole number between 5 and 9`);
   });
 
   it('reports missing required keys', async () => {
     const error = await loadError('output:\n  dir: ./x\n');
-    expect(error.message).toContain('datev: is required');
+    expect(error.message).toContain('bmd: is required');
   });
 
   it('reports unknown keys with their path', async () => {
-    const error = await loadError(`${VALID}  beratrnummer: 1\nfoo: 1\n`);
-    expect(error.message).toContain('datev.beratrnummer: unknown key');
+    const error = await loadError(`${VALID}  buchsymbl: HO\nfoo: 1\n`);
+    expect(error.message).toContain('bmd.buchsymbl: unknown key');
     expect(error.message).toContain('foo: unknown key');
   });
 
   it('reports YAML syntax errors with the file path', async () => {
-    const error = await loadError('datev: [unclosed\n');
+    const error = await loadError('bmd: [unclosed\n');
     expect(error.message).toMatch(/Cannot parse config file .*apaleo-bmd\.config\.yaml: line \d+, column \d+: /);
   });
 
@@ -321,14 +334,16 @@ describe('environment overrides', () => {
   });
 
   it('applies every allow-listed scalar override', async () => {
-    const { config } = await load(VALID, {
-      APALEO_CLIENT_ID: 'client-1',
-      APALEO_BMD_BERATERNUMMER: '7654321',
-      APALEO_BMD_MANDANTENNUMMER: '99',
-    });
+    const { config } = await load(VALID, { APALEO_CLIENT_ID: 'client-1', APALEO_BMD_OUTPUT_DIR: '/data/out', APALEO_BMD_TIMEZONE: 'Europe/Vienna' });
     expect(config.apaleo.clientId).toBe('client-1');
-    expect(config.datev.beraternummer).toBe(7654321);
-    expect(config.datev.mandantennummer).toBe(99);
+    expect(config.output.dir).toBe('/data/out');
+    expect(config.schedule.timezone).toBe('Europe/Vienna');
+  });
+
+  it('no longer reads the DATEV overrides of the Berater- and Mandantennummer', async () => {
+    const error = await loadError(VALID, { APALEO_BMD_BERATERNUMMER: '7654321', APALEO_BMD_MANDANTENNUMMER: '99' });
+    expect(error.message).toContain('APALEO_BMD_BERATERNUMMER: unknown variable');
+    expect(error.message).toContain('APALEO_BMD_MANDANTENNUMMER: unknown variable');
   });
 
   it('APALEO_BMD_TIMEZONE sets schedule.timezone and is validated like the file value', async () => {
@@ -342,14 +357,6 @@ describe('environment overrides', () => {
   it('ignores empty override values', async () => {
     const { config } = await load(VALID, { APALEO_BMD_OUTPUT_DIR: '' });
     expect(config.output.dir).toBe('./exports');
-  });
-
-  it('names the variable when an override value is invalid', async () => {
-    const notNumber = await loadError(VALID, { APALEO_BMD_BERATERNUMMER: 'abc' });
-    expect(notNumber.message).toContain('APALEO_BMD_BERATERNUMMER must be a whole number');
-    const outOfRange = await loadError(VALID, { APALEO_BMD_BERATERNUMMER: '12' });
-    expect(outOfRange.message).toContain('datev.beraternummer');
-    expect(outOfRange.message).toContain('from APALEO_BMD_BERATERNUMMER');
   });
 
   it('rejects an unknown APALEO_BMD_* variable and names it', async () => {
@@ -377,10 +384,33 @@ describe('environment overrides', () => {
     expect(ENV_OVERRIDES.map((o) => o.variable)).toEqual([
       'APALEO_BMD_OUTPUT_DIR',
       'APALEO_CLIENT_ID',
-      'APALEO_BMD_BERATERNUMMER',
-      'APALEO_BMD_MANDANTENNUMMER',
       'APALEO_BMD_TIMEZONE',
     ]);
+  });
+});
+
+describe('Buchungssymbole of the properties', () => {
+  const bmd = { dialect: 'ntcs' as const, sachkontenlaenge: 4, personenkontenlaenge: 6, buchsymbol: 'HO' };
+
+  it('uses the property symbol, else the bmd section, and the main symbol for payments without buchsymbolZahlung', () => {
+    const config = { bmd, properties: [{ id: 'BSP' }, { id: 'BS2', buchsymbol: 'HO2' }] };
+    expect(buchsymboleOf(config, 'BSP')).toEqual({ buchsymbol: 'HO', buchsymbolZahlung: 'HO' });
+    expect(buchsymboleOf(config, 'BS2')).toEqual({ buchsymbol: 'HO2', buchsymbolZahlung: 'HO2' });
+    expect(buchsymboleOf({ bmd: { ...bmd, buchsymbolZahlung: 'HZ' }, properties: [] }, 'BSP')).toEqual({ buchsymbol: 'HO', buchsymbolZahlung: 'HZ' });
+  });
+
+  it('warns W-BUCHSYMBOL-SHARED when two properties book under the same symbol', () => {
+    const [finding, ...rest] = sharedBuchsymbolFindings({ bmd, properties: [{ id: 'BSP' }, { id: 'BS2' }] });
+    expect(rest).toEqual([]);
+    expect(finding).toMatchObject({ code: 'W-BUCHSYMBOL-SHARED', value: 'HO' });
+    expect(finding?.message).toContain('BSP, BS2');
+    expect(finding?.message).toContain('Belegnummern would repeat');
+  });
+
+  it('does not warn when each property has its own symbol, and warns for a shared payment symbol', () => {
+    expect(sharedBuchsymbolFindings({ bmd, properties: [{ id: 'BSP' }, { id: 'BS2', buchsymbol: 'HO2' }] })).toEqual([]);
+    const shared = sharedBuchsymbolFindings({ bmd: { ...bmd, buchsymbolZahlung: 'HZ' }, properties: [{ id: 'BSP' }, { id: 'BS2', buchsymbol: 'HO2' }] });
+    expect(shared.map((f) => f.value)).toEqual(['HZ']);
   });
 });
 

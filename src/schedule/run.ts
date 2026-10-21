@@ -6,6 +6,7 @@ import { UserError } from '../core/errors.js';
 import type { Finding } from '../core/findings.js';
 import type { SourceAdapter } from '../core/source.js';
 import {
+  CALENDAR_YEAR_START,
   DEFAULT_TARGET,
   exportedFile,
   fileSystemFinding,
@@ -66,9 +67,9 @@ export interface ScheduleDeps {
  * (`E-EXPORT` with the next step); the run goes on with the others.
  */
 export async function runSchedule({ loaded, ctx, source, onOutcome }: ScheduleDeps): Promise<ScheduleResult> {
-  const { schedule, datev, output, properties } = loaded.config;
+  const { schedule, output, properties } = loaded.config;
   const { today, periods, waiting } = duePeriods(ctx.now(), schedule);
-  const parts = periods.flatMap((period) => splitPeriod(period, datev.wjBeginn));
+  const parts = periods.flatMap((period) => splitPeriod(period, CALENDAR_YEAR_START));
   const ids = properties.map((p) => p.id);
   const outputDir = resolve(ctx.cwd, output.dir);
   let adapter: SourceAdapter | undefined;
@@ -122,7 +123,7 @@ export async function runSchedule({ loaded, ctx, source, onOutcome }: ScheduleDe
     }
   }
   // Newest last, after the final periods; nothing is fetched for them.
-  for (const part of waiting.flatMap((period) => splitPeriod(period, datev.wjBeginn))) {
+  for (const part of waiting.flatMap((period) => splitPeriod(period, CALENDAR_YEAR_START))) {
     const findings = [notFinalFinding(part, schedule.timezone, schedule.finalAfter)];
     for (const propertyId of ids) {
       // A file written by hand with `export` still counts as exported.

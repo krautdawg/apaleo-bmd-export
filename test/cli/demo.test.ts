@@ -2,14 +2,13 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { runCli } from '../../src/cli/run.js';
-import { bodyOf, fileSystemFinding } from '../../src/export/index.js';
+import { fileSystemFinding } from '../../src/export/index.js';
 import { createTestContext } from '../helpers/context.js';
-import { splitFields } from '../helpers/extf.js';
 
 /** The demo marks its file name with `_DEMO`, so it never looks like a real export in a file list. */
-const FILE = 'EXTF_Buchungsstapel_1234567_42_20260901-20260930_BSP_DEMO.csv';
-const PROTOCOL = 'EXTF_Buchungsstapel_1234567_42_20260901-20260930_BSP_DEMO.protokoll.txt';
-const GOLDEN = readFileSync(new URL('../golden/export/EXTF_Buchungsstapel_1234567_42_20260901-20260930_BSP.csv', import.meta.url));
+const FILE = 'BMD_Buchungsimport_20260901-20260930_BSP_DEMO.csv';
+const PROTOCOL = 'BMD_Buchungsimport_20260901-20260930_BSP_DEMO.protokoll.txt';
+const GOLDEN = readFileSync(new URL('../golden/export/BMD_Buchungsimport_20260901-20260930_BSP.csv', import.meta.url));
 
 /** No config file, no secret, and a fetch stub that throws on every request. */
 function bareContext(env: Record<string, string> = {}) {
@@ -22,8 +21,10 @@ describe('apaleo-bmd export --demo', () => {
     expect(await runCli(['export', '--month', '2026-09', '--demo', '--dry-run'], ctx)).toBe(0);
     const out = ctx.out();
     expect(out.startsWith('DEMO: bundled sample data of the fabricated "Hotel Beispiel"')).toBe(true);
-    expect(out).toContain('Property BSP, 2026-09-01 to 2026-09-30: 25 apaleo lines, 22 DATEV bookings');
-    expect(out).toContain('Totals per DATEV account:');
+    expect(out).toContain('Property BSP, 2026-09-01 to 2026-09-30: 29 apaleo lines, 24 BMD bookings');
+    expect(out).toContain('Totals per BMD account');
+    expect(out).toContain('  10 %: net 584.82, tax 58.48, gross 643.30');
+    expect(out).toContain('Never import a demo file into a real BMD Mandant.');
     expect(out).toContain('File: a real run writes demo-output/BSP/2026-09/');
     expect(out).toContain('DEMO Result: dry run, nothing written; 1 file(s) passed every check.');
     expect(out).not.toContain('W-RECENT-DAY');
@@ -39,7 +40,7 @@ describe('apaleo-bmd export --demo', () => {
     expect(ctx.out()).toContain('DEMO Result: dry run, nothing written; 0 file(s) passed every check. 1 without bookings.');
   });
 
-  it('writes the same bookings as the golden file into ./demo-output only, with DEMO in the Bezeichnung and the protocol', async () => {
+  it('writes the golden file into ./demo-output only, with DEMO in the file name and the protocol', async () => {
     // A variable that would redirect a real export must not move the demo output.
     const ctx = bareContext({ APALEO_BMD_OUTPUT_DIR: 'exports' });
     expect(await runCli(['export', '--month', '2026-09', '--demo'], ctx)).toBe(0);
@@ -47,11 +48,7 @@ describe('apaleo-bmd export --demo', () => {
     const folder = join(ctx.cwd, 'demo-output', 'BSP', '2026-09');
     expect(readdirSync(folder).sort()).toEqual([FILE, PROTOCOL, 'manifest.json']);
 
-    const file = readFileSync(join(folder, FILE));
-    expect(Buffer.from(bodyOf(file)).equals(Buffer.from(bodyOf(GOLDEN)))).toBe(true);
-    const header = splitFields(new TextDecoder('windows-1252').decode(file).split('\r\n')[0] ?? '');
-    expect(header[16]).toBe('"DEMO apaleo BSP 2026-09"');
-    expect(header[5]?.startsWith('20261005')).toBe(true);
+    expect(readFileSync(join(folder, FILE)).equals(GOLDEN)).toBe(true);
     expect(readFileSync(join(folder, PROTOCOL), 'utf8').split('\n')[0]).toMatch(/^DEMO: /);
     expect(ctx.fetchCalls).toEqual([]);
 

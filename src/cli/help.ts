@@ -4,12 +4,12 @@ import { VERSION } from './version.js';
 
 export const BIN = 'apaleo-bmd';
 const DISCLAIMER_LINE =
-  'No warranty, not tax advice: have your Steuerberater check the mapping and the first imports. See DISCLAIMER.md.';
+  'No warranty, not tax advice: have your Steuerberatung check the mapping and the first imports. See DISCLAIMER.md.';
 
 export function renderHelp(commands: readonly Command[]): string {
   const width = Math.max(15, ...commands.map((c) => c.name.length + 2));
   return [
-    `${BIN} ${VERSION} - export apaleo accounting data to DATEV-Format (EXTF) files`,
+    `${BIN} ${VERSION} - export apaleo accounting data to BMD Buchungsimport files`,
     '',
     `Usage: ${BIN} <command> [options]`,
     '',

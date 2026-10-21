@@ -1,6 +1,6 @@
 # Import in DATEV
 
-Für die Kanzlei: So kommt die Datei in DATEV Rechnungswesen, und darauf solltest du beim ersten Import achten. Keine Gewähr, keine Steuerberatung.
+Für die Kanzlei: So kam die Datei des DATEV-Exports, aus dem dieses Tool entstanden ist, in DATEV Rechnungswesen. apaleo-bmd schreibt keine DATEV-Dateien mehr, sondern den BMD-Buchungsimport ([bmd-import.md](bmd-import.md)); diese Seite entfällt mit der nächsten Version. Keine Gewähr, keine Steuerberatung.
 
 ## Was du bekommst
 
@@ -17,7 +17,7 @@ Wer automatisch importiert: `KrStaPv` (die Stapelverarbeitung als Kommandozeile)
 
 ## Festschreibung: 0 oder 1
 
-`datev.festschreibung: 0` (Standard) lässt den Stapel nach dem Import bearbeitbar. Bei `1` wird er festgeschrieben und kann weder geändert noch gelöscht werden. Der Wert steht im Kopf der Datei und in jeder Buchungszeile (Feld 114).
+Die Festschreibung 0 (Standard des DATEV-Exports) lässt den Stapel nach dem Import bearbeitbar. Bei `1` wird er festgeschrieben und kann weder geändert noch gelöscht werden. Der Wert steht im Kopf der Datei und in jeder Buchungszeile (Feld 114).
 
 Das hat eine Folge für Nachbuchungen: Ein festgeschriebener Stapel lässt sich nicht durch eine neue Datei ersetzen. Das Tool erzeugt keinen Differenz- oder Korrekturstapel. Kommt nach dem Import einer Datei mit Festschreibung 1 eine Nachbuchung, importiert die Kanzlei **nie** die Datei aus `export --overwrite`, sonst stehen alle Buchungen des Monats doppelt im Mandanten. Sie bucht die Differenz von Hand; `export --month <YYYY-MM> --dry-run` zeigt die neuen Summen pro Konto zum Vergleich mit dem Protokoll der importierten Datei.
 

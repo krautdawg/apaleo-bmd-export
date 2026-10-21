@@ -4,16 +4,18 @@ import { formatCents } from '../core/money.js';
 import type { AccountRef, LedgerLine, LedgerTax } from '../core/source.js';
 import { VAT_RELEVANT_TYPES, type MappingRow } from '../mapping/index.js';
 import { accountText, lineFinding, percentText, rowText } from './describe.js';
-import { depositDirection, isUntaxedRelease, type ReleaseRate } from './release.js';
-import { datevVat, taxPercents, taxTotal } from './taxes.js';
+import { depositDirection, inferredTaxCents, isUntaxedRelease, type ReleaseRate } from './release.js';
+import { bmdCheckTax, taxPercents, taxTotal } from './taxes.js';
 
-/** One side of a ledger line with its mapping row and the VAT rate DATEV applies on that row. */
+/** One side of a ledger line with its mapping row. */
 export interface PostedSide {
   ref: AccountRef;
   row: MappingRow;
-  /** The VAT rate DATEV applies on the row (0 when none). */
+  /** The row's Steuercode; undefined without one. */
+  steuercode: number | undefined;
+  /** The VAT rate BMD books on the row (`bmd_vat_percent`, 0 without Steuercode). */
   rate: number;
-  /** DATEV applies VAT on this side: a rate above 0 % or a BU key. */
+  /** The row has a Steuercode: this side is the VAT side and leads the booking as `konto`. */
   vat: boolean;
 }
 
@@ -21,7 +23,7 @@ export interface GuardInput {
   line: LedgerLine;
   /** Normalised taxes with at most one percent. */
   taxes: readonly LedgerTax[];
-  /** Set for an untaxed deposit release whose rate was inferred. */
+  /** Set for an untaxed deposit line whose rate was inferred. */
   release: Extract<ReleaseRate, { kind: 'pair' | 'chart' }> | undefined;
   debit: PostedSide;
   credit: PostedSide;
@@ -32,8 +34,12 @@ export interface GuardResult {
   findings: Finding[];
   /** True when a finding blocks the booking. */
   failed: boolean;
-  /** DATEV's VAT minus apaleo's, signed like the line, when it is a one-cent rounding difference. */
+  /** The tax the booking carries, unsigned: apaleo's tax rounded to cents, or the inferred tax of a deposit line. */
+  steuerCents: number;
+  /** BMD's check value minus the booked tax, signed like the line, when it is a one-cent rounding difference. */
   roundingCents: number;
+  /** The booked tax differs by one cent from the VAT apaleo moved (a `PostPrepaymentVat` pair): the VAT check allows that cent. */
+  apaleoRounding: boolean;
 }
 
 /** The side to name in a fix: the VAT-relevant one (revenue, deposit, levy), else the credit side. */
@@ -46,15 +52,17 @@ function sideText(side: PostedSide): string {
 }
 
 /**
- * The VAT consistency guard (design decision 3): the rate DATEV applies must be
- * apaleo's rate, DATEV's VAT computed from the gross amount must be apaleo's VAT
- * within one cent (compared as magnitudes), and the VAT must have the sign of the
- * gross amount. An untaxed deposit release is checked against its inferred rate
- * and, when a `PostPrepaymentVat` pair exists, against the VAT reversed there.
+ * The VAT consistency guard (design decision 2). BMD receives the tax
+ * explicitly, so the guard checks that the VAT-side row books apaleo's rate,
+ * that the tax has the sign of the gross amount, and that BMD's own check of
+ * the booking (`round(|betrag| × rate / 100)`) is within one cent of the tax.
+ * The tax is apaleo's per-line tax rounded half away from zero; for an untaxed
+ * deposit line it comes from the inferred rate (`PostPrepaymentVat` pair or
+ * chart). Sub-cent digits of apaleo's tax never cause a finding.
  */
 export function guardVat(input: GuardInput): GuardResult {
   const { line, taxes, release, vatSide } = input;
-  const result: GuardResult = { findings: [], failed: false, roundingCents: 0 };
+  const result: GuardResult = { findings: [], failed: false, steuerCents: 0, roundingCents: 0, apaleoRounding: false };
   const fail = (code: string, message: string) => {
     result.findings.push(lineFinding(code, line, message));
     result.failed = true;
@@ -72,8 +80,8 @@ export function guardVat(input: GuardInput): GuardResult {
         line,
         `it settles a deposit without a VAT amount; the tool books it at ${percentText(release.rate)}, the VAT rate of account ` +
           `${release.account} in the apaleo chart of accounts, with no PostPrepaymentVat line to check the amount against` +
-          `${release.rate === 0 ? ', so DATEV computes no VAT on the release' : ''}. ` +
-          'Have your Steuerberater check the deposit bookings',
+          `${release.rate === 0 ? ', so the booking carries no tax' : `, and computes the tax ${formatCents(result.steuerCents)} from the gross amount`}. ` +
+          'Have your Steuerberatung check the deposit bookings',
       ),
     );
     return result;
@@ -87,22 +95,22 @@ export function guardVat(input: GuardInput): GuardResult {
       : `${isUntaxedRelease(line) ? 'settles' : 'books'} a deposit taxed at ${percentText(expected)}${source}`;
     return fail(
       'E-VAT-MISSING',
-      `it ${what}, but DATEV computes no VAT on either side (debit on ${rowText(input.debit.row)}, credit on ${rowText(input.credit.row)}). ` +
-        `Change the row for ${sideText(fix)} to a DATEV account that applies ${percentText(expected)}`,
+      `it ${what}, but neither side has a Steuercode (debit on ${rowText(input.debit.row)}, credit on ${rowText(input.credit.row)}), so BMD books no tax. ` +
+        `Change the row for ${sideText(fix)} to a BMD account with the Umsatzsteuer code and ${percentText(expected)}`,
     );
   }
   if (!taxed && !release && vatSide.rate > 0) {
     return fail(
       'E-VAT-UNEXPECTED',
-      `apaleo charged no VAT on it, but DATEV will compute ${percentText(vatSide.rate)} on ${sideText(vatSide)}. ` +
-        'Change that row to a DATEV account without VAT, or check the VAT setting of the account in apaleo',
+      `apaleo charged no VAT on it, but ${sideText(vatSide)} books ${percentText(vatSide.rate)} with Steuercode ${vatSide.steuercode}. ` +
+        'Change that row to a BMD account without tax, or check the VAT setting of the account in apaleo',
     );
   }
   if (vatSide.rate !== expected) {
     return fail(
       'E-VAT-RATE',
-      `apaleo taxed it at ${percentText(expected)}${source}, but DATEV will apply ${percentText(vatSide.rate)} on ${sideText(vatSide)}. ` +
-        `Change that row to a DATEV account for ${percentText(expected)} (a period taxed at other rates, such as food at 19 % before 2026, needs its own mapping)`,
+      `apaleo taxed it at ${percentText(expected)}${source}, but ${sideText(vatSide)} books ${percentText(vatSide.rate)}. ` +
+        `Change that row to a BMD account for ${percentText(expected)} (a period taxed at other rates needs its own mapping)`,
     );
   }
 
@@ -111,44 +119,64 @@ export function guardVat(input: GuardInput): GuardResult {
     if (apaleoVat !== 0 && Math.sign(apaleoVat) !== Math.sign(line.grossCents)) {
       return fail('E-VAT-SIGN', `the VAT ${formatCents(apaleoVat)} and the gross amount have opposite signs. ${REPORT_PROBLEM_HINT}`);
     }
-    const computed = Math.abs(datevVat(line.grossCents, expected));
-    return compareAmounts(result, line, computed - Math.abs(apaleoVat), () =>
-      `DATEV will compute ${formatCents(computed)} VAT at ${percentText(expected)} on ${formatCents(Math.abs(line.grossCents))}, but apaleo charged ${formatCents(Math.abs(apaleoVat))}`,
-    );
+    result.steuerCents = Math.abs(apaleoVat);
+  } else if (release) {
+    result.steuerCents = inferredTaxCents(line, release);
   }
-  if (release?.kind === 'pair') {
-    // One check for all releases of the day and reference; the rounding difference is counted on the first one only.
-    const first = release.releaseEntries[0] === line.sourceEntryNumber;
-    const difference = release.releaseVatCents - release.pairVatCents;
-    const entries = release.releaseEntries.length > 1 ? ` (together with ${release.releaseEntries.filter((e) => e !== line.sourceEntryNumber).join(', ')})` : '';
-    if (Math.abs(difference) <= 1 && !first) return result;
-    const reversed = depositDirection(line) > 0;
-    // `difference` is signed in the direction of the VAT movement; as magnitudes it is that direction times the difference.
-    return compareAmounts(result, line, depositDirection(line) * difference, () =>
-      `DATEV will compute ${formatCents(Math.abs(release.releaseVatCents))} VAT on the deposit ${isUntaxedRelease(line) ? 'release' : 'line'}${entries}, ` +
-        `but apaleo ${reversed ? 'reversed' : 'booked'} ${formatCents(Math.abs(release.pairVatCents))} on the PostPrepaymentVat line ${release.pairEntries.join(', ')}`,
-    );
+  if (release?.kind === 'pair' && !checkPair(result, line, release)) return result;
+  if (result.findings.length === 0 && expected > 0) checkBmdRounding(result, line, expected);
+  return result.failed ? result : inferred();
+}
+
+/**
+ * The tax computed on all untaxed deposit lines of the day and reference
+ * against the VAT apaleo moved on their `PostPrepaymentVat` lines; the rounding
+ * difference is counted on the first line only. False when the booking fails.
+ */
+function checkPair(result: GuardResult, line: LedgerLine, release: Extract<ReleaseRate, { kind: 'pair' }>): boolean {
+  const first = release.releaseEntries[0] === line.sourceEntryNumber;
+  const difference = release.releaseVatCents - release.pairVatCents;
+  if (difference === 0 || (Math.abs(difference) <= 1 && !first)) return true;
+  const entries = release.releaseEntries.length > 1 ? ` (together with ${release.releaseEntries.filter((e) => e !== line.sourceEntryNumber).join(', ')})` : '';
+  const reversed = depositDirection(line) > 0;
+  const describe =
+    `the tax contained in the deposit ${isUntaxedRelease(line) ? 'release' : 'line'}${entries} is ${formatCents(Math.abs(release.releaseVatCents))}, ` +
+    `but apaleo ${reversed ? 'reversed' : 'booked'} ${formatCents(Math.abs(release.pairVatCents))} on the PostPrepaymentVat line ${release.pairEntries.join(', ')}`;
+  // `difference` is signed in the direction of the VAT movement; as magnitudes it is that direction times the difference.
+  const magnitude = depositDirection(line) * difference;
+  if (Math.abs(magnitude) === 1) {
+    result.apaleoRounding = true;
+    result.roundingCents += Math.sign(line.grossCents) * magnitude;
+    result.findings.push(lineFinding('W-VAT-ROUNDING', line, `${describe}: a rounding difference of 0.01, added to the rounding total of the summary`));
+    return true;
   }
-  return inferred();
+  result.findings.push(lineFinding('E-VAT-AMOUNT', line, `${describe} (difference ${formatCents(magnitude)}). ${REPORT_PROBLEM_HINT}`));
+  result.failed = true;
+  return false;
+}
+
+/** BMD's check of the booking, `round(|betrag| × rate / 100)`, against the tax it carries. */
+function checkBmdRounding(result: GuardResult, line: LedgerLine, rate: number): void {
+  const betrag = Math.abs(line.grossCents) - result.steuerCents;
+  const check = bmdCheckTax(betrag, rate);
+  const difference = check - result.steuerCents;
+  if (difference === 0) return;
+  const describe =
+    `BMD checks the tax as ${percentText(rate)} of the Betrag ${formatCents(betrag)}, which is ${formatCents(check)}, ` +
+    `but the booking carries apaleo's tax ${formatCents(result.steuerCents)}`;
+  if (Math.abs(difference) === 1) {
+    result.roundingCents += Math.sign(line.grossCents) * difference;
+    result.findings.push(
+      lineFinding('W-VAT-ROUNDING', line, `${describe}: a rounding difference of 0.01. The booking keeps apaleo's tax; the difference is added to the rounding total of the summary`),
+    );
+    return;
+  }
+  result.findings.push(lineFinding('E-VAT-AMOUNT', line, `${describe} (difference ${formatCents(difference)}). ${REPORT_PROBLEM_HINT}`));
+  result.failed = true;
 }
 
 /** Where an inferred release rate comes from, for messages; empty for a taxed line. */
 function rateSource(release: GuardInput['release']): string {
   if (release?.kind === 'pair') return ` (inferred from the PostPrepaymentVat line ${release.pairEntries.join(', ')})`;
   return release ? ` (inferred from the chart of accounts, account ${release.account})` : '';
-}
-
-/** `difference` is DATEV's VAT minus apaleo's, as magnitudes. */
-function compareAmounts(result: GuardResult, line: LedgerLine, difference: number, describe: () => string): GuardResult {
-  if (difference === 0) return result;
-  if (Math.abs(difference) === 1) {
-    result.roundingCents += Math.sign(line.grossCents) * difference;
-    result.findings.push(
-      lineFinding('W-VAT-ROUNDING', line, `${describe()}: a rounding difference of 0.01, added to the rounding total of the summary`),
-    );
-    return result;
-  }
-  result.findings.push(lineFinding('E-VAT-AMOUNT', line, `${describe()} (difference ${formatCents(difference)}). ${REPORT_PROBLEM_HINT}`));
-  result.failed = true;
-  return result;
 }

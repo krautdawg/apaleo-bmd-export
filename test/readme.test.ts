@@ -160,7 +160,7 @@ describe('README.en.md', () => {
 
   it('shows the same install commands as the German quick start, without the shell comments', () => {
     expect(firstShellBlock(ENGLISH_README)).toEqual(INSTALL_BLOCK.map(withoutComment));
-    for (const command of ['init-mapping --property BSP --skr 03', 'export --month 2026-09 --dry-run', 'export --month 2026-09\n']) {
+    for (const command of ['init-mapping --property BSP --template ekr', 'export --month 2026-09 --dry-run', 'export --month 2026-09\n']) {
       expect(ENGLISH_README).toContain(command);
     }
   });
@@ -216,7 +216,7 @@ describe('docs folder', () => {
     const troubleshooting = readRepoFile('docs/troubleshooting.md');
     expect(troubleshooting).toContain('`netAmount` oder `taxes[…].amount`: Du nutzt eine alte Version');
     expect(troubleshooting).toContain('`grossAmount`: Das ist auch in der aktuellen Version ein echter Fehler');
-    expect(readRepoFile('docs/export.md')).toContain('DATEV VAT 37.38, apaleo VAT 37.37, difference 0.01');
+    expect(readRepoFile('docs/export.md')).toContain('10 %: net 77.46, tax 7.74, gross 85.20, apaleo VAT 7.75, difference -0.01 (apaleo precise 7.74545454)');
   });
 
   it('documents every config key and every environment variable in docs/configuration.md', () => {
@@ -226,18 +226,17 @@ describe('docs folder', () => {
     expect(text).toContain('`APALEO_BMD_CONFIG`');
   });
 
-  it('has the date-dependent rates, every unchecked template row and a sign-off checklist in the mapping guide, and no English summary', () => {
+  it('has the Austrian rates, every account of the EKR template and a sign-off checklist in the mapping guide, and no English summary', () => {
     const guide = readRepoFile('docs/mapping-guide.md');
     expect(guide).not.toContain('English summary');
-    expect(guide).toContain('Speisen**: 7 % für Leistungen ab 2026-01-01, 19 % davor');
+    expect(guide).toContain('**Beherbergung**: 10 %');
+    expect(guide).toContain('**Getränke**: 20 %');
     expect(guide).toContain('](examples/mapping-BSP.example.csv)');
-    const unchecked = ['skr03', 'skr04'].flatMap((skr) =>
-      readRepoFile(`templates/${skr}-hotel.rules.csv`)
-        .split(/\r?\n/)
-        .filter((line) => line.includes('Vorschlag (ungeprüft)')),
-    );
-    if (unchecked.length === 0) expect(guide).toContain('In Version 1 der Vorlagen ist keine Zeile mit `Vorschlag (ungeprüft)` markiert');
-    for (const line of unchecked) expect(guide).toContain(line.split(';').slice(0, 4).join(';'));
+    const rules = readRepoFile('templates/ekr-hotel.rules.csv')
+      .split(/\r?\n/)
+      .filter((line) => line !== '' && !line.startsWith('#') && !line.startsWith('apaleo_type;'));
+    for (const line of rules) expect(line, line).toContain('Vorschlag (ungeprüft)');
+    for (const account of new Set(rules.map((line) => line.split(';')[3]).filter(Boolean))) expect(guide).toContain(`\`${account}\``);
     expect(headings(guide, '##').at(-1)).toBe('Checkliste zur Freigabe durch die Kanzlei');
     expect(section(guide, '## Checkliste zur Freigabe durch die Kanzlei').match(/^- \[ \]/gm)?.length).toBeGreaterThanOrEqual(5);
   });

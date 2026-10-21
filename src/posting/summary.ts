@@ -1,13 +1,13 @@
+import type { BmdBooking } from '../bmd/types.js';
 import { depositMovement } from '../core/deposits.js';
 import type { Finding } from '../core/findings.js';
 import { sumDecimals } from '../core/money.js';
 import type { LedgerLine } from '../core/source.js';
 import type { ApaleoVat } from './apaleo-vat.js';
 import type { PostedSide } from './guard.js';
-import { datevVat } from './taxes.js';
-import { SKIP_REASONS, type PostedBooking, type PostingSummary, type SkipReason, type VatTotal } from './types.js';
+import { SKIP_REASONS, type PostingSummary, type SkipReason, type VatTotal } from './types.js';
 
-/** DATEV account numbers in numeric order: shorter (G/L) before longer (personal) numbers. */
+/** BMD account numbers in numeric order: shorter (Sachkonten) before longer (Personenkonten) numbers. */
 const byNumber = (a: string, b: string) => a.length - b.length || a.localeCompare(b);
 
 const CITY_TAX_TYPES: ReadonlySet<string> = new Set(['CityTaxes', 'SecondCityTax', 'GuestLevies']);
@@ -18,8 +18,20 @@ function creditedAmount(line: LedgerLine, types: ReadonlySet<string> | string): 
   return (has(line.credit.type) ? line.grossCents : 0) - (has(line.debit.type) ? line.grossCents : 0);
 }
 
+/**
+ * The movement model of a booking (design decision 10): `konto` moves by `betrag`,
+ * `gkonto` by minus `betrag` plus `steuer`, which is apaleo's gross. The tax leg
+ * on BMD's own tax account is not part of it. Soll positive.
+ */
+export function bookingMovements(booking: Pick<BmdBooking, 'konto' | 'gkonto' | 'betragCents' | 'tax'>): [string, number][] {
+  return [
+    [booking.konto, booking.betragCents],
+    [booking.gkonto, -(booking.betragCents + (booking.tax?.steuerCents ?? 0))],
+  ];
+}
+
 interface VatEntry {
-  gross: number;
+  net: number;
   vat: number;
   apaleo: string[];
 }
@@ -37,10 +49,12 @@ export class SummaryBuilder {
   private rounding = 0;
 
   /** `apaleoVat` is what `apaleoVatOf` gives for the line. */
-  addBooking(line: LedgerLine, booking: PostedBooking, debit: PostedSide, credit: PostedSide, roundingCents: number, apaleoVat: readonly ApaleoVat[]): void {
-    const [soll, haben] = booking.side === 'S' ? [booking.konto, booking.gegenkonto] : [booking.gegenkonto, booking.konto];
-    this.account(soll).soll += booking.amountCents;
-    this.account(haben).haben += booking.amountCents;
+  addBooking(line: LedgerLine, booking: BmdBooking, debit: PostedSide, credit: PostedSide, roundingCents: number, apaleoVat: readonly ApaleoVat[]): void {
+    for (const [account, cents] of bookingMovements(booking)) {
+      const entry = this.account(account);
+      if (cents > 0) entry.soll += cents;
+      else entry.haben -= cents;
+    }
     this.rounding += roundingCents;
 
     const side = (type: string) => (credit.ref.type === type ? credit : debit.ref.type === type ? debit : undefined);
@@ -48,12 +62,13 @@ export class SummaryBuilder {
     const deposit = revenue ? undefined : side('Liabilities');
     const vatSide = revenue ?? deposit;
     if (vatSide) {
-      const gross = creditedAmount(line, vatSide.ref.type);
-      const rate = vatSide.vat ? vatSide.rate : 0;
+      // Owed (positive) when the revenue or deposit account is credited.
+      const owed = booking.tax && vatSide.vat ? { net: -booking.betragCents, vat: -booking.tax.steuerCents } : { net: creditedAmount(line, vatSide.ref.type), vat: 0 };
+      const rate = booking.tax && vatSide.vat ? booking.tax.prozent : 0;
       const totals = revenue ? this.revenue : this.depositVat;
-      const entry = totals.get(rate) ?? { gross: 0, vat: 0, apaleo: [] };
-      entry.gross += gross;
-      entry.vat += datevVat(gross, rate);
+      const entry = totals.get(rate) ?? { net: 0, vat: 0, apaleo: [] };
+      entry.net += owed.net;
+      entry.vat += owed.vat;
       entry.apaleo.push(...apaleoVat.map((vat) => vat.precise));
       totals.set(rate, entry);
     }
@@ -61,7 +76,7 @@ export class SummaryBuilder {
     for (const payment of [debit, credit]) {
       if (payment.ref.type !== 'Payments') continue;
       const signed = payment === debit ? line.grossCents : -line.grossCents;
-      this.payments.set(payment.row.datevAccount, (this.payments.get(payment.row.datevAccount) ?? 0) + signed);
+      this.payments.set(payment.row.bmdAccount, (this.payments.get(payment.row.bmdAccount) ?? 0) + signed);
     }
     const movement = depositMovement(line);
     if (movement?.direction === 'increase') this.deposits.receivedCents += movement.cents;
@@ -112,5 +127,5 @@ export class SummaryBuilder {
 function vatTotals(entries: ReadonlyMap<number, VatEntry>): VatTotal[] {
   return [...entries]
     .sort(([a], [b]) => a - b)
-    .map(([ratePercent, { gross, vat, apaleo }]) => ({ ratePercent, grossCents: gross, vatCents: vat, apaleoVat: sumDecimals(apaleo) }));
+    .map(([ratePercent, { net, vat, apaleo }]) => ({ ratePercent, netCents: net, vatCents: vat, grossCents: net + vat, apaleoVat: sumDecimals(apaleo) }));
 }

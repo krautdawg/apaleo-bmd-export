@@ -1,16 +1,13 @@
 import type { Config } from '../core/config.js';
 import type { Finding } from '../core/findings.js';
-import type { Skr } from '../mapping/index.js';
 import type { PeriodPart } from './period.js';
 
 /** What a target needs to name and render the file of one property and period. */
 export interface TargetFileMeta {
-  /** The whole config: a target reads its own section (for example `datev`). */
+  /** The whole config: a target reads its own section (for example `bmd`). */
   config: Config;
   propertyId: string;
   part: PeriodPart;
-  /** The Mandant's chart of accounts, from the config or the mapping file. */
-  skr: Skr;
   /** `export --demo`: the file name and the file itself must say so. */
   demo: boolean;
   createdAt: Date;
@@ -30,7 +27,7 @@ export interface RenderedFile {
  * `sameContent`.
  */
 export interface TargetWriter<B> {
-  /** Short id, for example `datev`. */
+  /** Short id, for example `bmd`. */
   readonly id: string;
   /** The first line of the protocol beside each file. */
   readonly protocolTitle: string;

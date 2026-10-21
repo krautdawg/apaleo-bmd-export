@@ -142,18 +142,19 @@ describe('the docs checks', () => {
 
   it('knows nested, defaulted and array keys of the schema', () => {
     const paths = configPaths();
-    for (const key of ['apaleo.clientId', 'datev.wjBeginn', 'schedule.monthly.dayOfMonth', 'checks.aggregates', 'properties[].mapping']) {
+    for (const key of ['apaleo.clientId', 'bmd.buchsymbol', 'schedule.monthly.dayOfMonth', 'checks.aggregates', 'properties[].mapping']) {
       expect(paths.has(key), key).toBe(true);
     }
-    expect(checkConfigKeys('docs/x.md', '`properties[].mandantennummer` and `properties[].kanzlei`')).toEqual([
+    expect(checkConfigKeys('docs/x.md', '`properties[].buchsymbol` and `properties[].kanzlei`')).toEqual([
       'docs/x.md: `properties[].kanzlei` is not a config key',
     ]);
+    expect(checkConfigKeys('docs/x.md', '`datev.beraternummer`')).toEqual(['docs/x.md: `datev.beraternummer` is not a config key']);
   });
 
   it('ignores other backticked text and keys inside code fences', () => {
     const text = [
-      'The file name starts with `EXTF_`, cash goes to `1360`, the type is `Revenues`,',
-      'the host is `api.apaleo.com`, a value is `checks.aggregates: true`, and `datev` alone is a section.',
+      'The file name starts with `BMD_`, cash goes to `2700`, the type is `Revenues`,',
+      'the host is `api.apaleo.com`, a value is `checks.aggregates: true`, and `bmd` alone is a section.',
       '```yaml',
       '`posting.aggregate`',
       '```',

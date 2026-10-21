@@ -1,60 +1,66 @@
 import { describe, expect, it } from 'vitest';
-import { datevVat, normaliseTaxes } from '../../src/posting/index.js';
+import { bmdCheckTax, normaliseTaxes, taxFromGross } from '../../src/posting/index.js';
 import { ledgerLine, tax } from '../helpers/ledger.js';
 import { ACCOUNTS, post } from '../helpers/posting.js';
 
 describe('normaliseTaxes', () => {
   it('drops entries with percent 0 and amount 0 and keeps every other entry', () => {
     const without = tax('Without', 0, 0);
-    const reduced = tax('Reduced', 7, 654);
+    const reduced = tax('VeryReduced', 10, 1_000);
     const oddZero = tax('Without', 0, 12);
     expect(normaliseTaxes([without])).toEqual([]);
     expect(normaliseTaxes([without, reduced, oddZero])).toEqual([reduced, oddZero]);
-    expect(normaliseTaxes([tax('Reduced', 7, 0)])).toHaveLength(1);
+    expect(normaliseTaxes([tax('VeryReduced', 10, 0)])).toHaveLength(1);
   });
 });
 
-describe('datevVat', () => {
+describe('taxFromGross', () => {
   it.each([
     // gross × rate / (100 + rate), rounded half away from zero
-    [10_000, 7, 654], // 700000 / 107 = 6542.06… → 654.2 → 6.54
-    [1_200, 7, 79], // 8400 / 107 = 78.50… → 0.79
-    [300, 19, 48], // 5700 / 119 = 47.89… → 0.48
-    [2_380, 19, 380], // 45220 / 119 = 380 exactly
-    [20_000, 7, 1_308], // 140000 / 107 = 1308.41… → 13.08
-    [15_000, 7, 981], // 105000 / 107 = 981.30… → 9.81
-    [-1_000, 7, -65], // 7000 / 107 = 65.42… → −0.65, sign of the gross amount
+    [11_000, 10, 1_000], // 110000 / 110 = 1000 exactly
+    [9_800, 10, 891], // 98000 / 110 = 890.90… → 8.91
+    [4_680, 10, 425], // 46800 / 110 = 425.45… → 4.25
+    [2_400, 20, 400], // 48000 / 120 = 400 exactly
+    [1_480, 20, 247], // 29600 / 120 = 246.66… → 2.47
+    [10_500, 13, 1_208], // 136500 / 113 = 1207.96… → 12.08
+    [-1_100, 10, -100], // sign of the gross amount
     [500, 0, 0],
-    [107, 7, 7], // exactly 7.00 cents
-    [15, 7, 1], // 105 / 107 = 0.98… → 1
-    [7_490, 7, 490], // 52430 / 107 = 490 exactly
-    [1_605, 7, 105], // 11235 / 107 = 105 exactly
-    [3_745, 7, 245], // 26215 / 107 = 245 exactly
-    [-1_605, 7, -105],
-  ])('VAT on %i cents at %i %% is %i cents', (gross, rate, vat) => {
-    expect(datevVat(gross, rate)).toBe(vat);
+    [1_049, 4.9, 49], // 5140.1 / 104.9 = 49.0 → 0.49
+  ])('the tax in %i cents at %d %% is %i cents', (gross, rate, vat) => {
+    expect(taxFromGross(gross, rate)).toBe(vat);
   });
 
   it('rounds an exact half cent away from zero, without floating-point noise', () => {
-    // 1 cent at 100 %: 1 × 100 / 200 = 0.5 → 1; 3 cents: 1.5 → 2; and the negative amounts away from zero.
-    expect(datevVat(1, 100)).toBe(1);
-    expect(datevVat(3, 100)).toBe(2);
-    expect(datevVat(-1, 100)).toBe(-1);
-    expect(datevVat(-3, 100)).toBe(-2);
-    // Rates with decimals: 235 cents at 17.5 % = 35 exactly; 1 cent at 50 % = 0.33… → 0.
-    expect(datevVat(1, 50)).toBe(0);
-    expect(datevVat(235, 17.5)).toBe(35);
+    expect(taxFromGross(1, 100)).toBe(1);
+    expect(taxFromGross(3, 100)).toBe(2);
+    expect(taxFromGross(-1, 100)).toBe(-1);
+    expect(taxFromGross(-3, 100)).toBe(-2);
+    expect(taxFromGross(1, 50)).toBe(0);
+    expect(taxFromGross(235, 17.5)).toBe(35);
+  });
+});
+
+describe('bmdCheckTax', () => {
+  it.each([
+    [4_255, 10, 426], // VIE 000000031: 42.55 × 10 % = 4.255 → 4.26
+    [8_407, 13, 1_093], // VIE 000000029: 84.07 × 13 % = 10.9291 → 10.93
+    [9_292, 13, 1_208], // VIE 000000025: 92.92 × 13 % = 12.0796 → 12.08
+    [-1_000, 10, 100], // unsigned
+    [1_233, 20, 247], // 12.33 × 20 % = 2.466 → 2.47
+    [1_000, 4.9, 49],
+  ])('checks %i cents at %d %% as %i cents', (betrag, rate, check) => {
+    expect(bmdCheckTax(betrag, rate)).toBe(check);
   });
 });
 
 describe('VAT guard on apaleo precise tax', () => {
   it.each([
-    // Precise tax from apaleo: 11400 × 7 / 107 = 745.79 → 7.46; apaleo 7.45794393 → 7.46.
-    ['accommodation 114.00 at 7 %', ACCOUNTS.accommodation7, 11_400, tax('Reduced', 7, 746, '7.45794393')],
-    // Recorded BER line 000000032: 1490 × 19 / 119 = 237.90 → 2.38; apaleo 2.3789916 → 2.38.
-    ['drinks 14.90 at 19 %', ACCOUNTS.beverages19, 1_490, tax('Normal', 19, 238, '2.3789916')],
-    // A release: −8400 × 7 / 107 = −549.53 → −5.50; apaleo −5.4953271 → −5.50.
-    ['a negative allowance of 84.00 at 7 %', ACCOUNTS.accommodation7, -8_400, tax('Reduced', 7, -550, '-5.4953271')],
+    // 98.00 at 10 %: apaleo 8.90909091 → 8.91, Betrag 89.09, BMD checks 8.909 → 8.91.
+    ['accommodation 98.00 at 10 %', ACCOUNTS.accommodation10, 9_800, tax('VeryReduced', 10, 891, '8.90909091')],
+    // 14.80 at 20 %: apaleo 2.46666667 → 2.47, Betrag 12.33, BMD checks 2.466 → 2.47.
+    ['drinks 14.80 at 20 %', ACCOUNTS.beverages20, 1_480, tax('Normal', 20, 247, '2.46666667')],
+    // A negative allowance: −98.00, apaleo −8.90909091 → −8.91.
+    ['a negative allowance of 98.00 at 10 %', ACCOUNTS.accommodation10, -9_800, tax('VeryReduced', 10, -891, '-8.90909091')],
   ])('raises no finding for %s: sub-cent digits never count', (_name, credit, grossCents, entry) => {
     const result = post([ledgerLine({ credit, grossCents, taxes: [entry] })]);
     expect(result.findings).toEqual([]);

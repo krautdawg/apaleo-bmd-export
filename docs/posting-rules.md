@@ -1,74 +1,76 @@
-# Buchungsregeln: von apaleo-Zeilen zu DATEV-Buchungen
+# Buchungsregeln: von apaleo-Zeilen zu BMD-Buchungen
 
-`buildBookings(lines, mapping, chart, options)` in `src/posting` macht aus den Zeilen von `export-gross-daily` in apaleo die Buchungen eines DATEV-Buchungsstapels. Die Funktion ist rein: Dieselben Zeilen und dieselbe Kontenzuordnung ergeben immer dasselbe Ergebnis. Jede apaleo-Zeile landet an genau einer von drei Stellen: in einer Buchung, in der Liste der übersprungenen Zeilen (mit Grund und Betrag) oder in einem Befund mit `E-`, der den Export blockiert.
+`buildBookings(lines, mapping, chart, options)` in `src/posting` macht aus den Zeilen von `export-gross-daily` in apaleo die Buchungen eines BMD-Buchungsimports. Die Funktion ist rein: Dieselben Zeilen und dieselbe Kontenzuordnung ergeben immer dasselbe Ergebnis. Jede apaleo-Zeile landet an genau einer von drei Stellen: in einer Buchung, in der Liste der übersprungenen Zeilen (mit Grund und Betrag) oder in einem Befund mit `E-`, der den Export blockiert.
 
-Keine Gewähr, keine Steuerberatung: Die steuerlichen Entscheidungen stecken in der Kontenzuordnung, und die muss deine Steuerberatung freigeben. Die Regeln unten stellen nur sicher, dass DATEV die USt rechnet, die apaleo berechnet hat.
+Keine Gewähr, keine Steuerberatung: Die steuerlichen Entscheidungen stecken in der Kontenzuordnung, und die muss deine Steuerberatung freigeben. Die Regeln unten stellen nur sicher, dass BMD die USt bucht, die apaleo berechnet hat.
 
 ## Eine Buchung pro Zeile
 
-In dieser Version wird nichts verdichtet: Jede apaleo-Zeile wird eine Buchung mit dem Bruttobetrag ohne Vorzeichen, dem Geschäftstag als Belegdatum und der `sourceEntryNumber` aus apaleo, damit sich jede Buchung zurückverfolgen lässt. Ein Hotel mit 40 Zimmern erzeugt ein paar tausend Buchungen im Monat; DATEV importiert das ohne Probleme, und die USt-Prüfung bleibt pro Zeile genau.
+In dieser Version wird nichts verdichtet: Jede apaleo-Zeile wird eine Buchung mit dem Geschäftstag als Beleg- und Buchungsdatum und der `sourceEntryNumber` aus apaleo, damit sich jede Buchung zurückverfolgen lässt. Ein Hotel mit 40 Zimmern erzeugt ein paar tausend Buchungen im Monat; BMD importiert das ohne Probleme, und die USt-Prüfung bleibt pro Zeile genau.
 
-## Richtung: die USt-Seite kommt ins Gegenkonto
+## Richtung: die Seite mit Steuercode kommt ins Konto
 
-DATEV rechnet die USt aus dem Bruttobetrag auf dem Gegenkonto, über ein Automatikkonto (SKR03 8300, 8400, 1711, 1718 …) oder einen BU-Schlüssel. Beide Seiten der Zeile werden über die Kontenzuordnung aufgelöst (siehe [mapping-guide.md](mapping-guide.md)); die Seite, deren Zeile DATEV USt anwenden lässt (ein Satz über 0 % oder ein BU-Schlüssel), ist die USt-Seite.
+BMD rechnet und bucht die Steuer nur auf dem führenden Konto (`konto`), und auf einem Sachkonto erwartet es dort den Nettobetrag. Beide Seiten der Zeile werden über die Kontenzuordnung aufgelöst (siehe [mapping-guide.md](mapping-guide.md)); die Seite, deren Zeile einen Steuercode hat, ist die USt-Seite.
 
-| Fall | Konto | Gegenkonto | Soll/Haben |
-|---|---|---|---|
-| keine USt-Seite (Zahlungen, Umbuchungen zwischen Folios, Kurtaxe mit 0 %) | belastetes Konto | entlastetes Konto | `S` |
-| USt-Seite im Haben (Leistung, Anzahlung) | belastetes Konto | USt-Seite | `S` |
-| USt-Seite im Soll (Nachlass auf Erlöse, Auflösung einer Anzahlung) | entlastetes Konto | USt-Seite | `H` |
-| beide Seiten mit USt (Umbuchung zwischen zwei Erlöskonten) | Fehler `E-TWO-VAT-SIDES`, keine Buchung | | |
+| Fall | `konto` | `gkonto` | `betrag` | `steuer` |
+|---|---|---|---|---|
+| USt-Seite im Haben (Leistung, erhaltene Anzahlung) | USt-Seite | andere Seite | Brutto minus Steuer, negativ | Steuer, negativ |
+| USt-Seite im Soll (Nachlass auf Erlöse, Auflösung einer Anzahlung) | USt-Seite | andere Seite | Brutto minus Steuer, positiv | Steuer, positiv |
+| keine USt-Seite, eine Seite ist Erlös oder Forderungsverlust (Erlöse ohne Steuercode) | Erlös- oder Forderungsverlustkonto | andere Seite | Brutto, negativ im Haben, positiv im Soll | leer |
+| keine USt-Seite sonst (Zahlungen, Umbuchungen zwischen Folios, Ortstaxe ohne Steuercode) | belastetes Konto | entlastetes Konto | Brutto, positiv | leer |
+| beide Seiten mit Steuercode (Umbuchung zwischen zwei Erlöskonten) | Fehler `E-TWO-VAT-SIDES`, keine Buchung | | | |
 
-Ein negativer Bruttobetrag (ein Nachlass, der als negative Leistung gebucht ist) bucht seinen Betrag ohne Vorzeichen mit getauschter Seite. Der BU-Schlüssel kommt aus der Zeile der USt-Seite.
+Ein Erlös ohne Steuercode führt mit dem Erlöskonto, damit die Kostenstelle (`kost`) auf der Leistung und auf ihrem Nachlass steht. Zahlungen, Gastforderungen und Debitoren haben nie einen Steuercode (`E-STEUERCODE-NOT-ALLOWED`), sonst stünde die Umsatzsteuer im Soll. Ein negativer Bruttobetrag (eine negative Leistung, eine Erstattung) tauscht die Seiten. apaleo bucht die Auflösung einer Anzahlung als negative Belastung im Haben der Anzahlung; das Tool bucht sie deshalb mit positivem Betrag und positiver Steuer auf dem Anzahlungskonto. Mit `verbuchkz` `A` erzeugt BMD die Gegenbuchung auf `gkonto` (Betrag plus Steuer, also genau der Bruttobetrag aus apaleo) und die Steuerbuchung selbst.
+
+Die Steuer ist die Steuer der apaleo-Zeile, kaufmännisch auf den Cent gerundet (bei ,5 weg von null); der Betrag ist Brutto minus diese Steuer, nie der für sich gerundete Nettobetrag von apaleo. Steuercode und Prozent kommen aus der Zeile der USt-Seite. Eine Zeile mit Steuercode und 0 % (zum Beispiel ein Code für nicht steuerbare Umsätze) ist erlaubt und bucht die Steuer 0.
 
 ## USt-Prüfung pro Zeile
 
-Zuerst werden die `taxes[]` der Zeile bereinigt: Einträge mit Satz 0 und Betrag 0 (zum Beispiel `Without` bei der Kurtaxe) fallen weg. Dann wird die USt von DATEV als `round(|gross| × rate / (100 + rate))` berechnet, kaufmännisch gerundet (bei ,5 weg von null), und ohne Vorzeichen mit dem Steuerbetrag von apaleo verglichen.
+Zuerst werden die `taxes[]` der Zeile bereinigt: Einträge mit Satz 0 und Betrag 0 (zum Beispiel `Without` bei der Ortstaxe) fallen weg. Dass Netto plus Steuer den Bruttobetrag ergibt, prüft schon das Lesen der apaleo-Daten auf den halben Cent genau. Dann prüft das Tool:
 
 | Code | Bedeutung |
 |---|---|
-| `W-VAT-ROUNDING` | Die USt von DATEV weicht um einen Cent von der von apaleo ab. Gebucht; die Differenz geht in die Rundungssumme der Übersicht. |
+| `W-VAT-ROUNDING` | BMDs eigene Kontrolle, `round(|betrag| × Satz / 100)`, weicht um einen Cent von der Steuer ab (am Live-Tag VIE: 46,80 brutto zu 10 %, Steuer 4,25, Kontrolle 4,26). Gebucht mit der Steuer von apaleo; die Differenz geht in die Rundungssumme der Übersicht. |
 | `E-VAT-AMOUNT` | Die Abweichung ist größer als ein Cent. |
-| `E-VAT-RATE` | Der Satz von apaleo weicht von dem Satz ab, den DATEV auf dem zugeordneten Konto anwendet (auch bei einem Zeitraum aus 2025, der mit einer Kontenzuordnung für 2026 exportiert wird). |
-| `E-VAT-MISSING` | apaleo hat USt berechnet, aber keines der beiden zugeordneten Konten lässt DATEV USt rechnen. |
-| `E-VAT-UNEXPECTED` | apaleo hat keine USt berechnet, aber DATEV würde welche rechnen. |
+| `E-VAT-RATE` | Der Satz von apaleo weicht von `bmd_vat_percent` der USt-Seite ab. |
+| `E-VAT-MISSING` | apaleo hat USt berechnet, aber keine der beiden Seiten hat einen Steuercode. |
+| `E-VAT-UNEXPECTED` | apaleo hat keine USt berechnet, aber die USt-Seite bucht einen Satz über 0 %. |
 | `E-VAT-MIXED` | Eine Zeile hat mehr als einen USt-Satz. |
 | `E-VAT-SIGN` | USt und Bruttobetrag haben verschiedene Vorzeichen. |
-| `E-DATEV-RATE-UNKNOWN` | Der Satz, den DATEV auf einer Zeile der Kontenzuordnung anwendet, ist nicht bekannt (unbekannter BU-Schlüssel, leeres `datev_vat_percent`). |
-| `E-UNMAPPED` | Ein Konto hat keine Zeile mit DATEV-Konto; einmal pro Konto, wie bei `mapping check --from --to`. |
+| `E-VAT-RATE-MISSING` | Die Zeile der Kontenzuordnung hat einen Steuercode, aber keinen gültigen USt-Satz. |
+| `E-UNMAPPED` | Ein Konto hat keine Zeile mit BMD-Konto; einmal pro Konto, wie bei `mapping check --from --to`. |
 
 Die Meldungen nennen die Buchungsnummer aus apaleo, beide Konten mit Nummer und Typ (nie mit Namen, weil Gastfolios Gästenamen tragen) und die Zeile der Kontenzuordnung, die du ändern musst.
 
 ## Anzahlungen
 
-Anzahlungen werden auf das zugeordnete Anzahlungskonto gebucht, normalerweise die Automatikkonten für erhaltene, versteuerte Anzahlungen (SKR03 1711 / 1718, SKR04 3260 / 3272). So bucht DATEV die USt auf die Anzahlung und löst sie wieder auf, wenn die Anzahlung verrechnet wird.
+Anzahlungen werden auf das zugeordnete Anzahlungskonto gebucht, in der EKR-Vorlage 3200 (10 %), 3202 (13 %) und 3201 (20 %) mit Steuercode 1, Überzahlungen zu 0 % auf 3209 ohne Steuercode. In echten apaleo-Daten kommt jede Anzahlung, ihre Auflösung (eine negative Belastung derselben Anzahlung) und ihre Erstattung (eine negative Anzahlung) mit `taxes[]` oder mit 0 %, und es gibt keine `PostPrepaymentVat`-Zeilen. Die Übersicht zählt erhaltene, aufgelöste und erstattete Anzahlungen nach Seite und Vorzeichen.
 
-Die Auflösung (Soll auf dem Konto `Liabilities` des Gastes, Haben auf seinem Konto `Receivables`) muss den Satz der Anzahlung tragen. Schickt apaleo sie mit `taxes[]`, gilt die normale Prüfung. Sonst wird der Satz ermittelt, nie mit 0 % angenommen:
+Für ältere Daten und andere Quellen gilt: Die Auflösung (Soll auf dem Konto `Liabilities` des Gastes, Haben auf seinem Konto `Receivables`) muss den Satz der Anzahlung tragen. Schickt apaleo sie ohne `taxes[]`, wird der Satz ermittelt, nie mit 0 % angenommen:
 
-1. aus der oder den `PostPrepaymentVat`-Zeilen desselben Geschäftstags und derselben Referenz, die die USt der Anzahlung vom apaleo-Konto für USt auf Anzahlungen nehmen (ihr Steuersatz, oder der bekannte Satz, dessen USt auf der Auflösung ihrem Betrag entspricht). Die USt von DATEV auf der Auflösung muss dann bis auf einen Cent der USt auf diesen Zeilen entsprechen;
-2. sonst aus dem USt-Satz des Kontos `Liabilities` oder seines Elternkontos im Kontenplan von apaleo, mit der Warnung `W-VAT-INFERRED` (immer, auch wenn dieser Satz 0 % ist und die Auflösung auf das Anzahlungskonto ohne USt geht);
+1. aus der oder den `PostPrepaymentVat`-Zeilen desselben Geschäftstags und derselben Referenz (ihr Steuersatz, oder der bekannte Satz, dessen USt auf der Auflösung ihrem Betrag entspricht). Die Steuer ist dann der Betrag dieser Zeile (bei mehreren Auflösungen die aus dem Bruttobetrag berechnete Steuer jeder Auflösung), und die berechnete Steuer muss bis auf einen Cent der USt auf diesen Zeilen entsprechen;
+2. sonst aus dem USt-Satz des Kontos `Liabilities` oder seines Elternkontos im Kontenplan von apaleo, mit der Steuer `round(|brutto| × Satz / (100 + Satz))` und der Warnung `W-VAT-INFERRED` (immer, auch wenn dieser Satz 0 % ist und die Auflösung auf das Anzahlungskonto ohne Steuercode geht);
 3. sonst stoppt der Export mit `E-VAT-RATE-UNKNOWN`, statt die Auflösung ohne USt zu buchen.
 
-Eine erhaltene oder erstattete Anzahlung ohne `taxes[]` nimmt den Satz einer `PostPrepaymentVat`-Zeile desselben Geschäftstags und derselben Referenz, die USt in ihrer Richtung bucht (Eingang) oder zurückbucht (Erstattung), mit derselben Prüfung des Betrags. So wird die USt, die apaleo bewegt hat, auch in DATEV angemeldet oder zurückgenommen. Ohne eine solche Zeile bleibt es bei 0 % (ohne Rückgriff auf den Kontenplan).
-
-`mapping check --from --to` nutzt dieselbe Ermittlung und löst Auflösungen ohne USt also mit dem Satz auf, den auch der Export verwenden wird.
+Eine erhaltene oder erstattete Anzahlung ohne `taxes[]` nimmt den Satz einer `PostPrepaymentVat`-Zeile desselben Geschäftstags und derselben Referenz, die USt in ihrer Richtung bucht (Eingang) oder zurückbucht (Erstattung), mit derselben Prüfung des Betrags. Ohne eine solche Zeile bleibt es bei 0 % (ohne Rückgriff auf den Kontenplan). `mapping check --from --to` nutzt dieselbe Ermittlung.
 
 ## Übersprungene Zeilen
 
 | Grund | Zeilen |
 |---|---|
-| `VAT_ACCOUNT_LINE` | Jede Zeile, die ein apaleo-Konto `Vat` oder `VatOnLiabilities` berührt, auch `PostPrepaymentVat`. DATEV rechnet die USt selbst über die Automatikkonten; würden die USt-Zeilen von apaleo zusätzlich gebucht, stünde der Steuerbetrag ohne seine Bemessungsgrundlage (Kz 81/86) in der Voranmeldung, und die USt würde doppelt gezählt. Diese Konten brauchen keine Zeile in der Kontenzuordnung. |
+| `VAT_ACCOUNT_LINE` | Jede Zeile, die ein apaleo-Konto `Vat` oder `VatOnLiabilities` berührt, auch `PostPrepaymentVat`. BMD bucht die Steuer aus dem Feld `steuer` der Erlös- oder Anzahlungsbuchung; würden die USt-Zeilen von apaleo zusätzlich gebucht, stünde die Steuer doppelt in der UVA. Diese Konten brauchen keine Zeile in der Kontenzuordnung. |
 | `ZERO_AMOUNT` | Bruttobetrag 0. |
-| `SAME_ACCOUNT` | Beide Seiten sind demselben DATEV-Konto zugeordnet, zum Beispiel eine Umbuchung zwischen zwei Gastfolios auf 1410. |
+| `SAME_ACCOUNT` | Beide Seiten sind demselben BMD-Konto zugeordnet, zum Beispiel eine Umbuchung zwischen zwei Gastfolios auf 2390, oder die zweite Zeile einer Zahlung (`<Folio>_Receivables` an `<Folio>_Receivables/Offset`). |
 
-Übersprungene Zeilen behalten ihre Anzahl und ihre Bruttosumme in der Übersicht, es verschwindet also nichts.
+Übersprungene Zeilen behalten ihre Anzahl und ihre Bruttosumme ohne Vorzeichen in der Übersicht, es verschwindet also nichts.
 
 ## Felder
 
-- **Belegfeld 1**: die Belegnummer aus apaleo (Rechnung, Referenz des Zahlungsdienstleisters, …), wenn `posting.belegfeld1` auf `receipt` steht (Standard) und es eine gibt, sonst die Reservierungsreferenz. Der DATEV-Writer bereinigt sie.
-- **Buchungstext**: eine deutsche Bezeichnung des Vorgangs (`Erlös`, `Zahlung`, `Anzahlung`, `Umbuchung`, `Forderung`, `Forderungsverlust`, `USt Anzahlung`, sonst `Buchung`) und der Name des Kontos der USt-Seite, sonst des entlasteten Kontos, gekürzt auf 60 Zeichen. Konten vom Typ Receivables, AccountsReceivable und Liabilities außerhalb des globalen Buchungsjournals (Gast-, Buchungs- und Reservierungsfolios) nutzen den Namen ihres globalen Elternkontos oder die feste Bezeichnung `Gastforderung`, `Debitor` oder `Anzahlung Gast`, nie ihren eigenen Namen, denn der kann der eines Gastes sein. Beginnt die Kontobezeichnung schon mit der Bezeichnung des Vorgangs, steht sie allein (`Anzahlung Gast`, nicht `Anzahlung Anzahlung Gast`).
-- **KOST1, KOST2**: jeweils der erste nicht leere Wert aus der Zeile der USt-Seite, der Zeile des Kontos und der Zeile des Gegenkontos.
+- **Buchungssymbol**: `bmd.buchsymbol` (oder `properties[].buchsymbol`). Eine Zeile ohne USt-Seite mit einem Zahlungskonto bekommt `bmd.buchsymbolZahlung` (oder `properties[].buchsymbolZahlung`), sonst ebenfalls das Hauptsymbol.
+- **extbelegnr**: die Belegnummer aus apaleo (Rechnung, Referenz des Zahlungsdienstleisters, …), wenn `posting.extbelegnr` auf `receipt` steht (Standard) und es eine gibt, sonst die Reservierungsreferenz. Der BMD-Writer bereinigt sie.
+- **text**: eine deutsche Bezeichnung ohne Gästenamen, gekürzt auf 40 Zeichen: `Erlös Logis 10 %` oder `Erlösminderung …` nach Seite und Vorzeichen, `Anzahlung 10 %`, `Umbuchung Anzahlung`, `Auflösung Anzahlung 13 %`, `Erstattung Anzahlung`, `Zahlung Visa` oder `Erstattung …` (englische Namen der Zahlungsarten übersetzt oder weggelassen), `Forderung an Debitor`, `Ortstaxe`. Konten vom Typ Receivables, AccountsReceivable und Liabilities außerhalb des globalen Buchungsjournals nutzen den Namen ihres globalen Elternkontos oder eine feste Bezeichnung, nie ihren eigenen Namen, denn der kann der eines Gastes sein.
+- **kost**: nur aus der Zeile von `konto`, und nur, wenn das eine Erlös- oder Forderungsverlustzeile ist. Auf Zahlungen, Personenkonten, Anzahlungen, Ortstaxe und Verrechnungskonten bleibt `kost` leer, denn auf einer Zahlung liest BMD es als Belegnummer der bezahlten Rechnung.
 
 ## Übersicht
 
-Alles in Cent: Soll, Haben und Saldo pro DATEV-Konto; Erlöse pro USt-Satz mit der USt, die DATEV rechnen wird; Kurtaxe und Gästeabgaben; Zahlungen pro Geldtransitkonto; erhaltene und aufgelöste Anzahlungen; übersprungene Zeilen pro Grund; die Rundungssumme; Befunde pro Code.
+Alles in Cent: Soll, Haben und Saldo pro BMD-Konto nach dem Bewegungsmodell (`konto` mit dem Betrag, `gkonto` mit Betrag plus Steuer); Erlöse und Anzahlungen pro USt-Satz mit Netto, Steuer und Brutto, wie sie an BMD gehen, daneben die genaue USt von apaleo auf denselben Zeilen; Ortstaxe und Gästeabgaben; Zahlungen pro Konto; erhaltene, aufgelöste und erstattete Anzahlungen; die Bewegung auf dem Sammeldebitor; übersprungene Zeilen pro Grund; die Rundungssumme; Befunde pro Code.
