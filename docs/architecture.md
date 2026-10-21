@@ -1,6 +1,6 @@
 # Architektur, für Mitwirkende
 
-apaleo-bmd-export ist ein kleines Kommandozeilenprogramm in TypeScript (Node.js 24, ESM, strenge Typen, drei Abhängigkeiten zur Laufzeit: `csv-parse`, `yaml`, `zod`). Es liest ein PMS (apaleo) und schreibt ein Zielformat (BMD Buchungsimport). Der Code ist so geschnitten, dass eine zweite Quelle (Mews, Smoobu, Stripe) oder ein zweites Zielformat (RZL, DATEV, lexoffice) dazukommen kann, ohne den Rest anzufassen.
+apaleo-bmd-export ist ein kleines Kommandozeilenprogramm in TypeScript (Node.js 24, ESM, strenge Typen, drei Abhängigkeiten zur Laufzeit: `csv-parse`, `yaml`, `zod`). Es liest ein PMS (apaleo) und schreibt ein Zielformat (BMD Buchungsimport). Der Code ist so geschnitten, dass eine zweite Quelle (zum Beispiel Mews, Smoobu oder Stripe) oder ein zweites Zielformat dazukommen kann, ohne den Rest anzufassen. Geplant ist davon nichts; die Schnittstellen sind für Mitwirkende da, die so etwas brauchen.
 
 Code, Bezeichner und Commit-Nachrichten sind auf Englisch; diese Seite erklärt sie auf Deutsch.
 
@@ -61,7 +61,7 @@ Eine `LedgerLine` ist ein gebuchtes Paar aus Soll und Haben im Buchungsjournal d
 | `grossCents` | Bruttobetrag in ganzen Cent mit dem Vorzeichen der Quelle; Nachlässe sind negativ |
 | `netPrecise`, `netCents` | Nettobetrag als genauer Dezimaltext der Quelle (apaleo schickt bis zu acht Nachkommastellen, z. B. `"12.5210084"`) und kaufmännisch auf ganze Cent gerundet |
 | `taxes[]` | `vatType`, `percent`, `amountPrecise` (genauer Dezimaltext) und `amountCents` (gerundet), so weitergegeben, wie sie ankommen |
-| `receipt`, `reference`, `referenceType` | Rechnungs- oder Zahlungsreferenz und die Reservierung, für Belegfeld 1 |
+| `receipt`, `reference`, `referenceType` | Rechnungs- oder Zahlungsreferenz und die Reservierung, für `extbelegnr` (siehe `posting.extbelegnr`) |
 | `sourceEntryNumber`, `source` | damit sich jede Zeile bis zur Quelle zurückverfolgen lässt |
 
 Die Kontotypen nutzen die Namen von apaleo (`Revenues`, `Payments`, `Liabilities`, `Receivables`, `CityTaxes`, `Vat`, ...), das genaueste Modell, das bisher bekannt ist. Eine andere Quelle ordnet ihre Konten diesen Typen zu. Der Bruttobetrag ist immer ganze Cent: Rechne Gleitkommazahlen am Rand um, wie es `toCents` in `src/core/money.ts` tut, und lehne Bruttobeträge unter einem Cent ab. Netto- und Steuerbeträge dürfen genauer sein; behalte sie als Dezimaltext (`netPrecise`, `amountPrecise`) und runde sie für die Cent-Felder kaufmännisch (`decimalToCents`). Genaue Beträge addierst du mit `sumDecimals` exakt, nie als Gleitkommazahlen.
@@ -76,17 +76,42 @@ Die Kontotypen nutzen die Namen von apaleo (`Revenues`, `Payments`, `Liabilities
 4. Teste den Adapter mit den Testdaten über eine Attrappe für `fetchFn` (siehe `test/helpers/apaleo.ts` und `test/apaleo/`). Die Tests für Kontenzuordnung, Buchungsregeln und Export bleiben unabhängig vom PMS und nutzen `FakeSource` in `test/helpers/fake-source.ts`.
 5. Hat die Quelle kein Buchungsjournal (Smoobu, Stripe), bildet der Adapter die Paare aus Soll und Haben selbst. Beschreib diese Regel in `docs/`, denn die Steuerberatung muss sie verstehen.
 
-## Ein Zielformat hinzufügen (zum Beispiel BMD oder lexoffice)
+## Die Schnittstelle TargetWriter
 
-Die Buchungsregeln erzeugen Werte vom Typ `PostedBooking` (Konto, Gegenkonto, Betrag, Steuercode, Prozent, Steuer, Buchungssymbol, Belegdatum, extbelegnr, Buchungstext, Kostenstelle) und eine Übersicht. Nur `src/bmd/` kennt das Dateiformat. Ein neuer Writer:
+Die Buchungsregeln (`src/posting/`) erzeugen Werte vom Typ `PostedBooking`. Das ist ein `BmdBooking` aus `src/bmd/types.ts` plus die apaleo-Buchungsnummern, aus denen die Buchung entstand:
 
-1. liegt in `src/<Ziel>/` (zum Beispiel `src/bmd/`), hängt nicht von `src/sources/` ab und meldet fehlerhafte Daten als Befunde mit Codes, wie `renderBuchungsimport` in `src/bmd/writer.ts` (dessen `BmdValidationError` aus `src/bmd/errors.ts` als `FindingsError` alle Befunde auf einmal enthält);
-2. hat Golden Files in `test/golden/<Ziel>/`, die Byte für Byte verglichen werden (siehe `test/bmd/golden.test.ts`);
-3. implementiert die Schnittstelle `TargetWriter` aus `src/export/target.ts`: Dateiname, Muster für vorhandene und überlappende Dateien, die gerenderten Bytes, den Vergleich „unverändert“, den Titel des Protokolls, den Block zum Import im Protokoll (`importBlock`) und die Hinweise (`advice`) für die Meldungen `E-PERIOD-OVERLAP` und `E-FILE-EXISTS`: welches Programm die Datei importiert, welche Konfigurationswerte jede Zeile ändern und wie die Kanzlei eine importierte Datei rückgängig macht (Beispiel: `src/bmd/target.ts`). `src/export/` kennt ein Zielformat nur über diese Schnittstelle; `DEFAULT_TARGET` in `src/export/pipeline.ts` wählt das Ziel.
+```ts
+interface BmdBooking {
+  konto: string;          // führendes Konto, bei Erlösen das Erlöskonto
+  gkonto: string;         // Gegenkonto
+  businessDate: LocalDate; // wird Belegdatum und Buchungsdatum
+  buchsymbol: string;
+  betragCents: number;    // aus Sicht von konto: positiv Soll, negativ Haben; netto, wenn tax gesetzt ist
+  tax?: { steuercode: number; prozent: number; steuerCents: number };
+  text?: string;
+  kost?: string;
+  extbelegnr?: string;
+}
+```
 
-Der Writer ist `src/bmd/` (`bmdTarget`, Einstellungen aus dem Abschnitt `bmd` der Konfiguration); was er schreibt und gegen welche Quellen er geprüft wurde, steht in [bmd-format.md](bmd-format.md). `DEFAULT_TARGET` wählt ihn.
+Nur `src/bmd/` kennt das Dateiformat. Der Export (`src/export/`) schreibt Dateien ausschließlich über die Schnittstelle `TargetWriter<B>` aus `src/export/target.ts`, wobei `B` der Buchungstyp des Ziels ist. Die Umsetzung für BMD ist `bmdTarget` in `src/bmd/target.ts` (Einstellungen aus dem Abschnitt `bmd` der Konfiguration), und `DEFAULT_TARGET` in `src/export/pipeline.ts` wählt sie. Ein `TargetWriter` liefert:
 
-USt-Logik, die nur ein Zielformat betrifft (BMD hat zum Beispiel keine Automatikkonten), gehört in den Buchungsschritt für dieses Ziel, nicht in den Writer.
+- den Dateinamen und ein Muster, an dem der Ausgabeordner vorhandene und überlappende Dateien erkennt (`fileName`, `filePattern`);
+- die gerenderten Bytes und die Befunde über geänderte Werte (`render`, wie `renderBuchungsimport` in `src/bmd/writer.ts`, dessen `BmdValidationError` aus `src/bmd/errors.ts` als `FindingsError` alle Fehler auf einmal enthält);
+- den Vergleich „unverändert“ (`sameContent`), den Titel des Protokolls und den Block zum Import im Protokoll (`importBlock`, bei BMD „Import into BMD“);
+- die Hinweise (`advice`) für die Meldungen `E-PERIOD-OVERLAP` und `E-FILE-EXISTS`: welches Programm die Datei importiert, welche Konfigurationswerte jede Zeile ändern und wie die Kanzlei eine importierte Datei rückgängig macht.
+
+Was der BMD-Writer schreibt und gegen welche Quellen er geprüft wurde, steht in [bmd-format.md](bmd-format.md). Seine Golden Files liegen in `test/golden/bmd/` und werden Byte für Byte verglichen (siehe `test/bmd/golden.test.ts`).
+
+### Angenommen, jemand braucht ein anderes Zielformat
+
+Ein Beispiel ohne Zusage: Eine Kanzlei bucht mit RZL und möchte dieselben Buchungen als RZL-Datei. Dann
+
+1. kommt der Writer nach `src/<ziel>/`, hängt nicht von `src/sources/` ab und meldet fehlerhafte Daten als Befunde mit eigenen Codes, die in [troubleshooting.md](troubleshooting.md) stehen;
+2. bekommt er Golden Files in `test/golden/<ziel>/` und einen Test wie `test/bmd/golden.test.ts`;
+3. setzt er `TargetWriter` für seinen Buchungstyp um. Braucht das Ziel andere Felder als `BmdBooking`, gehört die Umrechnung aus den Buchungsregeln in einen eigenen Buchungsschritt für dieses Ziel, nicht in den Writer: USt-Logik, die nur ein Zielformat betrifft, bleibt in dessen Buchungsschritt.
+
+Besprich so eine Änderung zuerst in einem Issue (Formular „Neue Quelle oder neues Zielformat“); sie braucht eine eigene OpenSpec-Änderung.
 
 ## Befunde
 
