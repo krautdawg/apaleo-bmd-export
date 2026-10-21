@@ -1,7 +1,7 @@
 import { addOneYear, isLocalDate, previousDay, type LocalDate } from '../core/date.js';
 import type { Finding } from '../core/findings.js';
 import { FORMAT_VERSION } from './columns.js';
-import { toCp1252Text, describe } from './cp1252.js';
+import { toCp1252Text, describe } from '../core/cp1252.js';
 import { formatYyyymmdd, quoteText, SEPARATOR } from './format.js';
 import { labelOf } from './labels.js';
 import type { ExtfHeader } from './types.js';

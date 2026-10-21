@@ -1,6 +1,6 @@
 import { fileTag, type TargetFileMeta, type TargetWriter } from '../export/target.js';
 import type { PostedBooking } from '../posting/index.js';
-import { encodeCp1252 } from './cp1252.js';
+import { encodeCp1252 } from '../core/cp1252.js';
 import type { ExtfHeader } from './types.js';
 import { buchungsstapelFileName, renderBuchungsstapel } from './writer.js';
 
