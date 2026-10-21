@@ -1,8 +1,8 @@
 # Zeitplan und Docker
 
-`apaleo-bmd schedule --once` ermittelt, welche Zeiträume fällig sind, exportiert die, die noch nicht im Ausgabeordner liegen, und endet. Im Tool läuft keine eigene Uhr: Cron, ein systemd-Timer, ein Kubernetes CronJob oder die Schleife in `docker-compose.example.yml` ruft es auf. Du kannst es so oft aufrufen, wie du willst, zum Beispiel stündlich: Ein Zeitraum, dessen Datei schon existiert, kostet keine Anfrage an apaleo.
+`apaleo-bmd schedule --once` ermittelt, welche Zeiträume fällig sind, schreibt für jeden, der noch nicht im Ausgabeordner liegt, die BMD-Importdatei und endet. Im Tool läuft keine eigene Uhr: Cron, ein systemd-Timer, ein Kubernetes CronJob oder die Schleife in `docker-compose.example.yml` ruft es auf. Du kannst es so oft aufrufen, wie du willst, zum Beispiel stündlich: Ein Zeitraum, dessen Datei schon existiert, kostet keine Anfrage an apaleo.
 
-Keine Gewähr, keine Steuerberatung: Lass deine Steuerberatung die Kontenzuordnung und die ersten Importe prüfen, bevor das Tool allein läuft.
+Keine Gewähr, keine Steuerberatung: Lass deine Steuerberatung die Kontenzuordnung und die ersten Importe in BMD prüfen, bevor das Tool allein läuft.
 
 Es gibt kein Image in einer Registry. Du baust es selbst aus diesem Repository, wie unten gezeigt.
 
@@ -10,7 +10,7 @@ Es gibt kein Image in einer Registry. Du baust es selbst aus diesem Repository, 
 
 ```yaml
 schedule:
-  timezone: Europe/Berlin   # IANA-Zeitzone; auch APALEO_BMD_TIMEZONE
+  timezone: Europe/Vienna   # IANA-Zeitzone (Standard Europe/Vienna); auch APALEO_BMD_TIMEZONE
   cadence: monthly          # monthly (Standard) oder daily
   monthly:
     dayOfMonth: 3           # 1 bis 5
@@ -20,10 +20,10 @@ schedule:
   catchUpDays: 40           # mindestens 3 (monatlich) oder 5 (täglich)
 ```
 
-- „Heute“ ist das Datum in `schedule.timezone`, nie eine Schätzung in UTC: Am 3. November um 00:30 Uhr ist in Berlin der 3. November, auch wenn in UTC noch der 2. November ist.
+- „Heute“ ist das Datum in `schedule.timezone` (Standard `Europe/Vienna`), nie eine Schätzung in UTC: Am 3. November um 00:30 Uhr ist in Wien der 3. November, auch wenn in UTC noch der 2. November ist. Ein Hotel in Österreich braucht den Schlüssel also nicht; setz ihn nur, wenn dein Rechner und deine Hotels woanders stehen.
 - `cadence: monthly` (Standard): Ein Kalendermonat ist ab `schedule.monthly.dayOfMonth` des Folgemonats fällig. Mit Tag 3 wird der Oktober ab dem 3. November exportiert. Die Kanzlei bekommt einen Stapel pro Monat.
 - `cadence: daily`: Ein Tag ist `schedule.daily.offsetDays` Tage später fällig. Mit 2 (Standard) wird der 18. Oktober am 20. Oktober ab 06:00 Uhr exportiert. Täglich heißt für die Kanzlei etwa 30 Importe im Monat; stimm das also vorher mit ihr ab.
-- Ein geplanter Lauf schreibt nie einen Zeitraum, der noch nicht abgeschlossen ist. apaleo kann auf einen Tag noch buchen, bis der Tagesabschluss (Night Audit) den *folgenden* Tag schließt (ein Gast, der um 04:00 Uhr eincheckt, wird auf den Vortag gebucht), und dieser Abschluss läuft nach Mitternacht. Ein Zeitraum, der am Tag T endet, gilt deshalb erst ab `schedule.finalAfter` (Standard 06:00 Uhr) am Tag T+2 als abgeschlossen, nicht früher: Sobald die Datei existiert, überspringt jeder spätere Lauf den Zeitraum, spätere Buchungen kämen also nie in DATEV an. Bis dahin meldet das Tool den Zeitraum als `not yet final` (Hinweis `N-NOT-FINAL`), ohne apaleo zu fragen, und der erste Lauf nach dieser Uhrzeit exportiert ihn. Beispiele mit den Standardwerten: Der 18. Oktober wird am 20. Oktober ab 06:00 Uhr geschrieben; mit `offsetDays: 1` wartet der 19. Oktober bis zum 21. Oktober 06:00 Uhr; mit `dayOfMonth: 1` oder `2` wartet der Oktober bis zum 2. November 06:00 Uhr. Setze `finalAfter` auf die Uhrzeit, zu der dein Tagesabschluss sicher fertig ist (gern früher, nie später als 12:00 Uhr). Ob ein Zeitraum abgeschlossen ist, prüft das Tool in `schedule.timezone` und noch einmal in der Zeitzone des Hotels aus apaleo.
+- Ein geplanter Lauf schreibt nie einen Zeitraum, der noch nicht abgeschlossen ist. apaleo kann auf einen Tag noch buchen, bis der Tagesabschluss (Night Audit) den *folgenden* Tag schließt (ein Gast, der um 04:00 Uhr eincheckt, wird auf den Vortag gebucht), und dieser Abschluss läuft nach Mitternacht. Ein Zeitraum, der am Tag T endet, gilt deshalb erst ab `schedule.finalAfter` (Standard 06:00 Uhr) am Tag T+2 als abgeschlossen, nicht früher: Sobald die Datei existiert, überspringt jeder spätere Lauf den Zeitraum, spätere Buchungen kämen also nie in BMD an. Bis dahin meldet das Tool den Zeitraum als `not yet final` (Hinweis `N-NOT-FINAL`), ohne apaleo zu fragen, und der erste Lauf nach dieser Uhrzeit exportiert ihn. Beispiele mit den Standardwerten: Der 18. Oktober wird am 20. Oktober ab 06:00 Uhr geschrieben; mit `offsetDays: 1` wartet der 19. Oktober bis zum 21. Oktober 06:00 Uhr; mit `dayOfMonth: 1` oder `2` wartet der Oktober bis zum 2. November 06:00 Uhr. Setze `finalAfter` auf die Uhrzeit, zu der dein Tagesabschluss sicher fertig ist (gern früher, nie später als 12:00 Uhr). Ob ein Zeitraum abgeschlossen ist, prüft das Tool in `schedule.timezone` und noch einmal in der Zeitzone des Hotels aus apaleo.
 - Ein Rhythmus pro Installation. Lass nie einen täglichen und einen monatlichen Zeitplan in denselben BMD-Mandanten laufen: Die Buchungen würden doppelt importiert.
 - `schedule.catchUpDays`: Nach einem Ausfall wird jeder Zeitraum exportiert, dessen Fälligkeitstag (bei täglich: der Tag selbst) in den letzten `catchUpDays` Tagen liegt, der älteste zuerst. Ein Zeitraum, der aus diesem Fenster gefallen ist, wird nicht mehr automatisch exportiert; starte für ihn `export` von Hand (siehe unten). Der Wert muss bei `cadence: monthly` mindestens 3 und bei `cadence: daily` mindestens 5 sein: Ein Lauf kann einen Zeitraum bis zu vier Tage nach seinem letzten Tag als nicht abgeschlossen zurückhalten (vor `finalAfter`, in einer Zeitzone des Hotels, die hinter `schedule.timezone` liegt), und beim nächsten Lauf muss der Zeitraum noch im Fenster liegen. Starte `schedule --once` mindestens einmal am Tag, zum Beispiel stündlich, wie es die Compose-Schleife tut.
 
@@ -35,7 +35,7 @@ Hat ein früheres Tool (zum Beispiel ein bezahlter Connector) einige dieser Zeit
 
 ### Was übersprungen wird und was nicht
 
-- Ein Hotel und Zeitraum, dessen EXTF-Datei im Ausgabeordner liegt oder in der `manifest.json` dieses Monats als aktuell vermerkt ist (auch nachdem du die Datei verschoben hast), meldet das Tool als `already exported`, ohne apaleo zu fragen.
+- Ein Hotel und Zeitraum, dessen BMD-Datei im Ausgabeordner liegt oder in der `manifest.json` dieses Monats als aktuell vermerkt ist (auch nachdem du die Datei verschoben hast), meldet das Tool als `already exported`, ohne apaleo zu fragen.
 - Ein fehlgeschlagener Zeitraum (zum Beispiel `E-UNMAPPED`) wird bei jedem Lauf erneut versucht, bis er klappt oder das Nachholfenster verlässt.
 - Ein Zeitraum ohne Buchungen schreibt keine Datei und wird deshalb bei jedem Lauf im Fenster erneut abgefragt.
 - Nachbuchungen, nachdem eine Datei geschrieben wurde, holt das Tool nicht automatisch ab. Dafür gibt es den Ablauf mit `export --overwrite` in [export.md](export.md), den du von Hand startest, nachdem die Kanzlei die importierten Buchungen in BMD storniert hat ([bmd-import.md](bmd-import.md)).
@@ -45,12 +45,12 @@ Hat ein früheres Tool (zum Beispiel ein bezahlter Connector) einige dieser Zeit
 Eine Zeile pro Hotel und Zeitraum:
 
 ```text
-2026-11-03T06:00:12+01:00 BSP 2026-10 written /data/BSP/2026-10/EXTF_Buchungsstapel_1234567_42_20261001-20261031_BSP.csv
-2026-11-03T06:00:12+01:00 BSP2 2026-10 already exported /data/BSP2/2026-10/EXTF_Buchungsstapel_1234567_43_20261001-20261031_BSP2.csv
-2026-11-03T06:00:13+01:00 BSP3 2026-10 failed E-UNMAPPED
-  E-UNMAPPED (apaleo_account): apaleo account 5121 ...
-2026-11-03T06:00:14+01:00 BSP4 2026-10 written /data/BSP4/2026-10/EXTF_Buchungsstapel_1234567_44_20261001-20261031_BSP4.csv W-EXTF-CHARSET
-  W-EXTF-CHARSET (booking 12, Buchungstext): ...
+2026-11-03T06:30:12+01:00 BSP 2026-10 written /data/BSP/2026-10/BMD_Buchungsimport_20261001-20261031_BSP.csv
+2026-11-03T06:30:12+01:00 BSP2 2026-10 already exported /data/BSP2/2026-10/BMD_Buchungsimport_20261001-20261031_BSP2.csv
+2026-11-03T06:30:13+01:00 BSP3 2026-10 failed E-UNMAPPED
+  E-UNMAPPED (apaleo_account): apaleo account RevenueFoodAndBeverages_Normal:20.00 ...
+2026-11-03T06:30:14+01:00 BSP4 2026-10 written /data/BSP4/2026-10/BMD_Buchungsimport_20261001-20261031_BSP4.csv W-VAT-ROUNDING
+  W-VAT-ROUNDING: ... a rounding difference of 0.01, added to the rounding total of the summary
 ```
 
 Jede Zeile erscheint, sobald ihr Hotel und Zeitraum fertig sind, ein Lauf, der mittendrin abbricht, zeigt also trotzdem die Dateien, die er geschrieben hat. Das Ergebnis ist `written`, `already exported`, `no bookings`, `not yet final` oder `failed`, gefolgt von jedem Befund-Code (zuerst `E-`, dann Warnungen `W-` und Hinweise `N-`) und den Befunden selbst, eingerückt, damit auch die Mails von Cron und `docker logs` die Warnungen zeigen. Ist nichts fällig, steht dort `nothing due`. Der Exit-Code ist 0, wenn jeder Zeitraum geschrieben wurde, schon exportiert war, keine Buchungen hatte oder noch nicht abgeschlossen ist, 1, wenn einer fehlgeschlagen ist, und 2 bei falschem Aufruf (zum Beispiel `schedule` ohne `--once`). Ein Secret erscheint nie in der Ausgabe.
@@ -69,11 +69,11 @@ docker compose -f docker-compose.example.yml up -d --build
 docker compose -f docker-compose.example.yml logs -f
 ```
 
-Der Dienst ruft `schedule --once` auf, wartet eine Stunde und wiederholt das. Die Dateien erscheinen in `./data/<Hotel>/<JJJJ-MM>/`.
+Der Dienst `apaleo-bmd` (Image `apaleo-bmd-export:local`, aus diesem Repository gebaut) ruft `schedule --once` auf, wartet eine Stunde und wiederholt das. Die Dateien erscheinen in `./data/<Hotel>/<JJJJ-MM>/`; wie sie zur Kanzlei kommen, steht unten in [Wo die Kanzlei die Dateien findet](#wo-die-kanzlei-die-dateien-findet).
 
 Lässt du das `chown` weg, legt Docker `./data` mit root als Besitzer an, und jeder Zeitraum scheitert mit `E-EXPORT` und `EACCES: permission denied`, gefolgt von dem `chown`-Befehl, den du ausführen musst. Der Lauf macht mit den anderen Zeiträumen weiter und endet mit 1; es geht nichts verloren, der nächste Lauf nach der Korrektur exportiert sie.
 
-`config/`, `data/` und `./schedule.log` (siehe Cron auf dem Host unten) enthalten das Buchungssymbol, die Kontenzuordnung und die exportierten Buchhaltungsdaten. Sie liegen im geklonten Repository, und `.gitignore` schließt sie aus, damit ein `git add -A` sie nicht mitnimmt. Sichere sie getrennt.
+`config/`, `data/` und `./schedule.log` (siehe Cron auf dem Host unten) enthalten das Buchungssymbol, die Kontenzuordnung und die exportierten Buchungen. Sie liegen im geklonten Repository, und `.gitignore` schließt sie aus, damit ein `git add -A` sie nicht mitnimmt. Sichere sie getrennt.
 
 So ist der Container aufgebaut:
 
@@ -87,7 +87,7 @@ Weil das Arbeitsverzeichnis `/config` ist, zeigt ein Pfad zur Kontenzuordnung in
 
 ### Secrets und Umgebung
 
-Die eingebundene Konfiguration braucht kein Secret: `APALEO_CLIENT_SECRET` kommt aus `.env`, und Git ignoriert diese Datei. Schreib es nie in die Konfigurationsdatei; das Tool lehnt das ab. Neben dem Secret lassen sich nur diese einzelnen Werte aus der Umgebung setzen: `APALEO_BMD_CONFIG`, `APALEO_BMD_OUTPUT_DIR`, `APALEO_CLIENT_ID`, `APALEO_BMD_BERATERNUMMER`, `APALEO_BMD_MANDANTENNUMMER` und `APALEO_BMD_TIMEZONE`. Listen wie `properties` bleiben in der Konfigurationsdatei: `APALEO_BMD_PROPERTIES` lehnt das Tool mit einer entsprechenden Meldung ab.
+Die eingebundene Konfiguration braucht kein Secret: `APALEO_CLIENT_SECRET` kommt aus `.env`, und Git ignoriert diese Datei. Schreib es nie in die Konfigurationsdatei; das Tool lehnt das ab. Neben dem Secret lassen sich nur diese einzelnen Werte aus der Umgebung setzen: `APALEO_BMD_CONFIG`, `APALEO_BMD_OUTPUT_DIR`, `APALEO_CLIENT_ID` und `APALEO_BMD_TIMEZONE`. Im Image sind `APALEO_BMD_CONFIG=/config/apaleo-bmd.config.yaml` und `APALEO_BMD_OUTPUT_DIR=/data` schon gesetzt. Listen wie `properties` bleiben in der Konfigurationsdatei: `APALEO_BMD_PROPERTIES` lehnt das Tool mit einer entsprechenden Meldung ab.
 
 ### Einmalige Befehle
 
@@ -100,6 +100,23 @@ docker compose -f docker-compose.example.yml run --rm apaleo-bmd mapping check -
 ```
 
 So schließt du eine Lücke nach einem Ausfall, der länger als `schedule.catchUpDays` war, oder startest `export --overwrite` nach einer Nachbuchung.
+
+## Wo die Kanzlei die Dateien findet
+
+Jeder Lauf legt pro Hotel und Monat einen Ordner an:
+
+```text
+data/
+  BSP/
+    2026-10/
+      BMD_Buchungsimport_20261001-20261031_BSP.csv            die Importdatei für BMD
+      BMD_Buchungsimport_20261001-20261031_BSP.protokoll.txt  Summen pro Konto und USt-Satz, Block "Import into BMD"
+      manifest.json                                           Prüfsummen; daran erkennt der nächste Lauf, was schon exportiert ist
+```
+
+Das Tool verschickt nichts: Es gibt in dieser Version weder Mail noch Upload. Gib der Kanzlei die `.csv` und das Protokoll so, wie ihr es vereinbart habt, zum Beispiel über einen freigegebenen Ordner, auf den `./data` zeigt, oder über euren üblichen Datenaustausch. Ändere die Datei dabei nicht; schon ein Speichern in Excel kann Trennzeichen und Umlaute zerstören. Wie die Kanzlei sie in BMD NTCS einliest, steht in [bmd-import.md](bmd-import.md).
+
+Lösche oder verschiebe nach der Übergabe nicht den ganzen Monatsordner, und nie die `manifest.json`: Solange der Zeitraum im Nachholfenster liegt, würde der nächste Lauf ihn sonst noch einmal exportieren, und BMD würde ihn doppelt buchen. Die `.csv` allein darfst du verschieben; der Eintrag in `manifest.json` genügt.
 
 ## Cron auf dem Host statt der Schleife
 
@@ -128,7 +145,7 @@ docker run --rm --env-file .env -v "$PWD/config:/config:ro" -v "$PWD/data:/data"
 docker run --rm --env-file .env -v "$PWD/config:/config:ro" -v "$PWD/data:/data" apaleo-bmd-export:local export --month 2026-10
 ```
 
-Der Standardbefehl des Image ist `schedule --once`; Argumente ersetzen ihn.
+Der Standardbefehl des Image ist `schedule --once`; Argumente ersetzen ihn. Das Image läuft als Benutzer node (uid 1000), deshalb das `chown` für `./data` aus dem Abschnitt Docker Compose. Welche Version läuft, zeigt `docker run --rm apaleo-bmd-export:local --version`; die OCI-Labels (`docker inspect apaleo-bmd-export:local`) nennen das Repository und die MIT-Lizenz.
 
 ### Die Demo im Image
 

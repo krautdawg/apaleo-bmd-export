@@ -53,7 +53,7 @@ describe('monthly cadence', () => {
       config: exportConfig('  - id: BSP2', '    buchsymbol: HO2', ...ONE_MONTH),
       files: { 'mapping-BSP2.csv': BEISPIEL_MAPPING },
       data: addSecondProperty,
-      // 07:30 in Berlin on the due day.
+      // 07:30 in Vienna on the due day (schedule.timezone not set).
       now: new Date('2026-10-03T05:30:00Z'),
     });
     expect(await runCli(ONCE, setup.ctx)).toBe(0);
@@ -67,7 +67,7 @@ describe('monthly cadence', () => {
   it('exports nothing and exits 0 the day before the due day', async () => {
     const setup = exportSetup({ config: exportConfig('schedule:', '  catchUpDays: 20'), now: new Date('2026-10-02T21:59:59Z') });
     expect(await runCli(ONCE, setup.ctx)).toBe(0);
-    expect(lines(setup.ctx)).toEqual(['2026-10-02T23:59:59+02:00 nothing due (cadence monthly, today 2026-10-02 in Europe/Berlin)']);
+    expect(lines(setup.ctx)).toEqual(['2026-10-02T23:59:59+02:00 nothing due (cadence monthly, today 2026-10-02 in Europe/Vienna)']);
     expect(setup.fake.calls).toEqual([]);
     expect(existsSync(join(setup.ctx.cwd, 'exports'))).toBe(false);
   });
@@ -227,11 +227,11 @@ describe('daily cadence', () => {
 
 describe('periods that are not final yet', () => {
   const dayOne = exportConfig('schedule:', '  monthly:', '    dayOfMonth: 1', '  catchUpDays: 5');
-  const notFinal = (from: string, zone = 'Europe/Berlin') =>
+  const notFinal = (from: string, zone = 'Europe/Vienna') =>
     new RegExp(`^ {2}N-NOT-FINAL: the period ends 2026-09-30\\..*counts as final from ${from} 06:00 in ${zone}`);
 
   it('holds September back with dayOfMonth 1 until 06:00 on 2 October and exports it then, late posting of the audit included', async () => {
-    // 2026-09-30T22:05Z is 2026-10-01 00:05 in Berlin: the night audit for 30 September may not have run.
+    // 2026-09-30T22:05Z is 2026-10-01 00:05 in Vienna: the night audit for 30 September may not have run.
     const setup = exportSetup({ config: dayOne, now: new Date('2026-09-30T22:05:00Z') });
     expect(await runCli(ONCE, setup.ctx)).toBe(0);
     expect(lines(setup.ctx)).toEqual(['2026-10-01T00:05:00+02:00 BSP 2026-09 not yet final N-NOT-FINAL', expect.stringMatching(notFinal('2026-10-02'))]);

@@ -16,6 +16,10 @@ RUN pnpm build && pnpm prune --prod
 
 # --- runtime ------------------------------------------------------------------
 FROM node:24-bookworm-slim
+LABEL org.opencontainers.image.title="apaleo-bmd-export" \
+      org.opencontainers.image.description="Exports apaleo accounting data as BMD Buchungsimport files for BMD NTCS; run schedule --once from cron or the compose loop" \
+      org.opencontainers.image.source="https://github.com/krautdawg/apaleo-bmd-export" \
+      org.opencontainers.image.licenses="MIT"
 ENV NODE_ENV=production \
     APALEO_BMD_CONFIG=/config/apaleo-bmd.config.yaml \
     APALEO_BMD_OUTPUT_DIR=/data

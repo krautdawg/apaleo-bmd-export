@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { ScheduleConfig } from '../../src/core/config.js';
+import { scheduleSection, type ScheduleConfig } from '../../src/core/config.js';
 import { duePeriods } from '../../src/schedule/index.js';
 
-const MONTHLY: ScheduleConfig = { timezone: 'Europe/Berlin', cadence: 'monthly', daily: { offsetDays: 2 }, monthly: { dayOfMonth: 3 }, finalAfter: '06:00', catchUpDays: 40 };
+const MONTHLY: ScheduleConfig = { timezone: 'Europe/Vienna', cadence: 'monthly', daily: { offsetDays: 2 }, monthly: { dayOfMonth: 3 }, finalAfter: '06:00', catchUpDays: 40 };
 const DAILY: ScheduleConfig = { ...MONTHLY, cadence: 'daily' };
 
 const due = (now: string, schedule: Partial<ScheduleConfig> = {}, base = MONTHLY) => duePeriods(new Date(now), { ...base, ...schedule });
@@ -10,8 +10,49 @@ const days = (now: string, schedule: Partial<ScheduleConfig> = {}) => due(now, s
 const months = (now: string, schedule: Partial<ScheduleConfig> = {}) => due(now, schedule).periods.map((p) => `${p.from}..${p.to}`);
 const waiting = (now: string, schedule: Partial<ScheduleConfig> = {}, base = MONTHLY) => due(now, schedule, base).waiting.map((p) => `${p.from}..${p.to}`);
 
+describe('the default schedule.timezone', () => {
+  /** The schedule section as `schedule --once` reads it from a config without a `schedule` key. */
+  const DEFAULTS = scheduleSection.parse({});
+  const at = (now: string, schedule: Partial<ScheduleConfig> = {}) => duePeriods(new Date(now), { ...DEFAULTS, ...schedule });
+  const ranges = (list: readonly { from: string; to: string }[]) => list.map((p) => `${p.from}..${p.to}`);
+
+  it('is Europe/Vienna, monthly on the 3rd, final from 06:00', () => {
+    expect(DEFAULTS).toEqual({ timezone: 'Europe/Vienna', cadence: 'monthly', daily: { offsetDays: 2 }, monthly: { dayOfMonth: 3 }, finalAfter: '06:00', catchUpDays: 40 });
+  });
+
+  it('makes October due at 06:30 in Vienna on 3 November (05:30 UTC)', () => {
+    const result = at('2026-11-03T05:30:00Z');
+    expect(result.today).toBe('2026-11-03');
+    expect(ranges(result.periods)).toContain('2026-10-01..2026-10-31');
+  });
+
+  it('does not make October due while it is still 2 November in Vienna, and does from midnight in Vienna', () => {
+    // 22:59:59 UTC is 23:59:59 CET on 2 November.
+    const late = at('2026-11-02T22:59:59Z');
+    expect(late.today).toBe('2026-11-02');
+    expect(ranges(late.periods)).not.toContain('2026-10-01..2026-10-31');
+    expect(ranges(late.waiting)).toEqual([]);
+    expect(ranges(at('2026-11-02T22:59:59Z', { catchUpDays: 30 }).periods)).toEqual([]);
+    // One second later it is 3 November 00:00 in Vienna, while UTC still says 2 November.
+    expect(at('2026-11-02T23:00:00Z').today).toBe('2026-11-03');
+    expect(ranges(at('2026-11-02T23:00:00Z', { catchUpDays: 30 }).periods)).toEqual(['2026-10-01..2026-10-31']);
+  });
+
+  it('holds October back with dayOfMonth 1 until 06:00 on 2 November in Vienna', () => {
+    const dayOne = { monthly: { dayOfMonth: 1 }, catchUpDays: 5 };
+    // 04:59:59 UTC is 05:59:59 CET, before finalAfter.
+    expect(ranges(at('2026-11-02T04:59:59Z', dayOne).waiting)).toEqual(['2026-10-01..2026-10-31']);
+    expect(ranges(at('2026-11-02T04:59:59Z', dayOne).periods)).toEqual([]);
+    expect(ranges(at('2026-11-02T05:00:00Z', dayOne).periods)).toEqual(['2026-10-01..2026-10-31']);
+  });
+
+  it('makes 18 October due on 20 October at 10:00 in Vienna with cadence daily', () => {
+    expect(at('2026-10-20T08:00:00Z', { cadence: 'daily', catchUpDays: 5 }).periods.at(-1)).toEqual({ from: '2026-10-18', to: '2026-10-18' });
+  });
+});
+
 describe('monthly cadence', () => {
-  it('makes October due on 3 November at 06:30 in Berlin', () => {
+  it('makes October due on 3 November at 06:30 in Vienna', () => {
     expect(due('2026-11-03T05:30:00Z').today).toBe('2026-11-03');
     expect(months('2026-11-03T05:30:00Z', { catchUpDays: 31 })).toEqual(['2026-10-01..2026-10-31']);
   });
@@ -23,9 +64,9 @@ describe('monthly cadence', () => {
     expect(months('2026-11-12T08:00:00Z')).toEqual(['2026-10-01..2026-10-31']);
   });
 
-  it('does not make October due on 2 November, also late in the evening, in Berlin time', () => {
+  it('does not make October due on 2 November, also late in the evening, in Vienna time', () => {
     expect(months('2026-11-02T22:59:59Z', { catchUpDays: 30 })).toEqual([]);
-    // One second later it is 3 November 00:00 in Berlin.
+    // One second later it is 3 November 00:00 in Vienna.
     expect(months('2026-11-02T23:00:00Z', { catchUpDays: 30 })).toEqual(['2026-10-01..2026-10-31']);
     // In UTC that instant is still 2 November.
     expect(months('2026-11-02T23:00:00Z', { catchUpDays: 30, timezone: 'UTC' })).toEqual([]);
@@ -47,14 +88,14 @@ describe('monthly cadence', () => {
     expect(months('2026-08-01T22:05:00Z', dayOne)).toEqual([]);
     expect(waiting('2026-08-01T22:05:00Z', dayOne)).toEqual(['2026-07-01..2026-07-31']);
     expect(waiting('2026-08-02T03:59:59Z', dayOne)).toEqual(['2026-07-01..2026-07-31']);
-    // From 2 August 06:00 in Berlin July is final.
+    // From 2 August 06:00 in Vienna July is final.
     expect(months('2026-08-02T04:00:00Z', dayOne)).toEqual(['2026-07-01..2026-07-31']);
     expect(waiting('2026-08-02T04:00:00Z', dayOne)).toEqual([]);
   });
 
   it('holds a dayOfMonth 2 month back until schedule.finalAfter on the 2nd', () => {
     const dayTwo = { catchUpDays: 5, monthly: { dayOfMonth: 2 } };
-    // 2026-10-01T22:05Z is 2 October 00:05 in Berlin.
+    // 2026-10-01T22:05Z is 2 October 00:05 in Vienna.
     expect(months('2026-10-01T22:05:00Z', dayTwo)).toEqual([]);
     expect(waiting('2026-10-01T22:05:00Z', dayTwo)).toEqual(['2026-09-01..2026-09-30']);
     expect(months('2026-10-02T04:05:00Z', dayTwo)).toEqual(['2026-09-01..2026-09-30']);
@@ -94,7 +135,7 @@ describe('daily cadence', () => {
     expect(waiting('2026-10-19T22:05:00Z', dayMinusOne, DAILY)).toEqual(['2026-10-18..2026-10-18', '2026-10-19..2026-10-19']);
     expect(days('2026-10-20T21:59:59Z', dayMinusOne).at(-1)).toBe('2026-10-18');
     expect(waiting('2026-10-20T21:59:59Z', dayMinusOne, DAILY)).toEqual(['2026-10-19..2026-10-19']);
-    // 2026-10-21 06:00 in Berlin: 2026-10-19 is final.
+    // 2026-10-21 06:00 in Vienna: 2026-10-19 is final.
     expect(days('2026-10-21T04:00:00Z', dayMinusOne).at(-1)).toBe('2026-10-19');
     expect(waiting('2026-10-20T08:05:00Z', {}, DAILY)).toEqual([]);
   });
