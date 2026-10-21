@@ -4,13 +4,12 @@ import type { LocalDate } from '../../src/core/date.js';
 import { bodyOf, type TargetFileMeta } from '../../src/export/index.js';
 import { bmdBooking, bmdPayment, octoberOptions } from '../helpers/bmd.js';
 
-/** The default settings read nothing from the config yet (b03 adds `bmd.*`). */
+/** The default target reads its settings from the config's `bmd` section; this one holds the defaults. */
 function meta(overrides: Partial<TargetFileMeta> = {}, from: LocalDate = '2026-10-01', to: LocalDate = '2026-10-31'): TargetFileMeta {
   return {
-    config: {} as TargetFileMeta['config'],
+    config: { bmd: { ...BMD_DEFAULT_SETTINGS, buchsymbol: 'HO' } } as TargetFileMeta['config'],
     propertyId: 'BSP',
     part: { from, to, month: from.slice(0, 7), wjBeginn: '2026-01-01' },
-    skr: '03',
     demo: false,
     createdAt: new Date('2026-11-03T09:15:00Z'),
     ...overrides,
@@ -75,6 +74,15 @@ describe('bmdTarget', () => {
     expect(afterOverwrite).toBeUndefined();
     expect([overlap, headerChange, reimport, bmdTarget.protocolTitle].join(' ')).not.toMatch(/DATEV|datev\.|Festschreibung|EXTF/);
     expect(bmdTarget.id).toBe('bmd');
+  });
+
+  it('reads dialect and account lengths from the bmd section of the config', () => {
+    const config = { bmd: { dialect: 'bmd55', sachkontenlaenge: 5, personenkontenlaenge: 6, buchsymbol: 'HO' } } as TargetFileMeta['config'];
+    const { bytes } = bmdTarget.render([bmdBooking({ konto: '40100', gkonto: '23900' })], meta({ config }));
+    const [header, line] = new TextDecoder('windows-1252').decode(bytes).split('\r\n');
+    expect(header).toMatch(/^satzart;konto;gkto;/);
+    expect(line).toMatch(/^0;40100;23900;100100001;20261014;/);
+    expect(() => bmdTarget.render([bmdBooking()], meta({ config }))).toThrow(BmdValidationError);
   });
 
   it('names a dialect change in the refusal for a file with bookings, whose lines all change with the dialect', () => {

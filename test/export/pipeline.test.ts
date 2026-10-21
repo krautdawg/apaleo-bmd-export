@@ -6,7 +6,6 @@ import { runExport, type ExportRequest } from '../../src/export/index.js';
 import { buildBookings } from '../../src/posting/index.js';
 import { ApaleoPermissionError } from '../../src/sources/apaleo/index.js';
 import { BSP } from '../helpers/apaleo.js';
-import { splitFields } from '../helpers/extf.js';
 import { addSecondProperty, exportConfig, exportSetup, type ExportSetup } from '../helpers/export.js';
 
 const SEPTEMBER = { from: '2026-09-01', to: '2026-09-30' } as const;
@@ -19,7 +18,9 @@ async function run(setup: ExportSetup, request: Partial<ExportRequest> = {}, pos
 }
 
 const exportsOf = (setup: ExportSetup) => join(setup.ctx.cwd, 'exports');
-const header = (path: string) => splitFields(new TextDecoder('windows-1252').decode(readFileSync(path)).split('\r\n')[0] ?? '');
+const fileLines = (path: string) => new TextDecoder('windows-1252').decode(readFileSync(path)).split('\r\n');
+const FILE = 'BMD_Buchungsimport_20260901-20260930_BSP.csv';
+const withBmd = (config: string, lines: string) => config.replace('  buchsymbol: HO\n', `  buchsymbol: HO\n${lines}`);
 
 describe('the period-part runner', () => {
   it('fetches the chart once per property and the ledger once per month through the source', async () => {
@@ -38,31 +39,71 @@ describe('the period-part runner', () => {
     expect(outcomes[0]?.findings.map((f) => f.code)).toEqual(['N-NO-BOOKINGS']);
   });
 
-  it('renders the bookings through the writer with the DATEV profile in the header', async () => {
-    const setup = exportSetup({
-      config: exportConfig('    mandantennummer: 43').replace('mandantennummer: 42\n', 'mandantennummer: 42\n  festschreibung: 1\n'),
-    });
+  it('renders the bookings through the BMD writer with the settings of the bmd section', async () => {
+    const setup = exportSetup();
     const [outcome] = await run(setup);
     expect(outcome?.status).toBe('written');
-    expect(outcome?.bookings).toBe(22);
-    const path = join(exportsOf(setup), BSP, '2026-09', 'EXTF_Buchungsstapel_1234567_43_20260901-20260930_BSP.csv');
+    expect(outcome?.bookings).toBe(24);
+    const path = join(exportsOf(setup), BSP, '2026-09', FILE);
     expect(outcome?.path).toBe(path);
-    const fields = header(path);
-    expect(fields.slice(10, 21)).toEqual(['1234567', '43', '20260101', '4', '20260901', '20260930', '"apaleo BSP 2026-09"', '""', '1', '0', '1']);
-    expect(fields[26]).toBe('"03"');
-    const text = new TextDecoder('windows-1252').decode(readFileSync(path));
-    expect(text.split('\r\n')).toHaveLength(2 + 22 + 1);
-    expect(text).not.toContain('Müller');
+    const lines = fileLines(path);
+    expect(lines[0]).toBe('satzart;konto;gkonto;belegnr;belegdatum;buchdatum;buchsymbol;buchcode;prozent;steuercode;betrag;steuer;text;kost;extbelegnr;gegenbuchkz;verbuchkz');
+    expect(lines).toHaveLength(1 + 24 + 1);
+    expect(lines[1]).toBe('0;3200;2890;090100001;14.09.2026;14.09.2026;HO;2;10;1;-200,00;-20,00;Anzahlung 10 %;;PSP-8823410001;E;A');
+    expect(lines.join('\n')).not.toContain('Müller');
+  });
+
+  it('writes the BMD 5.5 dialect when bmd.dialect is bmd55', async () => {
+    const setup = exportSetup({ config: withBmd(exportConfig(), '  dialect: bmd55\n') });
+    const [outcome] = await run(setup);
+    expect(outcome?.status).toBe('written');
+    const lines = fileLines(join(exportsOf(setup), BSP, '2026-09', FILE));
+    expect(lines[0]).toBe('satzart;konto;gkto;belegnr;belegdat;buchdat;symbol;bucod;mwst;steucod;betrag;steuer;text;kost;extbelegnr;gegenbuchkz;verbuchkz');
+    expect(lines[1]?.split(';').slice(4, 6)).toEqual(['20260914', '20260914']);
+  });
+
+  it('puts payment lines under bmd.buchsymbolZahlung and every other line under bmd.buchsymbol', async () => {
+    const setup = exportSetup({ config: withBmd(exportConfig(), '  buchsymbolZahlung: HZ\n') });
+    await run(setup);
+    const rows = fileLines(join(exportsOf(setup), BSP, '2026-09', FILE)).slice(1, -1).map((line) => line.split(';'));
+    const symbolOf = (text: string) => [...new Set(rows.filter((row) => row[12]?.startsWith(text)).map((row) => row[6]))];
+    expect(symbolOf('Zahlung')).toEqual(['HZ']);
+    expect(symbolOf('Erlös')).toEqual(['HO']);
+    // A prepayment has a VAT side, so it keeps the main symbol.
+    expect(symbolOf('Anzahlung')).toEqual(['HO']);
+  });
+
+  it('gives each property its own Buchungssymbol and warns W-BUCHSYMBOL-SHARED only when two share one', async () => {
+    const own = exportSetup({ config: exportConfig('  - id: BS2', '    buchsymbol: HO2'), files: { 'mapping-BS2.csv': readMapping() }, data: (data) => addSecondProperty(data, 'BS2') });
+    const outcomes = await run(own, { propertyIds: [BSP, 'BS2'] });
+    expect(outcomes.map((o) => [o.propertyId, o.status, o.findings.map((f) => f.code)])).toEqual([
+      [BSP, 'written', []],
+      ['BS2', 'written', []],
+    ]);
+    const symbols = (id: string) => new Set(fileLines(join(exportsOf(own), id, '2026-09', `BMD_Buchungsimport_20260901-20260930_${id}.csv`)).slice(1, -1).map((line) => line.split(';')[6]));
+    expect(symbols(BSP)).toEqual(new Set(['HO']));
+    expect(symbols('BS2')).toEqual(new Set(['HO2']));
+
+    const shared = exportSetup({ config: exportConfig('  - id: BS2'), files: { 'mapping-BS2.csv': readMapping() }, data: (data) => addSecondProperty(data, 'BS2') });
+    const both = await run(shared, { propertyIds: [BSP, 'BS2'] });
+    expect(both.map((o) => [o.status, o.findings.map((f) => f.code)])).toEqual([
+      ['written', ['W-BUCHSYMBOL-SHARED']],
+      ['written', ['W-BUCHSYMBOL-SHARED']],
+    ]);
+    expect(both[0]?.summary).toContain('W-BUCHSYMBOL-SHARED');
+    expect(readFileSync(join(exportsOf(shared), BSP, '2026-09', 'BMD_Buchungsimport_20260901-20260930_BSP.protokoll.txt'), 'utf8')).toContain(
+      'the properties BSP, BS2 all book under the Buchungssymbol HO',
+    );
   });
 
   it('stops a part on an E- finding of the coverage check or the posting rules, before writing', async () => {
-    const unmapped = exportSetup({ files: { 'mapping-BSP.csv': readMapping().replace(/^5121;.*\r?\n/m, '') } });
+    const unmapped = exportSetup({ files: { 'mapping-BSP.csv': readMapping().replace(/^RevenueFoodAndBeverages_Normal:20\.00;.*\r?\n/m, '') } });
     const [first] = await run(unmapped);
     expect(first?.status).toBe('failed');
-    expect(first?.findings.filter((f) => f.code.startsWith('E-')).map((f) => [f.code, f.value])).toEqual([['E-UNMAPPED', '5121']]);
+    expect(first?.findings.filter((f) => f.code.startsWith('E-')).map((f) => [f.code, f.value])).toEqual([['E-UNMAPPED', 'RevenueFoodAndBeverages_Normal:20.00']]);
     expect(existsSync(exportsOf(unmapped))).toBe(false);
 
-    const wrongRate = exportSetup({ files: { 'mapping-BSP.csv': readMapping().replace('5011;Revenues;Accommodation 7%;7;8300;;7', '5011;Revenues;Accommodation 7%;7;8400;;19') } });
+    const wrongRate = exportSetup({ files: { 'mapping-BSP.csv': readMapping().replace('(10%);10;4000;1;10;', '(10%);10;4030;1;20;') } });
     const [second] = await run(wrongRate);
     expect(second?.status).toBe('failed');
     expect(new Set(second?.findings.filter((f) => f.code.startsWith('E-')).map((f) => f.code))).toEqual(new Set(['E-VAT-RATE']));
@@ -71,8 +112,8 @@ describe('the period-part runner', () => {
 
   it('isolates property-months: an unmapped account blocks only its property', async () => {
     const setup = exportSetup({
-      config: exportConfig('  - id: BSP2'),
-      files: { 'mapping-BSP.csv': readMapping().replace(/^5121;.*\r?\n/m, ''), 'mapping-BSP2.csv': readMapping() },
+      config: exportConfig('  - id: BSP2', '    buchsymbol: HO2'),
+      files: { 'mapping-BSP.csv': readMapping().replace(/^RevenueFoodAndBeverages_Normal:20\.00;.*\r?\n/m, ''), 'mapping-BSP2.csv': readMapping() },
       data: addSecondProperty,
     });
     const outcomes = await run(setup, { propertyIds: [BSP, 'BSP2'] });
@@ -83,24 +124,26 @@ describe('the period-part runner', () => {
     expect(readdirSync(exportsOf(setup))).toEqual(['BSP2']);
   });
 
-  it('reports a property the custom app cannot see, a missing mapping file and an unknown SKR per property', async () => {
-    const setup = exportSetup({
-      config: exportConfig('  - id: HBW', '  - id: NOPE'),
-      files: { 'mapping-BSP.csv': readMapping().replace(/^# .*\r?\n/, '') },
-    });
+  it('reports a property the custom app cannot see and a missing mapping file per property', async () => {
+    const setup = exportSetup({ config: exportConfig('  - id: HBW', '    buchsymbol: HBW', '  - id: NOPE', '    buchsymbol: NO') });
     const outcomes = await run(setup, { propertyIds: [BSP, 'HBW', 'NOPE'] });
     expect(outcomes.map((o) => [o.propertyId, o.status, o.findings.filter((f) => f.code.startsWith('E-')).map((f) => f.code)])).toEqual([
-      [BSP, 'failed', ['E-SKR-UNKNOWN']],
+      [BSP, 'written', []],
       ['HBW', 'failed', ['E-EXPORT']],
       ['NOPE', 'failed', ['E-PROPERTY-UNKNOWN']],
     ]);
     expect(outcomes[1]?.findings[0]?.message).toContain('No mapping file at');
+    expect(outcomes[1]?.findings[0]?.message).toContain('init-mapping --property <id> --template ekr');
   });
 
-  it('refuses a datev.skr that contradicts the mapping file', async () => {
-    const setup = exportSetup({ config: exportConfig().replace('mandantennummer: 42\n', 'mandantennummer: 42\n  skr: "04"\n') });
+  it('refuses a DATEV mapping file and names init-mapping --template ekr', async () => {
+    const datev = 'apaleo_account;apaleo_type;apaleo_name;apaleo_vat_percent;datev_account;bu_key;datev_vat_percent;kost1;kost2;comment\r\n';
+    const setup = exportSetup({ files: { 'mapping-BSP.csv': datev } });
     const [outcome] = await run(setup);
-    expect(outcome?.findings.map((f) => f.code)).toEqual(['E-SKR-CONFLICT']);
+    expect(outcome?.status).toBe('failed');
+    expect(outcome?.findings.map((f) => f.code)).toEqual(['E-EXPORT']);
+    expect(outcome?.findings[0]?.message).toContain('this is a DATEV mapping');
+    expect(outcome?.findings[0]?.message).toContain('--template ekr');
   });
 
   it('refuses a property that does not keep its books in EUR, before reading its ledger', async () => {
@@ -112,7 +155,7 @@ describe('the period-part runner', () => {
     const [outcome] = await run(setup);
     expect(outcome?.status).toBe('failed');
     expect(outcome?.findings.map((f) => [f.code, f.value])).toEqual([['E-CURRENCY', 'CHF']]);
-    expect(outcome?.findings[0]?.message).toContain('writes DATEV files in EUR only');
+    expect(outcome?.findings[0]?.message).toContain('writes BMD files in EUR only');
     expect(setup.fake.calls.some((call) => call.startsWith('getLedger'))).toBe(false);
     expect(existsSync(exportsOf(setup))).toBe(false);
   });
@@ -136,24 +179,28 @@ describe('the period-part runner', () => {
     const [outcome] = await run(setup, { dryRun: true });
     expect(outcome?.status).toBe('checked');
     expect(outcome?.plan).toBe('write');
-    expect(outcome?.summary).toContain('Totals per DATEV account:');
+    expect(outcome?.summary).toContain('Totals per BMD account');
     expect(readdirSync(setup.ctx.cwd).sort()).toEqual(['apaleo-bmd.config.yaml', 'mapping-BSP.csv']);
   });
 });
 
 describe('plausibility checks in the pipeline', () => {
-  it('blocks the file when a defect writes a booking with the wrong side', async () => {
+  it('blocks the file when a defect writes a positive Betrag where the apaleo line credits the Konto account', async () => {
     const setup = exportSetup();
     const sideBug: typeof buildBookings = (...args) => {
       const result = buildBookings(...args);
+      // The 98.00 logis charge: Betrag -89.09 and Steuer -8.91 on 4000 written as Soll.
       const booking = result.bookings[1];
-      if (booking) booking.side = booking.side === 'S' ? 'H' : 'S';
+      if (booking?.tax) {
+        booking.betragCents = -booking.betragCents;
+        booking.tax.steuerCents = -booking.tax.steuerCents;
+      }
       return result;
     };
     const [outcome] = await run(setup, {}, sideBug);
     expect(outcome?.status).toBe('failed');
     expect(outcome?.findings[0]?.code).toBe('E-ACCOUNT-BALANCE');
-    expect(outcome?.findings[0]?.message).toMatch(/^on 2026-09-14 DATEV account \d+ moves -?\d+\.\d\d in the bookings, but the apaleo lines mapped to it move/);
+    expect(outcome?.findings[0]?.message).toMatch(/^on 2026-09-14 BMD account \d+ moves -?\d+\.\d\d in the bookings, but the apaleo lines mapped to it move .* \(Soll positive, Haben negative\)/);
     expect(existsSync(exportsOf(setup))).toBe(false);
   });
 
@@ -179,15 +226,15 @@ describe('plausibility checks in the pipeline', () => {
       config: `${exportConfig()}checks:\n  aggregates: true\n`,
       data: (data) => {
         const day = data.totals?.[BSP]?.find((t) => t.businessDate === '2026-09-15');
-        const revenue = day?.accounts.find((a) => a.account.number === '5011');
+        const revenue = day?.accounts.find((a) => a.account.number === 'RevenueAccommodation_VeryReduced:10.00');
         if (revenue) revenue.balance.value = '-1.00';
       },
     });
     const [outcome] = await run(setup);
     expect(setup.fake.calls.filter((call) => call.startsWith('getAccountTotals'))).toHaveLength(30);
     expect(outcome?.status).toBe('written');
-    expect(outcome?.findings.map((f) => [f.code, f.value])).toEqual([['W-AGGREGATE-DIFF', '5011']]);
-    expect(outcome?.findings[0]?.message).toContain("on 2026-09-15 apaleo's daily aggregate for account 5011 (Revenues) has the balance -1.00");
+    expect(outcome?.findings.map((f) => [f.code, f.value])).toEqual([['W-AGGREGATE-DIFF', 'RevenueAccommodation_VeryReduced:10.00']]);
+    expect(outcome?.findings[0]?.message).toContain("on 2026-09-15 apaleo's daily aggregate for account RevenueAccommodation_VeryReduced:10.00 (Revenues) has the balance -1.00");
   });
 
   it('with checks.aggregates, blocks the part with a hint when apaleo refuses the aggregates', async () => {
@@ -203,5 +250,5 @@ describe('plausibility checks in the pipeline', () => {
 });
 
 function readMapping(): string {
-  return readFileSync(new URL('../fixtures/mapping/skr03-beispiel.csv', import.meta.url), 'utf8');
+  return readFileSync(new URL('../fixtures/mapping/ekr-beispiel.csv', import.meta.url), 'utf8');
 }

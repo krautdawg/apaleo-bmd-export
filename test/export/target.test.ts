@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/core/config.js';
 import { FindingsError } from '../../src/core/errors.js';
 import { DEFAULT_TARGET, exportedFile, fileTag, runExport, type ExportRequest, type TargetWriter } from '../../src/export/index.js';
-import { BMD_DEFAULT_SETTINGS, createBmdTarget, type BmdBooking, type BmdTargetSettings } from '../../src/bmd/index.js';
+import { BMD_DEFAULT_SETTINGS, createBmdTarget } from '../../src/bmd/index.js';
 import type { PostedBooking } from '../../src/posting/index.js';
 import { BSP, FIXTURE_FILES, createApaleoContext, createFixtureSource, fixturePath } from '../helpers/apaleo.js';
 import { exportSetup, latePosting, type ExportSetup } from '../helpers/export.js';
@@ -20,7 +20,7 @@ const fakeTarget: TargetWriter<PostedBooking> = {
   filePattern: /^FAKE_(\d{8})-(\d{8})_[A-Za-z0-9_-]+\.txt$/,
   fileName: ({ part, ...meta }) => `FAKE_${part.from.replaceAll('-', '')}-${part.to.replaceAll('-', '')}_${fileTag(meta)}.txt`,
   render: (bookings) => ({
-    bytes: new TextEncoder().encode(bookings.map((b) => `${b.konto};${b.gegenkonto};${b.side};${b.amountCents}\n`).join('')),
+    bytes: new TextEncoder().encode(bookings.map((b) => `${b.konto};${b.gkonto};${b.betragCents};${b.tax?.steuerCents ?? ''}\n`).join('')),
     findings: [],
   }),
   sameContent: (existing, next) => Buffer.from(existing).equals(Buffer.from(next)),
@@ -45,25 +45,8 @@ async function runWith(setup: ExportSetup, request: Partial<ExportRequest>, targ
 const folderOf = (setup: ExportSetup) => join(setup.ctx.cwd, 'exports', BSP, '2026-09');
 const errorCodes = (outcome: { findings: { code: string }[] }) => outcome.findings.filter((f) => f.code.startsWith('E-')).map((f) => f.code);
 
-/**
- * The BMD writer behind the same contract. The pipeline still posts DATEV
- * bookings until b03, so the test turns each one into a BMD booking without tax
- * (Soll positive, Haben negative). Hotel Beispiel's debtors have 5 digits.
- */
-const bmdWith = (settings: BmdTargetSettings): TargetWriter<PostedBooking> => {
-  const target = createBmdTarget(() => settings);
-  return { ...target, render: (bookings, meta) => target.render(bookings.map(toBmd), meta) };
-};
-const toBmd = (b: PostedBooking): BmdBooking => ({
-  konto: b.konto,
-  gkonto: b.gegenkonto,
-  businessDate: b.belegdatum,
-  buchsymbol: 'HO',
-  betragCents: b.side === 'S' ? b.amountCents : -b.amountCents,
-  ...(b.buchungstext === undefined ? {} : { text: b.buchungstext }),
-  ...(b.belegfeld1 === undefined ? {} : { extbelegnr: b.belegfeld1 }),
-});
-const bmdContractTarget = bmdWith({ ...BMD_DEFAULT_SETTINGS, personenkontenlaenge: 5 });
+/** The BMD writer behind the same contract, with the settings of the config's bmd section. */
+const bmdContractTarget = createBmdTarget();
 
 interface ContractCase {
   target: TargetWriter<PostedBooking>;
@@ -92,7 +75,7 @@ describe.each(CONTRACT_CASES)('the export through a TargetWriter: %s', (_label, 
     expect(outcome.status).toBe('written');
     expect(outcome.path).toBe(join(folderOf(setup), FILE));
     expect(readdirSync(folderOf(setup)).sort()).toEqual([PROTOCOL, FILE, 'manifest.json'].sort());
-    expect(fileLines(setup)).toHaveLength(headerLines + 22 + 1);
+    expect(fileLines(setup)).toHaveLength(headerLines + 24 + 1);
     expect(readFileSync(join(folderOf(setup), PROTOCOL), 'utf8')).toMatch(protocolTitle);
     expect(JSON.parse(readFileSync(join(folderOf(setup), 'manifest.json'), 'utf8'))).toMatchObject({ files: [{ file: FILE, status: 'current', ...SEPTEMBER }] });
   });
@@ -101,12 +84,13 @@ describe.each(CONTRACT_CASES)('the export through a TargetWriter: %s', (_label, 
     const setup = exportSetup();
     await run(setup);
     const folder = folderOf(setup);
+    const other = target === fakeTarget ? DEFAULT_TARGET : fakeTarget;
     expect(await exportedFile(setup.ctx, folder, SEPTEMBER, target)).toBe(FILE);
     // The manifest records this target's file; another target must not take it for its own.
-    expect(await exportedFile(setup.ctx, folder, SEPTEMBER, DEFAULT_TARGET)).toBeUndefined();
+    expect(await exportedFile(setup.ctx, folder, SEPTEMBER, other)).toBeUndefined();
     await setup.ctx.fs.rm(join(folder, 'manifest.json'));
     expect(await exportedFile(setup.ctx, folder, SEPTEMBER, target)).toBe(FILE);
-    expect(await exportedFile(setup.ctx, folder, SEPTEMBER, DEFAULT_TARGET)).toBeUndefined();
+    expect(await exportedFile(setup.ctx, folder, SEPTEMBER, other)).toBeUndefined();
   });
 
   it('sees every file of the target even when its pattern has the g or y flag', async () => {
@@ -159,7 +143,7 @@ describe.each(CONTRACT_CASES)('the export through a TargetWriter: %s', (_label, 
     expect(readdirSync(folderOf(setup)).sort()).toEqual(
       [PROTOCOL, `${stem}.replaced-20261020T080000Z.protokoll.txt`, `${stem}.replaced-20261020T080000Z${extension}`, FILE, 'manifest.json'].sort(),
     );
-    expect(fileLines(setup)).toHaveLength(headerLines + 23 + 1);
+    expect(fileLines(setup)).toHaveLength(headerLines + 25 + 1);
   });
 
   it('reports the findings of a file the target refuses to render, and writes nothing', async () => {
@@ -180,40 +164,40 @@ describe.each(CONTRACT_CASES)('the export through a TargetWriter: %s', (_label, 
 describe('the BMD target through the export', () => {
   it('reports the BMD validation findings of a file it cannot write, and writes nothing', async () => {
     const setup = exportSetup();
-    const outcome = await runWith(setup, {}, bmdWith({ ...BMD_DEFAULT_SETTINGS, sachkontenlaenge: 5, personenkontenlaenge: 6 }));
+    const outcome = await runWith(setup, {}, createBmdTarget(() => ({ ...BMD_DEFAULT_SETTINGS, sachkontenlaenge: 5 })));
     expect(outcome.status).toBe('failed');
     expect(new Set(errorCodes(outcome))).toEqual(new Set(['E-BMD-ACCOUNT']));
     expect(existsSync(join(setup.ctx.cwd, 'exports'))).toBe(false);
   });
 });
 
-describe('the checks and the summary do not depend on the target (recorded BER day 2026-10-21)', () => {
-  const MAPPING = readFileSync(fixturePath('live/BER/mapping-BER.live.csv'), 'utf8');
-  const CONFIG = `${FIXTURE_FILES['apaleo-bmd.config.yaml']}  skr: '03'\nproperties:\n  - id: BER\nchecks:\n  aggregates: true\n`;
+describe('the checks and the summary do not depend on the target (recorded VIE day 2026-10-21)', () => {
+  const MAPPING = readFileSync(fixturePath('live/VIE/mapping-VIE.live.csv'), 'utf8');
+  const CONFIG = `${FIXTURE_FILES['apaleo-bmd.config.yaml']}properties:\n  - id: VIE\nchecks:\n  aggregates: true\n`;
 
-  async function exportBer(target: TargetWriter<PostedBooking> | undefined) {
+  async function exportVie(target: TargetWriter<PostedBooking> | undefined) {
     const ctx = createApaleoContext(
       { live: true },
-      { files: { 'apaleo-bmd.config.yaml': CONFIG, 'mapping-BER.csv': MAPPING }, now: new Date('2026-10-25T08:00:00Z') },
+      { files: { 'apaleo-bmd.config.yaml': CONFIG, 'mapping-VIE.csv': MAPPING }, now: new Date('2026-10-25T08:00:00Z') },
     );
     const { source } = createFixtureSource({ live: true }, {}, ctx);
     const loaded = await loadConfig({ path: join(ctx.cwd, 'apaleo-bmd.config.yaml'), env: ctx.env, readFile: ctx.fs.readFile });
-    const request: ExportRequest = { period: { from: '2026-10-21', to: '2026-10-21' }, propertyIds: ['BER'], dryRun: false, overwrite: false };
+    const request: ExportRequest = { period: { from: '2026-10-21', to: '2026-10-21' }, propertyIds: ['VIE'], dryRun: false, overwrite: false };
     const [outcome] = await runExport(request, { loaded, source, ctx, ...(target ? { target } : {}) });
     if (!outcome) throw new Error('no outcome');
     return outcome;
   }
 
   it('gives the fake target the same summary and findings as the default target, without W-AGGREGATE-DIFF', async () => {
-    const [standard, fake] = [await exportBer(undefined), await exportBer(fakeTarget)];
+    const [standard, fake] = [await exportVie(undefined), await exportVie(fakeTarget)];
     expect(standard.status).toBe('written');
     expect(fake.status).toBe('written');
-    expect(fake.path).toMatch(/FAKE_20261021-20261021_BER\.txt$/);
+    expect(fake.path).toMatch(/FAKE_20261021-20261021_VIE\.txt$/);
     expect(fake.bookings).toBe(29);
     expect(fake.summary).toBe(standard.summary);
     expect(fake.findings).toEqual(standard.findings);
-    expect(fake.findings.map((f) => f.code)).not.toContain('W-AGGREGATE-DIFF');
-    expect(fake.summary).toContain('Deposits: received 590.00, released 352.00, of it refunded 10.00');
+    expect(fake.findings.map((f) => f.code)).toEqual(['W-VAT-ROUNDING']);
+    expect(fake.summary).toContain('Deposits: received 491.00, released 295.00, of it refunded 10.00');
   });
 });
 

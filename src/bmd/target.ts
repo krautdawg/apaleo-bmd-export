@@ -13,14 +13,17 @@ export interface BmdTargetSettings {
   personenkontenlaenge: number;
 }
 
-/**
- * Used until the config has a `bmd` section (b03): NTCS, 4-digit Sachkonten as
- * in the EKR, 6-digit Personenkonten (`201001` in PR08).
- */
+/** The defaults of the `bmd` config section: NTCS, 4-digit Sachkonten as in the EKR, 6-digit Personenkonten (`201001` in PR08). */
 export const BMD_DEFAULT_SETTINGS: Readonly<BmdTargetSettings> = { dialect: DEFAULT_DIALECT, sachkontenlaenge: 4, personenkontenlaenge: 6 };
 
-/** The BMD Buchungsimport as the export's target, with the settings `settingsOf` reads for each file. */
-export function createBmdTarget(settingsOf: (meta: TargetFileMeta) => BmdTargetSettings = () => BMD_DEFAULT_SETTINGS): TargetWriter<BmdBooking> {
+/** The file settings of the config's `bmd` section. */
+export function settingsFromConfig({ config }: Pick<TargetFileMeta, 'config'>): BmdTargetSettings {
+  const { dialect, sachkontenlaenge, personenkontenlaenge } = config.bmd;
+  return { dialect, sachkontenlaenge, personenkontenlaenge };
+}
+
+/** The BMD Buchungsimport as the export's target, with the settings `settingsOf` reads for each file (default: the config). */
+export function createBmdTarget(settingsOf: (meta: TargetFileMeta) => BmdTargetSettings = settingsFromConfig): TargetWriter<BmdBooking> {
   const optionsOf = (meta: TargetFileMeta): BmdRenderOptions => ({
     ...settingsOf(meta),
     from: meta.part.from,
