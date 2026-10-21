@@ -20,6 +20,16 @@ import { readIfExists, replaceKeepingBackup, withFolderLock, writeFileAtomic } f
 
 export const MANIFEST_FILE = 'manifest.json';
 
+/**
+ * Whether `name` matches the target's `filePattern`. A `g` or `y` flag would make
+ * `exec` and `test` continue from the last match, so the pattern is used without them.
+ */
+function matchTargetFile(target: FolderTarget, name: string): RegExpExecArray | null {
+  const pattern = target.filePattern;
+  const stateless = pattern.global || pattern.sticky ? new RegExp(pattern.source, pattern.flags.replace(/[gy]/g, '')) : pattern;
+  return stateless.exec(name);
+}
+
 /** One file the export wrote or replaced. Entries for replaced files keep only what is known about them. */
 export interface ManifestEntry {
   file: string;
@@ -90,7 +100,7 @@ async function targetFiles(ctx: CommandContext, folder: string, target: FolderTa
     throw error;
   }
   return names.sort().flatMap((name) => {
-    const match = target.filePattern.exec(name);
+    const match = matchTargetFile(target, name);
     return match ? [{ name, from: match[1] ?? '', to: match[2] ?? '' }] : [];
   });
 }
@@ -103,7 +113,7 @@ async function targetFiles(ctx: CommandContext, folder: string, target: FolderTa
 export async function exportedFile(ctx: CommandContext, folder: string, period: DateRange, target: FolderTarget): Promise<string | undefined> {
   const manifest = await readManifest(ctx, join(folder, MANIFEST_FILE)).catch((): Manifest => ({ files: [] }));
   const recorded = manifest.files.find(
-    (entry) => entry.status === 'current' && entry.from === period.from && entry.to === period.to && target.filePattern.test(entry.file),
+    (entry) => entry.status === 'current' && entry.from === period.from && entry.to === period.to && matchTargetFile(target, entry.file) !== null,
   );
   if (recorded) return recorded.file;
   const [from, to] = [compactDate(period.from), compactDate(period.to)];

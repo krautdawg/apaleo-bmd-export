@@ -70,6 +70,20 @@ describe('the export through a fake TargetWriter', () => {
     expect(await exportedFile(setup.ctx, folder, SEPTEMBER, DEFAULT_TARGET)).toBeUndefined();
   });
 
+  it('sees every file of the target even when its pattern has the g or y flag', async () => {
+    for (const flags of ['g', 'y', 'gy']) {
+      const stateful = { ...fakeTarget, filePattern: new RegExp(fakeTarget.filePattern.source, flags) };
+      const setup = exportSetup();
+      await run(setup, {}, stateful);
+      const folder = folderOf(setup);
+      for (let i = 0; i < 3; i++) expect(await exportedFile(setup.ctx, folder, SEPTEMBER, stateful)).toBe(FILE);
+      // Sorted right after FILE: a pattern that kept its lastIndex would skip it.
+      await setup.ctx.fs.writeFile(join(folder, 'FAKE_20260915-20260920_BSP.txt'), '');
+      const outcome = await run(setup, {}, stateful);
+      expect(errorCodes(outcome)).toEqual(['E-PERIOD-OVERLAP']);
+    }
+  });
+
   it('leaves an unchanged file alone on a re-run', async () => {
     const setup = exportSetup();
     await run(setup);

@@ -13,6 +13,10 @@ exports/
 /apaleo-bmd.config.yaml
 /apaleo-bmd.config.yml
 /apaleo-bmd.config.json
+# legacy names from the apaleo-datev-export copy, so an old local config stays out of git
+/apaleo-datev.config.yaml
+/apaleo-datev.config.yml
+/apaleo-datev.config.json
 # docs/docker.md: the compose mounts and the host-cron log hold customer numbers,
 # the account mapping and exported bookkeeping data
 /config/
