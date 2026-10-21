@@ -88,6 +88,9 @@ describe('CI workflow', () => {
     expect(docker).toContain('docker run --rm apaleo-bmd-export:ci --version');
     expect(docker).toContain('docker run --rm apaleo-bmd-export:ci export --month 2026-09 --demo --dry-run');
     const text = read('.github/workflows/ci.yml');
+    expect(text).toContain('docker run --rm -w /data -v "$RUNNER_TEMP/demo-data:/data" apaleo-bmd-export:ci export --month 2026-09 --demo\n');
+    expect(text).toContain('sudo chown 1000:1000 "$RUNNER_TEMP/demo-data"');
+    expect(text).toContain('test -s "$RUNNER_TEMP/demo-data/demo-output/BSP/2026-09/BMD_Buchungsimport_20260901-20260930_BSP_DEMO.csv"');
     for (const forbidden of ['docker login', 'docker push', 'docker/login-action', 'docker/build-push-action', 'ghcr.io', 'packages: write']) {
       expect(text).not.toContain(forbidden);
     }
@@ -115,6 +118,19 @@ describe('container image', () => {
     expect(dockerfile).not.toMatch(/^HEALTHCHECK/m);
   });
 
+  it('carries OCI labels for the BMD product, the repository and the MIT licence', () => {
+    const labels = Object.fromEntries(
+      [...dockerfile.matchAll(/(org\.opencontainers\.image\.[a-z]+)="([^"]*)"/g)].map(([, key = '', value = '']) => [key.replace('org.opencontainers.image.', ''), value]),
+    );
+    expect(labels).toEqual({
+      title: 'apaleo-bmd-export',
+      description: expect.stringContaining('BMD Buchungsimport'),
+      source: 'https://github.com/krautdawg/apaleo-bmd-export',
+      licenses: 'MIT',
+    });
+    expect(dockerfile).not.toMatch(/datev/i);
+  });
+
   it('keeps secrets and local files out of the build context', () => {
     const ignore = read('.dockerignore').split('\n');
     expect(ignore).toContain('*');
@@ -136,6 +152,14 @@ describe('compose and env examples', () => {
     expect(service?.restart).toBe('unless-stopped');
     expect(service?.env_file).toBe('.env');
     expect(service?.volumes).toEqual(['./config:/config:ro', './data:/data']);
+  });
+
+  it('names the service apaleo-bmd and the image apaleo-bmd-export:local, with no registry host', () => {
+    expect(Object.keys(compose.services)).toEqual(['apaleo-bmd']);
+    expect(compose.services['apaleo-bmd']?.build).toBe('.');
+    expect(compose.services['apaleo-bmd']?.image).toBe('apaleo-bmd-export:local');
+    const text = read('docker-compose.example.yml');
+    for (const registry of ['ghcr.io', 'docker.io', 'quay.io', 'docker pull']) expect(text).not.toContain(registry);
   });
 
   it('runs schedule --once in a while-sleep loop', () => {

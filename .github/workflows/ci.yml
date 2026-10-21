@@ -91,6 +91,13 @@ jobs:
           echo "$out"
           test "$code" -eq 1
           grep -q -- '-w /data' <<<"$out"
+      - name: OCI labels name the BMD product and the MIT licence
+        run: |
+          label() { docker inspect -f "{{ index .Config.Labels \"org.opencontainers.image.$1\" }}" apaleo-bmd-export:ci; }
+          test "$(label title)" = apaleo-bmd-export
+          test "$(label licenses)" = MIT
+          test "$(label source)" = https://github.com/krautdawg/apaleo-bmd-export
+          label description | grep -q 'BMD Buchungsimport'
       - name: Runs as user node
         run: test "$(docker run --rm --entrypoint id apaleo-bmd-export:ci -un)" = node
       - name: schedule without --once exits 2
