@@ -53,7 +53,8 @@ describe('contribution and conduct files', () => {
 
 describe('CHANGELOG.md', () => {
   const text = readRepoFile('CHANGELOG.md');
-  const [unreleased = '', release = ''] = text.split(/^## \[0\.1\.0\] - 2026-10-21$/m);
+  const unreleased = text.split(/^## \[Unveröffentlicht\]$/m)[1] ?? '';
+  const part = (heading: string) => unreleased.split(new RegExp(`^### ${heading}$`, 'm'))[1]?.split(/^### /m)[0] ?? '';
 
   it('follows the German edition of Keep a Changelog with an Unveröffentlicht section', () => {
     expect(text).toContain('[Keep a Changelog](https://keepachangelog.com/de/1.1.0/)');
@@ -61,15 +62,20 @@ describe('CHANGELOG.md', () => {
     expect(text).not.toMatch(/^##+ (\[Unreleased\]|Added|Changed|Removed|Fixed)$/m);
   });
 
-  it('says under Unveröffentlicht that README and docs are now German, with a short README.en.md', () => {
-    const changed = unreleased.split(/^### Geändert$/m)[1] ?? '';
-    for (const phrase of ['README', 'deutsch', '`README.en.md`']) expect(changed).toContain(phrase);
+  it('starts the history of apaleo-bmd-export and names apaleo-datev-export v0.1.0 as its origin instead of repeating its entries', () => {
+    expect(text).toContain('[apaleo-datev-export](https://github.com/krautdawg/apaleo-datev-export) v0.1.0');
+    expect(text).not.toMatch(/^## \[0\.1\.0\]/m);
+    expect(text).not.toContain('apaleo-datev` mit `--help`');
   });
 
-  it('lists the user-visible features of the first release under 0.1.0, in German, with unchanged identifiers', () => {
-    expect(release).toMatch(/^### Hinzugefügt$/m);
-    for (const feature of ['export --demo', 'schedule --once', 'init-mapping', 'live-smoke', '--dry-run', 'Docker']) expect(release).toContain(feature);
-    expect(release).toContain('Kontenzuordnung');
+  it('Unreleased section: lists the BMD features under Hinzugefügt and the DATEV output under Entfernt, in German', () => {
+    const added = part('Hinzugefügt');
+    for (const feature of ['BMD Buchungsimport', 'init-mapping --template ekr', 'Steuercodes', 'Ortstaxe', 'Anzahlungen', 'Forderungsverlust', 'export --demo', 'schedule --once', 'Docker']) {
+      expect(added, feature).toContain(feature);
+    }
+    const removed = part('Entfernt');
+    for (const item of ['DATEV', 'EXTF', 'SKR03', 'SKR04']) expect(removed, item).toContain(item);
+    for (const slice of ['b01', 'b02', 'b03', 'b04', 'b05', 'b06', 'b07', 'b08']) expect(unreleased, slice).toContain(`${slice}`);
   });
 });
 
@@ -92,6 +98,16 @@ describe('issue and pull-request templates', () => {
     expect(sourceOrTarget.name).toBe('Neue Quelle oder neues Zielformat');
     expect(ids(sourceOrTarget)).toEqual(['kind', 'system', 'api', 'mapping', 'help']);
     expect(markdown(sourceOrTarget)).toContain('docs/architecture.md');
+    expect(sourceOrTarget.description).toContain('RZL oder DATEV');
+    expect(markdown(sourceOrTarget)).toContain('apaleo-datev-export');
+  });
+
+  it('the forms and the pull-request template speak of BMD and Austrian numbers, not of DATEV practice', () => {
+    expect(form('feature_request.yml').description).toContain('nach BMD');
+    for (const file of ['bug_report.yml', 'feature_request.yml']) {
+      expect(readRepoFile(`.github/ISSUE_TEMPLATE/${file}`), file).not.toMatch(/DATEV|SKR|Berater|Mandantennummer/);
+    }
+    expect(readRepoFile('.github/pull_request_template.md')).not.toMatch(/DATEV|Berater|Mandantennummer/);
   });
 
   it('the pull-request template has a German checklist for tests, docs, secrets and personal data', () => {

@@ -10,6 +10,6 @@
 
 - [ ] Tests decken die Änderung ab, und `pnpm test`, `pnpm lint`, `pnpm typecheck` und `pnpm build` laufen lokal durch.
 - [ ] Dokumentation ist aktualisiert, auf Deutsch: README oder `docs/` für neue Befehle, Optionen und Konfigurationsschlüssel, `docs/troubleshooting.md` für neue Befund-Codes, `CHANGELOG.md` unter Unveröffentlicht.
-- [ ] Keine Secrets: kein Client-Secret, kein Token, keine `.env`-Datei und keine echten Berater- oder Mandantennummern in Code, Testdaten, Tests oder dieser Beschreibung.
+- [ ] Keine Secrets: kein Client-Secret, kein Token, keine `.env`-Datei und keine echten Steuer- oder UID-Nummern in Code, Testdaten, Tests oder dieser Beschreibung.
 - [ ] Keine personenbezogenen Daten: keine echten Gästenamen, E-Mail-Adressen, Reservierungs- oder Rechnungsnummern; beigesteuerte apaleo-Antworten sind anonymisiert.
 - [ ] Commits folgen den Conventional Commits, auf Englisch.

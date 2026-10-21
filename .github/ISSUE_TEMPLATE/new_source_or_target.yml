@@ -1,11 +1,13 @@
 name: Neue Quelle oder neues Zielformat
-description: Schlag ein weiteres PMS oder eine Zahlungsquelle (Mews, Smoobu, Stripe, ...) oder ein weiteres Zielformat (BMD, lexoffice, ...) vor.
+description: Schlag ein weiteres PMS oder eine Zahlungsquelle (Mews, Smoobu, Stripe, ...) oder ein weiteres Zielformat (zum Beispiel RZL oder DATEV) vor.
 labels: [new-source-or-target]
 body:
   - type: markdown
     attributes:
       value: |
         Quellen und Zielformate hängen an einer kleinen Schnittstelle; lies zuerst docs/architecture.md.
+        Für DATEV gibt es schon das Projekt apaleo-datev-export (https://github.com/krautdawg/apaleo-datev-export), auf dem dieses Tool aufbaut.
+        Ein neues Zielformat ist kein geplanter Teil dieses Tools; es braucht eine eigene OpenSpec-Änderung.
         Füge nie echte API-Antworten mit Gästedaten ein: Anonymisiere Namen, Nummern und Beträge.
   - type: dropdown
     id: kind
@@ -20,7 +22,7 @@ body:
     id: system
     attributes:
       label: System
-      placeholder: Smoobu, Mews, Stripe, BMD NTCS, lexoffice, ...
+      placeholder: Smoobu, Mews, Stripe, RZL, DATEV, ...
     validations:
       required: true
   - type: textarea

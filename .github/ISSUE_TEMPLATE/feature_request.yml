@@ -1,5 +1,5 @@
 name: Funktionswunsch
-description: Schlag eine Verbesserung für den bestehenden Export von apaleo nach DATEV vor.
+description: Schlag eine Verbesserung für den bestehenden Export von apaleo nach BMD vor.
 labels: [enhancement]
 body:
   - type: markdown
@@ -18,12 +18,12 @@ body:
     id: proposal
     attributes:
       label: Vorschlag
-      description: Wie könnte das Tool es lösen? Befehle, Konfigurationsschlüssel, ein Beispiel für die DATEV-Buchung, die du erwartest.
+      description: Wie könnte das Tool es lösen? Befehle, Konfigurationsschlüssel, ein Beispiel für die BMD-Buchung (Konto, Gegenkonto, Steuercode), die du erwartest.
   - type: textarea
     id: accounting
     attributes:
       label: Buchhalterischer Hintergrund
-      description: Wenn sich Buchungen ändern, was sagt deine Steuerberatung dazu? Welcher SKR, welche Konten?
+      description: Wenn sich Buchungen ändern, was sagt deine Kanzlei dazu? Welcher Kontenplan (EKR oder ein eigener), welche Konten und Steuercodes, BMD NTCS oder BMD 5.5?
   - type: checkboxes
     id: help
     attributes:

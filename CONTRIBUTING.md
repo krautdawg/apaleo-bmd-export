@@ -1,6 +1,6 @@
 # Mitmachen
 
-Danke, dass du helfen willst. Dieses Projekt ist ein Geschenk an Hotels und ihre Steuerberatung: klein, lesbar und nachprüfbar. Fehlermeldungen, Korrekturen, Dokumentation, Wissen über die Kontenzuordnung und neue Quellen oder Zielformate sind alle willkommen.
+Danke, dass du helfen willst. Dieses Projekt ist ein Geschenk an Hotels in Österreich und ihre Kanzlei: klein, lesbar und nachprüfbar. Fehlermeldungen, Korrekturen, Dokumentation, Wissen über BMD NTCS und die Kontenzuordnung nach dem EKR und neue Quellen sind alle willkommen.
 
 Die Dokumentation ist deutsch. Code, Bezeichner, Kommentare im Code, Ausgaben der Kommandozeile und Commit-Nachrichten bleiben auf Englisch, damit auch Mitwirkende ohne Deutsch den Code lesen können. Issues und Pull Requests auf Englisch sind genauso willkommen wie auf Deutsch.
 
@@ -63,9 +63,11 @@ Wie der Code aufgebaut ist und wie du eine Quelle oder ein Zielformat hinzufügs
 
 - **Niemals echte Gästedaten committen**: keine Gästenamen, E-Mail-Adressen, Reservierungsnummern, Rechnungsnummern oder echten Beträge aus einem Hotel. Testdaten sind erfunden („Hotel Beispiel“) oder vollständig anonymisiert.
 - **Anonymisiere apaleo-Antworten**, bevor du sie beisteuerst: Ersetze Namen, Nummern von Reservierungen und Folios, Belegnummern, Namen der Hotels und Beträge, und lass die Struktur genau so, wie apaleo sie geschickt hat. Beschreib den Tag in der `README.md` des Ordners mit den Testdaten.
-- **Niemals Secrets committen**: kein Client-Secret, kein Token, keine echte Beraternummer oder Mandantennummer, keine `.env`. Die Tests dürfen nie die echte apaleo-API aufrufen; `live-smoke` ist der einzige Befehl für echte Zugangsdaten, und du startest ihn von Hand.
+- **Niemals Secrets committen**: kein Client-Secret, kein Token, keine echte Steuernummer, UID-Nummer oder Nummer eines BMD-Mandanten, keine `.env`. Die Tests dürfen nie die echte apaleo-API aufrufen; `live-smoke` ist der einzige Befehl für echte Zugangsdaten, und du startest ihn von Hand.
 - Füge die Ausgabe von `live-smoke` erst in ein Issue ein, nachdem du die Namen entfernt hast.
 
 ## Wissen über die Kontenzuordnung
 
-Änderungen an den Vorlagen für SKR03 oder SKR04 (`templates/`) brauchen eine Quelle: den DATEV-Kontenrahmen mit Artikelnummer und Datum, im Kommentar der Zeile genannt, wie bei den vorhandenen Zeilen. Eine Zeile, die nicht gegen eine Quelle geprüft ist, wird mit `Vorschlag (ungeprüft)` markiert, und der Leitfaden zur Kontenzuordnung führt sie auf.
+Änderungen an der EKR-Vorlage (`templates/ekr-hotel.rules.csv`) brauchen eine Quelle: den Einheitskontenrahmen (KFS/BW 6), das Handbuch von BMD oder den Kontenplan einer Kanzlei, die die Zeile bestätigt, im Kommentar der Zeile genannt. Eine Zeile, die nicht gegen eine Quelle geprüft ist, wird mit `Vorschlag (ungeprüft)` markiert, und der [Leitfaden zur Kontenzuordnung](docs/mapping-guide.md) führt sie auf. Steuerliche Regeln (Steuersätze, Ortstaxe, Anzahlungen) belegst du mit dem UStG 1994 im RIS, dem Landesgesetz oder einer Fundstelle im Handbuch von BMD.
+
+Hat deine Kanzlei eine Datei des Tools in BMD importiert, hilft ein kurzer Bericht am meisten: BMD-Version, Dialekt, was ohne Nacharbeit ging und was nicht, ohne Namen und Beträge. Er kommt als Testimport in [docs/maintainers.md](docs/maintainers.md#testimporte).

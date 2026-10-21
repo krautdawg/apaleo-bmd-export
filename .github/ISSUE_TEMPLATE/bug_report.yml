@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Danke für deine Meldung. **Füge nie Secrets oder Gästedaten ein.** Entferne vor dem Absenden das apaleo-Client-Secret
-        und Tokens, Gästenamen, E-Mail-Adressen, Reservierungs- und Rechnungsnummern und echte Berater- oder Mandantennummern.
+        und Tokens, Gästenamen, E-Mail-Adressen, Reservierungs- und Rechnungsnummern und echte Steuer- oder UID-Nummern.
         Sicherheitsprobleme gehören nicht hierher, sondern in ein privates Security Advisory (siehe SECURITY.md).
 
         Meldungen auf Englisch sind ebenfalls willkommen.
