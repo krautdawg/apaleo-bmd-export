@@ -298,13 +298,16 @@ describe('docs folder', () => {
     }
   });
 
-  it('Going public later: docs/maintainers.md has the "Vor der Veröffentlichung" checklist, starting with the test import', () => {
-    expect(MAINTAINERS).toContain('**niemand außerhalb kann sie sehen, bis der Maintainer das Repository öffentlich macht**');
-    const checklist = section(MAINTAINERS, '## Vor der Veröffentlichung');
-    const steps = checklist.split('\n').filter((line) => /^\d+\. \[ \] /.test(line));
-    expect(steps[0]).toMatch(/Testimport in BMD NTCS.*\[Testimporte\]\(#testimporte\)/);
-    for (const step of ['--visibility public', 'Vorschaubild (Social Preview)', 'Discussions', 'v0.1.0']) expect(checklist).toContain(step);
-    expect(checklist).not.toContain('[x]');
+  it('Public: docs/maintainers.md says the repository is public and keeps the "Veröffentlichung" checklist, starting with the open test import', () => {
+    expect(section(MAINTAINERS, '## Das Repository ist öffentlich')).toContain('öffentlich');
+    expect(MAINTAINERS).not.toMatch(/ist privat|vorerst privat/);
+    const checklist = section(MAINTAINERS, '## Veröffentlichung');
+    const open = checklist.split('\n').filter((line) => /^\d+\. \[ \] /.test(line));
+    expect(open[0]).toMatch(/Testimport in BMD NTCS.*\[Testimporte\]\(#testimporte\)/);
+    for (const step of ['Vorschaubild (Social Preview)', 'Discussions', 'frischen Klon']) expect(open.join('\n')).toContain(step);
+    const done = checklist.split('\n').filter((line) => /^\d+\. \[x\] /.test(line)).join('\n');
+    for (const step of ['Sichtbarkeit', 'Sicherheitslücken', 'Schutz für den Branch', 'v0.1.0', 'Historie', 'pnpm test']) expect(done).toContain(step);
+    expect(MAINTAINERS).not.toContain('--visibility public');
   });
 
   it('records test imports under "Testimporte" in a table with date, BMD version, dialect and result', () => {
@@ -323,7 +326,7 @@ describe('docs folder', () => {
     const topics = ['apaleo', 'bmd', 'bmd-ntcs', 'bmd-export', 'buchungsimport', 'ekr', 'hotel', 'hospitality', 'accounting', 'buchhaltung', 'steuerberater', 'austria', 'oesterreich'];
     expect(MAINTAINERS).toContain(`--add-topic ${topics.join(',')}`);
     expect(MAINTAINERS).toMatch(/--description "Kostenloser apaleo BMD Export.*BMD NTCS/);
-    expect(section(MAINTAINERS, '## Das Repository ist vorerst privat')).not.toContain('--visibility');
+    expect(section(MAINTAINERS, '## Das Repository ist öffentlich')).not.toContain('--visibility');
   });
 });
 
