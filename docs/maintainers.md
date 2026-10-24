@@ -1,10 +1,8 @@
 # Hinweise für Maintainer
 
-## Das Repository ist vorerst privat
+## Das Repository ist öffentlich
 
-Das Repository ist privat. README, Beschreibung und Themen sind für Hotels und Kanzleien in Österreich geschrieben, die auf GitHub nach „apaleo BMD Export“, „BMD NTCS Import“ oder „apaleo Buchhaltung Österreich“ suchen, aber **niemand außerhalb kann sie sehen, bis der Maintainer das Repository öffentlich macht**. Bis dahin bringen sie für die Auffindbarkeit nichts.
-
-Beschreibung und Themen sind so gesetzt; die Sichtbarkeit hat dabei niemand geändert:
+Das Repository ist seit dem 21. Oktober 2026 öffentlich, Version `v0.1.0` ist veröffentlicht. README, Beschreibung und Themen sind für Hotels und Kanzleien in Österreich geschrieben, die auf GitHub nach „apaleo BMD Export“, „BMD NTCS Import“ oder „apaleo Buchhaltung Österreich“ suchen. Beschreibung und Themen sind mit diesem Befehl gesetzt; mit `gh repo view` prüfst du den Stand:
 
 ```sh
 gh repo edit krautdawg/apaleo-bmd-export \
@@ -13,30 +11,28 @@ gh repo edit krautdawg/apaleo-bmd-export \
 gh repo view krautdawg/apaleo-bmd-export --json description,repositoryTopics,visibility
 ```
 
-Keiner der Schritte unter „Vor der Veröffentlichung“ ist bisher erledigt. Jeder einzelne ist die Entscheidung des Maintainers.
-
 ## Zusammenführen
 
-Solange das Repository privat ist, gibt es keinen Schutz für Branches (nicht im kostenlosen Tarif), GitHub blockiert also keinen roten Pull Request. Führe nur zusammen, wenn die CI grün ist:
+Der Branch `main` ist geschützt und verlangt die CI-Prüfungen, GitHub blockiert also einen roten Pull Request. Führe zusammen, wenn die CI grün ist:
 
 ```sh
 gh pr checks <number> --watch --fail-fast && gh pr merge <number> --squash
 ```
 
-## Vor der Veröffentlichung
+## Veröffentlichung
 
-In dieser Reihenfolge:
+Erledigt ist, was abgehakt ist; die offenen Schritte sind weiterhin die Entscheidung des Maintainers.
 
 1. [ ] Mach mit einer Kanzlei einen ersten echten Testimport in BMD NTCS (Testmandant, Checkliste in [bmd-import.md](bmd-import.md#erster-import-bitte-prüfen)) und trag ihn unten unter [Testimporte](#testimporte) ein: Datum, BMD-Version, Dialekt und Ergebnis. Erst wenn der Import ohne Nacharbeit ging, darf das README mehr sagen als „folgt dem dokumentierten BMD-Importformat“.
 2. [ ] Lies das README in einem frischen Klon und führe den Schnellstart und `export --month 2026-09 --demo --dry-run` noch einmal aus.
-3. [ ] Starte `pnpm test` (mit dem Docs-Test) und prüfe, dass die CI auf `main` grün ist.
-4. [ ] Durchsuche die Historie nach allem, was nicht öffentlich werden darf: `git log -p | grep -iE 'secret|password|token'` darf nur Code und Dokumentation zeigen, nie einen Wert. Keine echten Gästedaten in den Testdaten.
-5. [ ] Stelle die Sichtbarkeit um: `gh repo edit krautdawg/apaleo-bmd-export --visibility public --accept-visibility-change-consequences`.
+3. [x] `pnpm test` (mit dem Docs-Test) läuft, und die CI auf `main` ist grün.
+4. [x] Die Historie ist durchsucht: `git log -p | grep -iE 'secret|password|token'` zeigt nur Code und Dokumentation, nie einen Wert. Keine echten Gästedaten in den Testdaten.
+5. [x] Die Sichtbarkeit ist öffentlich (seit dem 21. Oktober 2026).
 6. [ ] Lade ein Vorschaubild (Social Preview) hoch (Settings > General > Social preview).
 7. [ ] Entscheide, ob es GitHub Discussions für Fragen geben soll. Schaltest du sie ein, leg eine `config.yml` in `.github/ISSUE_TEMPLATE/` an, die auf die Discussions verweist; bis dahin sind die Vorlagen für Issues der einzige Weg.
-8. [ ] Schalte die private Meldung von Sicherheitslücken ein (Settings > Code security), auf die `SECURITY.md` verweist.
-9. [ ] Schalte den Schutz für den Branch `main` mit den erforderlichen CI-Prüfungen ein (für öffentliche Repositories kostenlos), damit sich ein roter Pull Request nicht zusammenführen lässt.
-10. [ ] Markiere die erste Version mit dem Tag `v0.1.0`: Setze die Version in `package.json`, verschiebe die Einträge unter `## [Unveröffentlicht]` in `CHANGELOG.md` nach `## [0.1.0] - <Datum>`, committe, dann `git tag v0.1.0 && git push origin v0.1.0`. Ein Tag ist nur eine Version des Quellcodes; nichts wird auf npm oder in einer Container-Registry veröffentlicht.
+8. [x] Die private Meldung von Sicherheitslücken ist eingeschaltet (Settings > Code security), auf die `SECURITY.md` verweist.
+9. [x] Der Schutz für den Branch `main` ist eingeschaltet und verlangt die CI-Prüfungen, damit sich ein roter Pull Request nicht zusammenführen lässt.
+10. [x] Die erste Version ist mit dem Tag `v0.1.0` markiert. Ein Tag ist nur eine Version des Quellcodes; nichts wird auf npm oder in einer Container-Registry veröffentlicht.
 11. [ ] Prüfe, dass das deutsche README auf github.com richtig angezeigt wird (Tabellen, der Link auf `README.en.md` in der zweiten Zeile, die Anker der Überschriften, die Badges) und dass das CI-Badge den Stand von `main` zeigt.
 
 ## Testimporte
